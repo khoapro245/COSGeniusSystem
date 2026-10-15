@@ -1,0 +1,44 @@
+## Visual Studio & .NET Build Artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+
+## Visual Studio cache & user-specific files
+.vs/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+*.sln.docstates
+
+## Visual Studio Code
+.vscode/
+
+## JetBrains Rider
+.idea/
+*.sln.iml
+
+## NuGet
+*.nuget.props
+*.nuget.targets
+project.lock.json
+project.assets.json
+
+## Crash dumps and profiling
+*.stackdump
+*.prof
+*.coverage
+*.coveragexml
+
+## OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+## Docker & Compose local overrides / secrets
+docker-compose.override.yml.local
+*.env.local
+
+## Ensure .gitkeep files are always tracked
+!.gitkeep

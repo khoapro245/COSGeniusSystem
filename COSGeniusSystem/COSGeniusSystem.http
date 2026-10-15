@@ -1,0 +1,6 @@
+@COSGeniusSystem_HostAddress = http://localhost:5217
+
+GET {{COSGeniusSystem_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

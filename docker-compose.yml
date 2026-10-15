@@ -1,0 +1,22 @@
+services:
+  cosgeniussystem:
+    image: ${DOCKER_REGISTRY-}cosgeniussystem
+    build:
+      context: .
+      dockerfile: COSGeniusSystem/Dockerfile
+    depends_on:
+      - sqlserver
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: cosgenius-sqlserver
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
+volumes:
+  sqlserver_data:
