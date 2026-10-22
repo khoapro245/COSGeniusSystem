@@ -1,15 +1,17 @@
+﻿using System;
+using System.Collections.Generic;
+
 namespace COSGeniusSystem.Model;
 
-public class Role
+public partial class Role
 {
-    public Guid RoleId { get; set; } = Guid.NewGuid();
+    public int RoleId { get; set; }
 
-    public string RoleName { get; set; } = string.Empty;
+    public string RoleCode { get; set; } = null!;
+
+    public string RoleName { get; set; } = null!;
 
     public string? Description { get; set; }
 
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
-    // Navigation properties
-    public ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
+    public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }
