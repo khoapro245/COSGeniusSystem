@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using COSGeniusSystem.Model;
-using Microsoft.EntityFrameworkCore;
+﻿using COSGeniusSystem.Models;
 
 namespace COSGeniusSystem.Data;
 
@@ -50,6 +47,8 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Patient> Patients { get; set; }
 
+    public virtual DbSet<PatientContact> PatientContacts { get; set; }
+
     public virtual DbSet<Podetail> Podetails { get; set; }
 
     public virtual DbSet<PurchaseOrder> PurchaseOrders { get; set; }
@@ -80,7 +79,7 @@ public partial class ApplicationDbContext : DbContext
     {
         modelBuilder.Entity<AuditDetail>(entity =>
         {
-            entity.HasKey(e => e.AuditDetailId).HasName("PK__AuditDet__1E1C703D98BE8406");
+            entity.HasKey(e => e.AuditDetailId).HasName("PK__AuditDet__1E1C703DAB62BCCE");
 
             entity.ToTable("AuditDetail");
 
@@ -106,13 +105,13 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Batch>(entity =>
         {
-            entity.HasKey(e => e.BatchId).HasName("PK__Batch__5D55CE3880BBB038");
+            entity.HasKey(e => e.BatchId).HasName("PK__Batch__5D55CE38A4FE232B");
 
             entity.ToTable("Batch");
 
             entity.HasIndex(e => new { e.HerbId, e.ExpiryDate }, "IX_Batch_Herb_ExpiryDate");
 
-            entity.HasIndex(e => e.BatchNumber, "UQ__Batch__F869ED6DADC4C311").IsUnique();
+            entity.HasIndex(e => e.BatchNumber, "UQ__Batch__F869ED6D63EFBD99").IsUnique();
 
             entity.Property(e => e.BatchId).HasColumnName("BatchID");
             entity.Property(e => e.BatchNumber)
@@ -143,7 +142,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<DispenseDetail>(entity =>
         {
-            entity.HasKey(e => e.DispenseDetailId).HasName("PK__Dispense__991E2D4B12FAC223");
+            entity.HasKey(e => e.DispenseDetailId).HasName("PK__Dispense__991E2D4BB797A4DE");
 
             entity.ToTable("DispenseDetail");
 
@@ -172,11 +171,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Disposal>(entity =>
         {
-            entity.HasKey(e => e.DisposalId).HasName("PK__Disposal__206044C3B2058AB3");
+            entity.HasKey(e => e.DisposalId).HasName("PK__Disposal__206044C3500067ED");
 
             entity.ToTable("Disposal");
 
-            entity.HasIndex(e => e.DisposalCode, "UQ__Disposal__68D7C973F40065D6").IsUnique();
+            entity.HasIndex(e => e.DisposalCode, "UQ__Disposal__68D7C9735CCB340D").IsUnique();
 
             entity.Property(e => e.DisposalId).HasColumnName("DisposalID");
             entity.Property(e => e.DisposalCode)
@@ -204,7 +203,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<DisposalDetail>(entity =>
         {
-            entity.HasKey(e => e.DisposalDetailId).HasName("PK__Disposal__DFE713E63E4F96A6");
+            entity.HasKey(e => e.DisposalDetailId).HasName("PK__Disposal__DFE713E677DDC18F");
 
             entity.ToTable("DisposalDetail");
 
@@ -226,11 +225,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Doctor>(entity =>
         {
-            entity.HasKey(e => e.DoctorId).HasName("PK__Doctor__2DC00EDFD3E95CE5");
+            entity.HasKey(e => e.DoctorId).HasName("PK__Doctor__2DC00EDFF582BC3C");
 
             entity.ToTable("Doctor");
 
-            entity.HasIndex(e => e.UserId, "UQ__Doctor__1788CCAD07AF5190").IsUnique();
+            entity.HasIndex(e => e.UserId, "UQ__Doctor__1788CCAD1B186363").IsUnique();
 
             entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
             entity.Property(e => e.FullName).HasMaxLength(150);
@@ -251,7 +250,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ExamSheet>(entity =>
         {
-            entity.HasKey(e => e.ExamSheetId).HasName("PK__ExamShee__31F9A958B3178772");
+            entity.HasKey(e => e.ExamSheetId).HasName("PK__ExamShee__31F9A9581FDCAC59");
 
             entity.ToTable("ExamSheet");
 
@@ -280,7 +279,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<FormulaDetail>(entity =>
         {
-            entity.HasKey(e => e.FormulaDetailId).HasName("PK__FormulaD__DC9CD7F074D5FA2B");
+            entity.HasKey(e => e.FormulaDetailId).HasName("PK__FormulaD__DC9CD7F03E6B94FA");
 
             entity.ToTable("FormulaDetail");
 
@@ -303,11 +302,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<GoodsReceipt>(entity =>
         {
-            entity.HasKey(e => e.ReceiptId).HasName("PK__GoodsRec__CC08C400391A5D07");
+            entity.HasKey(e => e.ReceiptId).HasName("PK__GoodsRec__CC08C400402F8E47");
 
             entity.ToTable("GoodsReceipt");
 
-            entity.HasIndex(e => e.ReceiptCode, "UQ__GoodsRec__1AB76D00692AA91D").IsUnique();
+            entity.HasIndex(e => e.ReceiptCode, "UQ__GoodsRec__1AB76D002590D01C").IsUnique();
 
             entity.Property(e => e.ReceiptId).HasColumnName("ReceiptID");
             entity.Property(e => e.Note).HasMaxLength(255);
@@ -338,11 +337,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Herb>(entity =>
         {
-            entity.HasKey(e => e.HerbId).HasName("PK__Herb__086A0758FD30BFB2");
+            entity.HasKey(e => e.HerbId).HasName("PK__Herb__086A0758896E06DB");
 
             entity.ToTable("Herb");
 
-            entity.HasIndex(e => e.HerbCode, "UQ__Herb__A7FAC81B62F7A9F1").IsUnique();
+            entity.HasIndex(e => e.HerbCode, "UQ__Herb__A7FAC81B12CCE445").IsUnique();
 
             entity.Property(e => e.HerbId).HasColumnName("HerbID");
             entity.Property(e => e.CommonName).HasMaxLength(150);
@@ -359,11 +358,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ImportRequest>(entity =>
         {
-            entity.HasKey(e => e.RequestId).HasName("PK__ImportRe__33A8519AB403E1EF");
+            entity.HasKey(e => e.RequestId).HasName("PK__ImportRe__33A8519A62E3CF35");
 
             entity.ToTable("ImportRequest");
 
-            entity.HasIndex(e => e.RequestCode, "UQ__ImportRe__CBAB82F65252C915").IsUnique();
+            entity.HasIndex(e => e.RequestCode, "UQ__ImportRe__CBAB82F61111396E").IsUnique();
 
             entity.Property(e => e.RequestId).HasColumnName("RequestID");
             entity.Property(e => e.Reason).HasMaxLength(255);
@@ -385,7 +384,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ImportRequestDetail>(entity =>
         {
-            entity.HasKey(e => e.RequestDetailId).HasName("PK__ImportRe__DC528B703973950D");
+            entity.HasKey(e => e.RequestDetailId).HasName("PK__ImportRe__DC528B70B0CC50E0");
 
             entity.ToTable("ImportRequestDetail");
 
@@ -407,11 +406,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<InventoryAudit>(entity =>
         {
-            entity.HasKey(e => e.AuditId).HasName("PK__Inventor__A17F23B8DD1F3158");
+            entity.HasKey(e => e.AuditId).HasName("PK__Inventor__A17F23B886181D25");
 
             entity.ToTable("InventoryAudit");
 
-            entity.HasIndex(e => e.AuditCode, "UQ__Inventor__EAFB17CE1522D85E").IsUnique();
+            entity.HasIndex(e => e.AuditCode, "UQ__Inventor__EAFB17CEA5C5ED89").IsUnique();
 
             entity.Property(e => e.AuditId).HasColumnName("AuditID");
             entity.Property(e => e.AuditCode)
@@ -438,13 +437,13 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Invoice>(entity =>
         {
-            entity.HasKey(e => e.InvoiceId).HasName("PK__Invoice__D796AAD5DB3664A4");
+            entity.HasKey(e => e.InvoiceId).HasName("PK__Invoice__D796AAD5A9A943D8");
 
             entity.ToTable("Invoice");
 
             entity.HasIndex(e => e.ExamSheetId, "IX_Invoice_ExamSheetID");
 
-            entity.HasIndex(e => e.InvoiceCode, "UQ__Invoice__0D9D7FF3C1864881").IsUnique();
+            entity.HasIndex(e => e.InvoiceCode, "UQ__Invoice__0D9D7FF35ACA6B70").IsUnique();
 
             entity.Property(e => e.InvoiceId).HasColumnName("InvoiceID");
             entity.Property(e => e.CashierId).HasColumnName("CashierID");
@@ -478,7 +477,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<InvoiceDetail>(entity =>
         {
-            entity.HasKey(e => e.InvoiceDetailId).HasName("PK__InvoiceD__1F1578F12614DDE5");
+            entity.HasKey(e => e.InvoiceDetailId).HasName("PK__InvoiceD__1F1578F167D12318");
 
             entity.ToTable("InvoiceDetail");
 
@@ -502,7 +501,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<MedicalRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__MedicalR__FBDF78C95416EEF0");
+            entity.HasKey(e => e.RecordId).HasName("PK__MedicalR__FBDF78C9F4FA2F15");
 
             entity.ToTable("MedicalRecord");
 
@@ -524,13 +523,13 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<MedicineDispense>(entity =>
         {
-            entity.HasKey(e => e.DispenseId).HasName("PK__Medicine__26DF670A7FC9C0CC");
+            entity.HasKey(e => e.DispenseId).HasName("PK__Medicine__26DF670A51035B13");
 
             entity.ToTable("MedicineDispense");
 
             entity.HasIndex(e => e.FormulaId, "IX_MedicineDispense_FormulaID");
 
-            entity.HasIndex(e => e.DispenseCode, "UQ__Medicine__126E0A48E3443D2A").IsUnique();
+            entity.HasIndex(e => e.DispenseCode, "UQ__Medicine__126E0A48B9E5C8B4").IsUnique();
 
             entity.Property(e => e.DispenseId).HasColumnName("DispenseID");
             entity.Property(e => e.DispenseCode)
@@ -564,7 +563,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Notification>(entity =>
         {
-            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E32C454F83F");
+            entity.HasKey(e => e.NotificationId).HasName("PK__Notifica__20CF2E3279BC1919");
 
             entity.ToTable("Notification");
 
@@ -582,7 +581,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Patient>(entity =>
         {
-            entity.HasKey(e => e.PatientId).HasName("PK__Patient__970EC346A27898CD");
+            entity.HasKey(e => e.PatientId).HasName("PK__Patient__970EC34686FD9E92");
 
             entity.ToTable("Patient");
 
@@ -591,19 +590,56 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.CreatedAt)
                 .HasDefaultValueSql("(getdate())")
                 .HasColumnType("datetime");
+            entity.Property(e => e.Email)
+                .HasMaxLength(100)
+                .IsUnicode(false);
+            entity.Property(e => e.Ethnicity).HasMaxLength(100);
             entity.Property(e => e.FullName).HasMaxLength(150);
             entity.Property(e => e.Gender).HasMaxLength(10);
             entity.Property(e => e.IdentityCard)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.IdentityCardIssuedPlace).HasMaxLength(255);
+            entity.Property(e => e.Nationality).HasMaxLength(100);
+            entity.Property(e => e.Occupation).HasMaxLength(150);
+            entity.Property(e => e.PatientCode)
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('BN'+CONVERT([varchar](20),[PatientID]))", true);
             entity.Property(e => e.Phone)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.PhotoUrl).HasMaxLength(500);
+            entity.Property(e => e.Province).HasMaxLength(100);
+            entity.Property(e => e.Ward).HasMaxLength(100);
+            entity.Property(e => e.Workplace).HasMaxLength(255);
+        });
+
+        modelBuilder.Entity<PatientContact>(entity =>
+        {
+            entity.HasKey(e => e.ContactId).HasName("PK__PatientC__5C6625BB39DDE3F1");
+
+            entity.ToTable("PatientContact");
+
+            entity.HasIndex(e => e.PatientId, "IX_PatientContact_PatientID");
+
+            entity.Property(e => e.ContactId).HasColumnName("ContactID");
+            entity.Property(e => e.FullName).HasMaxLength(150);
+            entity.Property(e => e.PatientId).HasColumnName("PatientID");
+            entity.Property(e => e.Phone)
+                .HasMaxLength(20)
+                .IsUnicode(false);
+            entity.Property(e => e.Relationship).HasMaxLength(50);
+
+            entity.HasOne(d => d.Patient).WithMany(p => p.PatientContacts)
+                .HasForeignKey(d => d.PatientId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_PatientContact_Patient");
         });
 
         modelBuilder.Entity<Podetail>(entity =>
         {
-            entity.HasKey(e => e.PodetailId).HasName("PK__PODetail__4EB47B5E56E4822D");
+            entity.HasKey(e => e.PodetailId).HasName("PK__PODetail__4EB47B5E22280B4B");
 
             entity.ToTable("PODetail");
 
@@ -628,11 +664,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<PurchaseOrder>(entity =>
         {
-            entity.HasKey(e => e.Poid).HasName("PK__Purchase__5F02A2F40FD20EBD");
+            entity.HasKey(e => e.Poid).HasName("PK__Purchase__5F02A2F47F712579");
 
             entity.ToTable("PurchaseOrder");
 
-            entity.HasIndex(e => e.Pocode, "UQ__Purchase__40ACF5B82DF83511").IsUnique();
+            entity.HasIndex(e => e.Pocode, "UQ__Purchase__40ACF5B85D1CCAD9").IsUnique();
 
             entity.Property(e => e.Poid).HasColumnName("POID");
             entity.Property(e => e.OrderDate)
@@ -666,7 +702,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ReceiptDetail>(entity =>
         {
-            entity.HasKey(e => e.ReceiptDetailId).HasName("PK__ReceiptD__82FADEDBCDE43B3D");
+            entity.HasKey(e => e.ReceiptDetailId).HasName("PK__ReceiptD__82FADEDB2D061BB2");
 
             entity.ToTable("ReceiptDetail");
 
@@ -691,7 +727,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<ReceiptHistory>(entity =>
         {
-            entity.HasKey(e => e.HistoryId).HasName("PK__ReceiptH__4D7B4ADD941AE3B7");
+            entity.HasKey(e => e.HistoryId).HasName("PK__ReceiptH__4D7B4ADDC11785B3");
 
             entity.ToTable("ReceiptHistory");
 
@@ -717,7 +753,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<RemedyFormula>(entity =>
         {
-            entity.HasKey(e => e.FormulaId).HasName("PK__RemedyFo__22745645928FBE80");
+            entity.HasKey(e => e.FormulaId).HasName("PK__RemedyFo__2274564543758D58");
 
             entity.ToTable("RemedyFormula");
 
@@ -737,11 +773,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Role>(entity =>
         {
-            entity.HasKey(e => e.RoleId).HasName("PK__Role__8AFACE3AD759AFCE");
+            entity.HasKey(e => e.RoleId).HasName("PK__Role__8AFACE3AC2F1042A");
 
             entity.ToTable("Role");
 
-            entity.HasIndex(e => e.RoleCode, "UQ__Role__D62CB59C37F5B057").IsUnique();
+            entity.HasIndex(e => e.RoleCode, "UQ__Role__D62CB59C5FEC503E").IsUnique();
 
             entity.Property(e => e.RoleId).HasColumnName("RoleID");
             entity.Property(e => e.Description).HasMaxLength(255);
@@ -753,11 +789,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Service>(entity =>
         {
-            entity.HasKey(e => e.ServiceId).HasName("PK__Service__C51BB0EA0C4EA8F3");
+            entity.HasKey(e => e.ServiceId).HasName("PK__Service__C51BB0EA828335D1");
 
             entity.ToTable("Service");
 
-            entity.HasIndex(e => e.ServiceCode, "UQ__Service__A01D74C97246E7BC").IsUnique();
+            entity.HasIndex(e => e.ServiceCode, "UQ__Service__A01D74C948D336FE").IsUnique();
 
             entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
             entity.Property(e => e.Description).HasMaxLength(255);
@@ -772,11 +808,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Supplier>(entity =>
         {
-            entity.HasKey(e => e.SupplierId).HasName("PK__Supplier__4BE666945F6AB912");
+            entity.HasKey(e => e.SupplierId).HasName("PK__Supplier__4BE6669471D9491D");
 
             entity.ToTable("Supplier");
 
-            entity.HasIndex(e => e.SupplierCode, "UQ__Supplier__44BE981B932EC338").IsUnique();
+            entity.HasIndex(e => e.SupplierCode, "UQ__Supplier__44BE981B88DC8699").IsUnique();
 
             entity.Property(e => e.SupplierId).HasColumnName("SupplierID");
             entity.Property(e => e.Address).HasMaxLength(255);
@@ -798,7 +834,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<TreatmentProtocol>(entity =>
         {
-            entity.HasKey(e => e.ProtocolId).HasName("PK__Treatmen__C1131837656F7882");
+            entity.HasKey(e => e.ProtocolId).HasName("PK__Treatmen__C1131837F07CA261");
 
             entity.ToTable("TreatmentProtocol");
 
@@ -820,7 +856,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<UsageHistory>(entity =>
         {
-            entity.HasKey(e => e.UsageId).HasName("PK__UsageHis__29B197C083B8328A");
+            entity.HasKey(e => e.UsageId).HasName("PK__UsageHis__29B197C0C7D02719");
 
             entity.ToTable("UsageHistory");
 
@@ -850,11 +886,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.HasKey(e => e.UserId).HasName("PK__User__1788CCACF4207DA3");
+            entity.HasKey(e => e.UserId).HasName("PK__User__1788CCACBDED65D1");
 
             entity.ToTable("User");
 
-            entity.HasIndex(e => e.Username, "UQ__User__536C85E4075CFA72").IsUnique();
+            entity.HasIndex(e => e.Username, "UQ__User__536C85E4A8CEAE1C").IsUnique();
 
             entity.Property(e => e.UserId).HasColumnName("UserID");
             entity.Property(e => e.CreatedAt)
@@ -878,7 +914,7 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<UserRole>(entity =>
         {
-            entity.HasKey(e => new { e.UserId, e.RoleId }).HasName("PK__UserRole__AF27604F84E3CCE5");
+            entity.HasKey(e => new { e.UserId, e.RoleId }).HasName("PK__UserRole__AF27604FDEF7A3F7");
 
             entity.ToTable("UserRole");
 
@@ -899,11 +935,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Warehouse>(entity =>
         {
-            entity.HasKey(e => e.WarehouseId).HasName("PK__Warehous__2608AFD9A28EBF4A");
+            entity.HasKey(e => e.WarehouseId).HasName("PK__Warehous__2608AFD98F636906");
 
             entity.ToTable("Warehouse");
 
-            entity.HasIndex(e => e.WarehouseCode, "UQ__Warehous__1686A056E1E6867C").IsUnique();
+            entity.HasIndex(e => e.WarehouseCode, "UQ__Warehous__1686A0568604EC20").IsUnique();
 
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
             entity.Property(e => e.IsActive).HasDefaultValue(true);
