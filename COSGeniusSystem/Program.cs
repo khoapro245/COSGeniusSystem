@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
 
 var builder = WebApplication.CreateBuilder(args);
