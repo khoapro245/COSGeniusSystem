@@ -1,11 +1,17 @@
 using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
+using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services.TreatmentServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Đăng ký các Service vào DI container
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
