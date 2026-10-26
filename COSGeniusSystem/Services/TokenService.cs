@@ -1,7 +1,7 @@
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
-using COSGeniusSystem.Model;
+using COSGeniusSystem.Models;
 using Microsoft.IdentityModel.Tokens;
 
 namespace COSGeniusSystem.Services;

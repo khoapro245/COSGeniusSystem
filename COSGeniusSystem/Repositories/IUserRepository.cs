@@ -1,4 +1,4 @@
-using COSGeniusSystem.Model;
+using COSGeniusSystem.Models;
 
 namespace COSGeniusSystem.Repositories;
 

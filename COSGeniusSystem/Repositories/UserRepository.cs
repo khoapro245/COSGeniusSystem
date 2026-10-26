@@ -1,5 +1,5 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.Model;
+using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Repositories;

@@ -1,7 +1,7 @@
 using COSGeniusSystem.Common;
 using COSGeniusSystem.DTOs.Auth;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Model;
+using COSGeniusSystem.Models;
 using COSGeniusSystem.Repositories;
 
 namespace COSGeniusSystem.Services;
