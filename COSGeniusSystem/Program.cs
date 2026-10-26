@@ -1,5 +1,12 @@
-using Microsoft.EntityFrameworkCore;
+using System.Text;
 using COSGeniusSystem.Data;
+using COSGeniusSystem.Middlewares;
+using COSGeniusSystem.Repositories;
+using COSGeniusSystem.Services;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,11 +14,73 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Register MemoryCache
+builder.Services.AddMemoryCache();
+
+// Register Repositories and Services
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+
+// Configure JWT Authentication
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
+    ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "COSGeniusClient";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = context =>
+        {
+            var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
+            var authHeader = context.Request.Headers.Authorization.ToString();
+            var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                ? authHeader["Bearer ".Length..].Trim()
+                : authHeader.Trim();
+
+            if (blacklistService.IsTokenBlacklisted(token))
+            {
+                context.Fail("This token has been revoked.");
+            }
+
+            return Task.CompletedTask;
+        }
+    };
+});
+
+builder.Services.AddAuthorization();
 builder.Services.AddControllers();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+
+// Configure OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+// Global Exception Handler Middleware
+app.UseMiddleware<ExceptionMiddleware>();
 
 // Automatically apply migrations on startup (with retry for container startup)
 if (app.Environment.IsDevelopment())
@@ -42,10 +111,12 @@ if (app.Environment.IsDevelopment())
 if (app.Environment.IsDevelopment())
 {
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
