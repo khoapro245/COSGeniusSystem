@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services.Herbs;
 using COSGeniusSystem.Services.TreatmentServices;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +13,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Đăng ký các Service vào DI container
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<ITreatmentService, TreatmentService>();
+builder.Services.AddScoped<IHerbService, HerbService>();
 
 builder.Services.AddControllers();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
