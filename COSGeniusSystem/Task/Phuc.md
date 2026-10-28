@@ -1,296 +1,353 @@
-# BÁO CÁO CÔNG VIỆC THỰC HIỆN - MODULE BÁC SĨ & DỊCH VỤ TRỊ LIỆU
+# BÁO CÁO CÔNG VIỆC THỰC HIỆN - HỆ THỐNG API COSGENIUSSYSTEM
 
 > **Dự án:** COSGeniusSystem (Hệ thống quản lý phòng khám đông y & dược liệu)  
-> **Người thực hiện:** Phúc  
-> **Nền tảng:** .NET 10 (ASP.NET Core Web API), Entity Framework Core (SQL Server & InMemory)
+> **Người thực hiện:** Phúc
+> **Nền tảng:** .NET 10 (ASP.NET Core Web API), Entity Framework Core (SQL Server & InMemory)  
+> **Phân hệ phụ trách:** Toàn diện Luồng Tiếp tân (Receptionist Workflow) & Bác sĩ - Dịch vụ Trị liệu  
+> **Cập nhật lần cuối:** 29/10/2026  
 
 ---
 
 ## I. TỔNG QUAN CÔNG VIỆC ĐÃ HOÀN THÀNH
 
-1. **Kết nối Cơ sở dữ liệu:**
-   - Cấu hình lại chuỗi kết nối trong `appsettings.json` kết nối chuẩn xác vào cơ sở dữ liệu `ClinicHerbManagementDB` trên máy cục bộ (`Server=localhost`).
-2. **Triển khai Cụm 1 - Module Bác sĩ (Doctor):**
-   - Xây dựng API lấy danh sách bác sĩ có lọc đa điều kiện (`API-PHUC-01`).
-   - Xây dựng API xem chi tiết bác sĩ kèm thông tin tài khoản liên kết (`API-PHUC-02`).
-3. **Triển khai Cụm 2 - Module Dịch vụ trị liệu (Treatment Service):**
-   - Xây dựng API lấy danh mục bảng giá dịch vụ khả dụng (`API-PHUC-03`).
-   - Xây dựng API thêm mới dịch vụ trị liệu kèm validation chống trùng và kiểm tra giá (`API-PHUC-04`).
-   - Xây dựng API cập nhật dịch vụ trị liệu và bảo đảm tính bất biến của hóa đơn cũ (`API-PHUC-05`).
-4. **Tổ chức kiến trúc chuẩn N-Tier:**
-   - Tách biệt rõ ràng các tầng: DTOs, Services (Interfaces + Implementations), Controllers.
-   - Đăng ký Dependency Injection (`AddScoped`) trong `Program.cs`.
-5. **Xây dựng toàn diện bộ mã nguồn Unit Test (xUnit & EF Core InMemory):**
-   - Viết trọn vẹn 11 test cases từ `UT-PHUC-01` đến `UT-PHUC-05`.
-   - Toàn bộ 11/11 test cases đều **PASS 100%**.
+1. **Kết nối Cơ sở dữ liệu & Rà soát hiện trạng (Bước 0):**
+   - Rà soát cấu trúc mã nguồn trong solution: xác nhận `ApplicationDbContext` kết nối cơ sở dữ liệu `ClinicHerbManagementDB`.
+   - Xác nhận và bảo toàn các mapping có sẵn của entity `Patient` (`PatientCode`, `PatientContacts`), `ExamSheet`, `UsageHistory`, `MedicalRecord`, `TreatmentProtocol`, `RemedyFormula`, `FormulaDetail`.
+   - Đảm bảo tính tương thích ngược: kế thừa trực tiếp `IPatientService` và `PatientsController` hỗ trợ đồng thời cả route chuẩn mới `/api/v1/patients` và route hiện hành của nhóm `/api/patients`.
+
+2. **Triển khai Trọn bộ 4 Module Nghiệp vụ Cốt lõi của Phân hệ Tiếp tân:**
+   - **Module 1 - Quản lý Hồ sơ Bệnh nhân (Patients):** Cung cấp bộ API tìm kiếm tương đối không phân trang (trả về mảng thuần túy), xem chi tiết mở rộng kèm người liên hệ, lịch sử khám bệnh, chi tiết phiếu khám gồm thông tin khám + dịch vụ chỉ định + đơn thuốc/vị thuốc, danh sách phác đồ và các buổi trị liệu đã thực hiện.
+   - **Module 2 - Đăng ký & Hàng đợi Khám bệnh (Examinations):** Quản lý lượt đăng ký khám và hàng đợi trong ngày, phân công bác sĩ, gắn cờ ưu tiên (`IsPriority`), tự động khởi tạo hồ sơ bệnh án `MedicalRecord` mặc định nếu bệnh nhân chưa có và cấp mã khám bệnh `KCBxxxxx`.
+   - **Module 3 - Tiếp nhận & Hàng đợi Trị liệu Liệu trình (Treatments):** Quản lý hàng đợi tiếp nhận điều trị theo phác đồ, tự động tính toán và hiển thị tiến độ buổi (dạng `"Buổi 03 / 05"`), tiếp nhận yêu cầu điều trị mới và cấp mã `YCDTxxxxx`.
+   - **Module 4 - Tổng quan Tiếp tân (Reception Dashboard):** Cung cấp 4 thẻ thống kê số liệu tổng quan trong ngày (tổng tiếp nhận, chờ khám, chờ trị liệu, hoàn tất, phân rã ca mới/điều trị) và 2 danh sách thu gọn (Quick Queues) cho trang chủ tiếp tân.
+
+3. **Tích hợp các Module Có sẵn vào Luồng Tiếp tân:**
+   - Kết nối danh mục Bác sĩ (`/api/v1/doctors`) phục vụ phân công khám bệnh.
+   - Kết nối Bảng giá Dịch vụ trị liệu (`/api/v1/services`) phục vụ chỉ định điều trị.
+   - Kết nối Người liên hệ bệnh nhân (`/api/patients/{id}/contacts`).
+   - Kết nối Hóa đơn & Thu ngân (`/api/v1/invoices`) phục vụ thu viện phí sau khám/trị liệu.
+
+4. **Tuân thủ Quy chuẩn Kiến trúc & Ràng buộc Kỹ thuật:**
+   - Mô hình Layered (Feature-based): `Controllers/` $\rightarrow$ `Services/<Module>/` $\rightarrow$ `ApplicationDbContext`.
+   - Không tạo tầng Repository trung gian, không tạo Middleware hay Custom Exception ngoài cấu trúc hiện hành.
+   - Toàn bộ query đọc dữ liệu đều sử dụng tối ưu hóa `.AsNoTracking()`.
+   - Chuẩn hóa mã hóa nghiệp vụ: Mã BN (`PatientCode` hoặc `BN{id:D5}`), Mã khám (`KCB{id:D5}`), Mã bệnh án (`MR{id:D5}`), Mã phác đồ (`LT{id:D5}`), Mã yêu cầu điều trị (`YCDT{id:D5}`).
+
+5. **Xây dựng Bộ Kiểm thử Tự động Unit Test (xUnit & EF Core InMemory):**
+   - Viết toàn diện 16 test cases mới cho 4 module Tiếp tân (7 Patient, 4 Examination, 3 Treatment, 2 Dashboard).
+   - Tổng cộng **48/48 test cases** trong solution đạt **PASS 100%**.
 
 ---
 
-## II. CẤU TRÚC FILE MÃ NGUỒN ĐÃ TẠO
+## II. BẢN ĐỒ QUY TRÌNH NGHIỆP VỤ LUỒNG TIẾP TÂN (RECEPTIONIST WORKFLOW)
+
+```mermaid
+flowchart TD
+    Start([Bệnh nhân đến phòng khám]) --> Decision{Bệnh nhân mới hay cũ?}
+    
+    Decision -- Bệnh nhân mới --> RegPatient["1. Tạo hồ sơ bệnh nhân mới<br/>(POST /api/v1/patients)<br/>• Lưu thông tin & Người liên hệ<br/>• Tự động tạo MedicalRecord"]
+    Decision -- Bệnh nhân cũ --> SearchPatient["Tìm kiếm hồ sơ bệnh nhân<br/>(GET /api/v1/patients?keyword=...)<br/>Xem chi tiết / Lịch sử khám<br/>(GET /api/v1/patients/{id})"]
+    
+    RegPatient --> ChooseFlow{"Nhu cầu đến khám?"}
+    SearchPatient --> ChooseFlow
+    
+    ChooseFlow -- Khám bệnh mới / Tái khám --> ExamQueue["2. Đăng ký & Vào hàng đợi khám<br/>(POST /api/v1/examinations/visits)<br/>• Phân công Bác sĩ khám<br/>• Ghi nhận triệu chứng & Ưu tiên<br/>• Sinh mã KCBxxxxx"]
+    ChooseFlow -- Trị liệu theo Liệu trình --> TreatQueue["3. Tiếp nhận vào hàng đợi trị liệu<br/>(POST /api/v1/treatments/queue)<br/>• Chọn phác đồ & Dịch vụ<br/>• Phân công KTV / Bác sĩ<br/>• Sinh mã YCDTxxxxx"]
+    
+    ExamQueue --> MonExam["Theo dõi hàng đợi khám trong ngày<br/>(GET /api/v1/examinations/visits)"]
+    TreatQueue --> MonTreat["Theo dõi hàng đợi trị liệu trong ngày<br/>(GET /api/v1/treatments/queue)"]
+    
+    MonExam --> Dashboard["4. Giám sát Tổng quan Dashboard<br/>(GET /api/v1/reception/dashboard/stats)<br/>(GET /api/v1/reception/dashboard/quick-queues)"]
+    MonTreat --> Dashboard
+    
+    MonExam --> ExamFinish["Bác sĩ hoàn thành khám & Kê đơn / Chỉ định"]
+    MonTreat --> TreatFinish["Kỹ thuật viên hoàn thành buổi trị liệu"]
+    
+    ExamFinish --> Billing["5. Lập hóa đơn & Thu phí tại quầy<br/>(POST /api/v1/invoices)"]
+    TreatFinish --> Billing
+    Billing --> End([Hoàn tất quy trình tiếp tân])
+```
+
+---
+
+## III. BẢNG TỔNG HỢP TOÀN BỘ API THEO TỪNG MODULE TRONG LUỒNG TIẾP TÂN
+
+Dưới đây là bảng tổng hợp toàn bộ các API tham gia vào phân hệ Tiếp tân, bao gồm cả các API có sẵn được tích hợp và các API mới xây dựng/nâng cấp:
+
+| STT | Luồng / Module nghiệp vụ | Phương thức | Tuyến đường API (Endpoint) | Mục đích nghiệp vụ trong luồng tiếp tân | Tình trạng |
+| :---: | :--- | :---: | :--- | :--- | :---: |
+| **1** | **TỔNG QUAN TIẾP TÂN (DASHBOARD)** | | | | |
+| 1.1 | Thống kê Dashboard | `GET` | `/api/v1/reception/dashboard/stats` | Thống kê 4 thẻ chỉ số trong ngày (tiếp nhận, chờ khám, chờ trị liệu, hoàn tất) và phân rã lượt | **Mới tạo** |
+| 1.2 | Hàng đợi nhanh Dashboard | `GET` | `/api/v1/reception/dashboard/quick-queues` | Lấy danh sách thu gọn Top 3 ca chờ khám và Top 3 ca chờ trị liệu hiển thị trang chủ | **Mới tạo** |
+| **2** | **HỒ SƠ BỆNH NHÂN (PATIENTS)** | | | | |
+| 2.1 | Danh sách bệnh nhân | `GET` | `/api/v1/patients` | Tra cứu, tìm kiếm tương đối hồ sơ bệnh nhân theo Mã BN, Tên, Số điện thoại (trả mảng thuần túy) | **Mới tạo / Nâng cấp** |
+| 2.2 | Chi tiết bệnh nhân | `GET` | `/api/v1/patients/{id}` | Xem chi tiết hồ sơ bệnh nhân mở rộng (CCCD, địa chỉ, nghề nghiệp...) và danh sách người liên hệ | **Mới tạo / Nâng cấp** |
+| 2.3 | Tạo hồ sơ bệnh nhân | `POST` | `/api/v1/patients` | Đón tiếp bệnh nhân mới: lưu hồ sơ, lưu người liên hệ, tự động tạo bệnh án `MedicalRecord` | **Mới tạo / Nâng cấp** |
+| 2.4 | Cập nhật hồ sơ bệnh nhân | `PUT` | `/api/v1/patients/{id}` | Cập nhật thông tin hành chính của bệnh nhân và bổ sung/chỉnh sửa người liên hệ | **Mới tạo / Nâng cấp** |
+| 2.5 | Xóa hồ sơ bệnh nhân | `DELETE` | `/api/v1/patients/{id}` | Xóa hồ sơ bệnh nhân khi nhập sai (chỉ xóa được khi chưa phát sinh phiếu khám/liên hệ) | Có sẵn / Tương thích |
+| 2.6 | Lịch sử khám bệnh | `GET` | `/api/v1/patients/{id}/visit-history` | Xem lịch sử các lượt khám bệnh trước đây của bệnh nhân (kèm mã `KCB`, mã `MR`, bác sĩ) | **Mới tạo** |
+| 2.7 | Chi tiết phiếu khám | `GET` | `/api/v1/patients/exam-sheets/{examSheetId}` | Xem chi tiết phiếu khám: chẩn đoán, mạch, lưỡi, dịch vụ chỉ định (`UsageHistory`) và đơn thuốc/vị thuốc | **Mới tạo** |
+| 2.8 | Danh sách phác đồ | `GET` | `/api/v1/patients/{id}/treatment-protocols` | Lấy danh sách phác đồ của bệnh nhân, tự động tính số buổi đã thực hiện và tổng số buổi | **Mới tạo** |
+| 2.9 | Chi tiết buổi trị liệu | `GET` | `/api/v1/patients/treatment-protocols/{protocolId}/sessions` | Xem chi tiết tiến độ các buổi trị liệu đã thực hiện của phác đồ (thời gian, dịch vụ, KTV, kết quả) | **Mới tạo** |
+| 2.10 | Danh sách người liên hệ | `GET` | `/api/patients/{patientId}/contacts` | Xem danh sách người liên hệ đại diện của bệnh nhân | Có sẵn |
+| 2.11 | Thêm người liên hệ | `POST` | `/api/patients/{patientId}/contacts` | Thêm người thân/người giám hộ cho bệnh nhân | Có sẵn |
+| 2.12 | Xem người liên hệ | `GET` | `/api/patients/{patientId}/contacts/{contactId}` | Xem chi tiết 1 người liên hệ | Có sẵn |
+| 2.13 | Sửa người liên hệ | `PUT` | `/api/patients/{patientId}/contacts/{contactId}` | Cập nhật thông tin người liên hệ | Có sẵn |
+| 2.14 | Xóa người liên hệ | `DELETE` | `/api/patients/{patientId}/contacts/{contactId}` | Xóa người liên hệ | Có sẵn |
+| **3** | **ĐĂNG KÝ & HÀNG ĐỢI KHÁM (EXAMINATIONS)** | | | | |
+| 3.1 | Danh sách hàng đợi khám | `GET` | `/api/v1/examinations/visits` | Lấy danh sách hàng đợi khám trong ngày (sắp xếp ưu tiên lên đầu, lọc theo BS, từ khóa, trạng thái) | **Mới tạo** |
+| 3.2 | Đăng ký khám mới | `POST` | `/api/v1/examinations/visits` | Đăng ký khám: tự động gắn `MedicalRecord`, phân công BS, gán cờ ưu tiên, tạo phiếu `KCBxxxxx` | **Mới tạo** |
+| 3.3 | Chi tiết phiếu đăng ký | `GET` | `/api/v1/examinations/visits/{examSheetId}` | Xem chi tiết phiếu đăng ký khám theo `ExamSheetID` | **Mới tạo** |
+| 3.4 | Hủy phiếu khám | `DELETE` | `/api/v1/examinations/visits/{examSheetId}` | Hủy lượt đăng ký khám khi bệnh nhân bỏ về (áp dụng khi đang `"Chờ khám"`) | **Mới tạo** |
+| 3.5 | Danh mục Bác sĩ khám | `GET` | `/api/v1/doctors` | Lấy danh mục bác sĩ đang hoạt động theo chuyên khoa để tiếp tân phân công phòng khám | Có sẵn / Tích hợp |
+| 3.6 | Chi tiết Bác sĩ | `GET` | `/api/v1/doctors/{id}` | Xem chi tiết thông tin và chuyên môn của bác sĩ | Có sẵn / Tích hợp |
+| **4** | **TIẾP NHẬN & HÀNG ĐỢI TRỊ LIỆU (TREATMENTS)** | | | | |
+| 4.1 | Hàng đợi chờ trị liệu | `GET` | `/api/v1/treatments/queue` | Lấy danh sách chờ trị liệu hôm nay, hiển thị tiến độ buổi liệu trình (dạng `"Buổi 03 / 05"`) | **Mới tạo** |
+| 4.2 | Tiếp nhận điều trị | `POST` | `/api/v1/treatments/queue` | Tiếp nhận bệnh nhân vào hàng đợi trị liệu, gắn vào phiếu khám, tạo `UsageHistory`, cấp mã `YCDTxxxxx` | **Mới tạo** |
+| 4.3 | Danh mục bảng giá dịch vụ | `GET` | `/api/v1/services` | Tra cứu danh mục dịch vụ trị liệu khả dụng (Châm cứu, Bấm huyệt, Cứu ngải...) và đơn giá | Có sẵn / Tích hợp |
+| **5** | **HÓA ĐƠN & THU PHÍ TẠI QUẦY (INVOICES)** | | | | |
+| 5.1 | Danh sách hóa đơn | `GET` | `/api/v1/invoices` | Lấy danh sách hóa đơn viện phí tại quầy thu ngân | Có sẵn / Tích hợp |
+| 5.2 | Chi tiết hóa đơn | `GET` | `/api/v1/invoices/{id}` | Xem chi tiết hóa đơn thanh toán (chi phí khám, dịch vụ trị liệu, tiền thuốc thang) | Có sẵn / Tích hợp |
+| 5.3 | Lập hóa đơn | `POST` | `/api/v1/invoices` | Tạo hóa đơn thanh toán viện phí cho bệnh nhân sau khám/trị liệu | Có sẵn / Tích hợp |
+
+---
+
+## IV. CẤU TRÚC FILE MÃ NGUỒN CÁC MODULE VỪA TRIỂN KHAI
 
 ```text
 COSGeniusSystem/
 ├── Controllers/
-│   ├── DoctorsController.cs                       # Endpoints API-PHUC-01, API-PHUC-02
-│   └── TreatmentServicesController.cs             # Endpoints API-PHUC-03, 04, 05
+│   ├── PatientsController.cs                          # Module 1: Quản lý hồ sơ bệnh nhân (Nâng cấp)
+│   ├── ExaminationsController.cs                      # Module 2: Đăng ký & Hàng đợi khám bệnh (Mới)
+│   ├── TreatmentsController.cs                        # Module 3: Tiếp nhận & Hàng đợi trị liệu (Mới)
+│   └── ReceptionDashboardController.cs                # Module 4: Tổng quan Dashboard tiếp tân (Mới)
 ├── DTOs/
-│   ├── Doctors/
-│   │   ├── DoctorFilterQuery.cs                   # Tham số lọc danh sách bác sĩ
-│   │   ├── DoctorResponseDto.cs                   # Output danh sách bác sĩ
-│   │   └── DoctorDetailDto.cs                     # Output chi tiết bác sĩ kèm user
-│   └── TreatmentServices/
-│       ├── TreatmentServiceResponseDto.cs         # Output thông tin dịch vụ trị liệu
-│       ├── CreateTreatmentServiceRequest.cs       # Input thêm mới dịch vụ
-│       └── UpdateTreatmentServiceRequest.cs       # Input cập nhật dịch vụ
+│   ├── Patients/                                      # DTOs Module 1: Hồ sơ bệnh nhân
+│   │   ├── PatientSearchQuery.cs                      # Tham số tìm kiếm bệnh nhân tương đối
+│   │   ├── PatientResponseDto.cs                      # Output mảng bệnh nhân thuần túy
+│   │   ├── PatientDetailDto.cs                        # Output chi tiết bệnh nhân kèm người liên hệ
+│   │   ├── PatientContactDto.cs                       # Thông tin người liên hệ
+│   │   ├── CreatePatientRequest.cs                    # Input tạo bệnh nhân + liên hệ đại diện
+│   │   ├── UpdatePatientRequest.cs                    # Input cập nhật bệnh nhân + danh sách liên hệ
+│   │   ├── PatientVisitHistoryDto.cs                  # Output lịch sử các lần khám
+│   │   ├── MedicalRecordDetailDto.cs                  # Output chi tiết phiếu khám, dịch vụ, đơn thuốc
+│   │   ├── TreatmentProtocolDto.cs                    # Output danh sách phác đồ & số buổi hoàn tất
+│   │   └── TreatmentSessionDto.cs                     # Output chi tiết các buổi trị liệu
+│   ├── Examinations/                                  # DTOs Module 2: Khám bệnh
+│   │   ├── ExaminationFilterQuery.cs                  # Tham số lọc hàng đợi khám
+│   │   ├── ExaminationVisitDto.cs                     # Output phiếu khám trong hàng đợi
+│   │   └── CreateExaminationVisitRequest.cs           # Input đăng ký lượt khám bệnh mới
+│   ├── Treatments/                                    # DTOs Module 3: Trị liệu
+│   │   ├── TreatmentQueueQuery.cs                     # Tham số lọc hàng đợi trị liệu
+│   │   ├── TreatmentQueueDto.cs                       # Output hàng đợi trị liệu kèm tiến độ buổi
+│   │   └── CreateTreatmentRequest.cs                  # Input tiếp nhận lượt trị liệu mới
+│   └── Reception/                                     # DTOs Module 4: Tổng quan Dashboard
+│       ├── DashboardStatsDto.cs                       # Output 4 chỉ số thống kê & phân rã trong ngày
+│       └── DashboardQueueDto.cs                       # Output Top ca chờ khám & chờ trị liệu trang chủ
 ├── Services/
-│   ├── Doctors/
-│   │   ├── IDoctorService.cs                      # Interface nghiệp vụ Bác sĩ
-│   │   └── DoctorService.cs                       # Xử lý truy vấn Bác sĩ qua EF Core
-│   └── TreatmentServices/
-│       ├── ITreatmentService.cs                   # Interface nghiệp vụ Dịch vụ trị liệu
-│       └── TreatmentService.cs                    # Xử lý nghiệp vụ & validation dịch vụ
+│   ├── Interfaces/
+│   │   └── IPatientService.cs                         # Interface Module 1 (Mở rộng 8 phương thức)
+│   ├── PatientService.cs                              # Hiện thực Service Module 1
+│   ├── Examinations/
+│   │   ├── IExaminationService.cs                     # Interface Module 2 (kèm alias IExamSheetService)
+│   │   └── ExaminationService.cs                      # Hiện thực Service Module 2
+│   ├── Treatments/
+│   │   ├── ITreatmentProtocolService.cs               # Interface Module 3 (kèm alias ITreatmentQueueService)
+│   │   └── TreatmentProtocolService.cs                # Hiện thực Service Module 3
+│   └── Reception/
+│       ├── IReceptionDashboardService.cs              # Interface Module 4: Dashboard
+│       └── ReceptionDashboardService.cs               # Hiện thực Service Module 4
 ├── UnitTests/
-│   ├── UnitTests.csproj                           # Project kiểm thử xUnit & InMemory EF Core
-│   ├── Doctors/
-│   │   └── DoctorServiceTests.cs                  # Unit Test UT-PHUC-01, UT-PHUC-02
-│   └── TreatmentServices/
-│       └── TreatmentServiceTests.cs               # Unit Test UT-PHUC-03, UT-PHUC-04, UT-PHUC-05
-└── Task/
-    └── Phuc.md                                    # File báo cáo & tài liệu kiểm thử
+│   ├── Patients/
+│   │   └── PatientServiceTests.cs                     # 7 Unit Tests kiểm thử Module 1
+│   ├── Examinations/
+│   │   └── ExaminationServiceTests.cs                 # 4 Unit Tests kiểm thử Module 2
+│   ├── Treatments/
+│   │   └── TreatmentProtocolServiceTests.cs           # 3 Unit Tests kiểm thử Module 3
+│   └── Reception/
+│       └── ReceptionDashboardServiceTests.cs          # 2 Unit Tests kiểm thử Module 4
+├── Commons/
+│   └── SystemMessages.cs                              # Bổ sung các thông điệp phản hồi chuẩn hóa
+└── Program.cs                                         # Đăng ký Dependency Injection AddScoped
 ```
 
 ---
 
-## III. CHI TIẾT DANH SÁCH API ENDPOINTS
+## V. ĐẶC TẢ CHI TIẾT TỪNG API TRONG LUỒNG TIẾP TÂN
 
-### 1. CỤM 1: MODULE BÁC SĨ (DOCTOR)
+### 1. MODULE 1: HỒ SƠ & THÔNG TIN BỆNH NHÂN
 
-#### API-PHUC-01: Lấy danh sách bác sĩ / kỹ thuật viên
-* **Method & URL:** `GET /api/v1/doctors`
-* **Query Parameters (`DoctorFilterQuery`):**
-  * `keyword` *(string, optional)*: Tìm kiếm tương đối không phân biệt hoa thường theo `FullName` hoặc `Phone`.
-  * `specialization` *(string, optional)*: Lọc theo chuyên khoa / chuyên môn.
-  * `isActive` *(bool, optional, mặc định: `true`)*: Lọc trạng thái hoạt động.
-* **Logic:** Dùng `AsNoTracking()`, kết hợp các bộ lọc và ánh xạ sang `DoctorResponseDto`.
-* **Mẫu gọi:**
-  ```text
-  GET http://localhost:5217/api/v1/doctors?keyword=Nguyen&specialization=Châm cứu&isActive=true
-  ```
-* **Response Output (`200 OK`):**
+#### API-RECEPT-01: Lấy danh sách hồ sơ bệnh nhân
+* **Method & URL:** `GET /api/v1/patients` (hoặc `GET /api/patients`)
+* **Query Parameters (`PatientSearchQuery`):**
+  * `keyword` *(string, optional)*: Tìm kiếm tương đối không phân biệt hoa thường theo `PatientCode`, `FullName` hoặc `Phone`.
+* **Logic:** Dùng `.AsNoTracking()`, sắp xếp giảm dần theo `PatientId`, chuẩn hóa mã `PatientCode ?? $"BN{p.PatientId:D5}"`.
+* **Output:** `200 OK` kèm `List<PatientResponseDto>`. Trả về danh sách mảng thuần túy để UI Client tự phân trang.
+
+#### API-RECEPT-02: Xem chi tiết bệnh nhân kèm người liên hệ
+* **Method & URL:** `GET /api/v1/patients/{id}` (hoặc `GET /api/patients/{id}`)
+* **Route Parameter:** `id` *(int)*: Khóa chính `PatientId`.
+* **Logic:** Truy vấn bệnh nhân kết hợp `.Include(p => p.PatientContacts)`. Nếu không tìm thấy, trả về `404 Not Found`.
+* **Output:** `200 OK` kèm `PatientDetailDto` gồm toàn bộ thông tin cá nhân mở rộng (CCCD, ngày cấp, nơi cấp, nghề nghiệp, nơi làm việc, dân tộc, quốc tịch...) và danh sách người liên hệ từ bảng `PatientContact`.
+
+#### API-RECEPT-03: Thêm mới hồ sơ bệnh nhân
+* **Method & URL:** `POST /api/v1/patients` (hoặc `POST /api/patients`)
+* **Request Body (`CreatePatientRequest`):** Thông tin cá nhân bệnh nhân kèm thông tin người liên hệ đại diện ban đầu (`ContactFullName`, `ContactRelationship`, `ContactPhone`).
+* **Logic:**
+  * Validate ngày sinh và ngày cấp CCCD không được vượt quá ngày hiện tại.
+  * Lưu vào bảng `Patient`. Nếu có thông tin người liên hệ, lưu tiếp vào `PatientContact`.
+  * **Tự động khởi tạo 1 bản ghi `MedicalRecord` mặc định** gắn với `PatientId` với `Status = N'Đang theo dõi'` và `CreatedDate = DateTime.Now`.
+* **Output:** `201 Created` kèm thông tin chi tiết bệnh nhân vừa tạo.
+
+#### API-RECEPT-04: Cập nhật hồ sơ bệnh nhân
+* **Method & URL:** `PUT /api/v1/patients/{id}` (hoặc `PUT /api/patients/{id}`)
+* **Request Body (`UpdatePatientRequest`):** Thông tin hành chính cập nhật và danh sách người liên hệ cần cập nhật hoặc thêm mới.
+* **Logic:** Cập nhật các trường thông tin bệnh nhân; duyệt danh sách `Contacts`: nếu có `ContactId` thì cập nhật, nếu không có thì thêm mới vào `PatientContact`.
+* **Output:** `200 OK` kèm thông tin chi tiết bệnh nhân sau cập nhật.
+
+#### API-RECEPT-05: Lịch sử các lần khám bệnh của bệnh nhân
+* **Method & URL:** `GET /api/v1/patients/{id}/visit-history`
+* **Route Parameter:** `id` *(int)*: Khóa chính `PatientId`.
+* **Logic:** Truy vấn các phiếu khám `ExamSheet` liên kết thông qua `MedicalRecord` của bệnh nhân, sắp xếp giảm dần theo ngày khám `ExamDate`.
+* **Output:** `200 OK` kèm `List<PatientVisitHistoryDto>` (Mã `KCB{ExamSheetId:D5}`, mã `MR{RecordId:D5}`, bác sĩ, triệu chứng, trạng thái).
+
+#### API-RECEPT-06: Chi tiết một lần khám bệnh
+* **Method & URL:** `GET /api/v1/patients/exam-sheets/{examSheetId}`
+* **Route Parameter:** `examSheetId` *(int)*: Khóa chính `ExamSheetId`.
+* **Logic:** Truy vấn chi tiết `ExamSheet` kèm bác sĩ, các dịch vụ chỉ định từ `UsageHistory` và các đơn thuốc từ `RemedyFormula` kèm chi tiết từng vị thuốc trong `FormulaDetail`.
+* **Output:** `200 OK` kèm `MedicalRecordDetailDto`:
+  * Thông tin khám: Bác sĩ, ngày giờ khám, chẩn đoán xác định, triệu chứng, mạch chẩn, thiệt chẩn, lời dặn bác sĩ.
+  * Danh sách dịch vụ chỉ định (`UsageHistoryItemDto`): Mã `YCDTxxxxx`, tên dịch vụ, số lượng, thời gian thực hiện, bác sĩ/KTV thực hiện, ghi chú kết quả.
+  * Đơn thuốc (`PrescriptionDto`): Tên bài thuốc, hướng dẫn sử dụng, số ngày uống, tổng số thang và danh sách vị thuốc (`FormulaDetailItemDto` gồm tên dược liệu, liều lượng/thang, vai trò Quân/Thần/Tá/Sứ).
+
+#### API-RECEPT-07: Danh sách phác đồ / liệu trình điều trị
+* **Method & URL:** `GET /api/v1/patients/{id}/treatment-protocols`
+* **Route Parameter:** `id` *(int)*: Khóa chính `PatientId`.
+* **Logic:** Lấy danh sách `TreatmentProtocol` của bệnh nhân. Tính toán `CompletedSessions` dựa trên số lượng bản ghi `UsageHistory` tương ứng; bóc tách `TotalSessions` từ mô tả phác đồ (mặc định 10); xác định trạng thái `"Đang điều trị"`, `"Đã hoàn thành"` hoặc `"Mới tiếp nhận"`.
+* **Output:** `200 OK` kèm `List<TreatmentProtocolDto>`.
+
+#### API-RECEPT-08: Chi tiết các buổi trị liệu của phác đồ
+* **Method & URL:** `GET /api/v1/patients/treatment-protocols/{protocolId}/sessions`
+* **Route Parameter:** `protocolId` *(int)*: Khóa chính `ProtocolId`.
+* **Logic:** Lấy danh sách các buổi trị liệu đã ghi nhận trong `UsageHistory` thuộc bệnh án của phác đồ, sắp xếp theo thời gian thực hiện.
+* **Output:** `200 OK` kèm `List<TreatmentSessionDto>`: Thứ tự buổi `SessionNo` (1, 2, 3...), thời gian, tên dịch vụ, người thực hiện, ghi chú kết quả, trạng thái (`"Chờ điều trị"` hoặc `"Đã hoàn thành"`).
+
+---
+
+### 2. MODULE 2: ĐĂNG KÝ & HÀNG ĐỢI KHÁM BỆNH
+
+#### API-RECEPT-09: Lấy danh sách đăng ký khám & hàng đợi khám
+* **Method & URL:** `GET /api/v1/examinations/visits`
+* **Query Parameters (`ExaminationFilterQuery`):** `FromDate`, `ToDate`, `DoctorId`, `Keyword`, `Status`. Mặc định lấy theo ngày hiện tại (`DateTime.Today`).
+* **Logic:** Lọc phiếu khám theo khoảng thời gian; ưu tiên hiển thị các ca cấp cứu/người già (`IsPriority == true`) lên trước, sau đó theo thứ tự thời gian đến; đánh số thứ tự `Stt`.
+* **Output:** `200 OK` kèm `List<ExaminationVisitDto>` (`Stt`, `KcbCode`, `PatientCode`, `PatientName`, `RegisteredDate`, `DoctorName`, `IsPriority`, `Phone`, `Status`).
+
+#### API-RECEPT-10: Đăng ký lượt khám bệnh mới vào hàng đợi
+* **Method & URL:** `POST /api/v1/examinations/visits`
+* **Request Body (`CreateExaminationVisitRequest`):** `PatientId`, `DoctorId`, `Symptoms`, `DoctorAdvice`, `IsPriority`.
+* **Logic:**
+  * Lấy `RecordId` từ `MedicalRecord` đang hoạt động của bệnh nhân (nếu chưa có thì tự động tạo mới `MedicalRecord`).
+  * Nếu là ca ưu tiên (`IsPriority == true`), tự động gắn tiền tố `[Ưu tiên]` vào triệu chứng.
+  * Thêm bản ghi mới vào `ExamSheet` với `ExamDate = DateTime.Now`, `DoctorId`, `Symptoms`, và gán `FinalDiagnosis = N'Chờ khám'`.
+* **Output:** `201 Created` kèm thông tin phiếu khám và mã lượt khám vừa sinh `KCBxxxxx`.
+
+#### API-RECEPT-11: Xem chi tiết phiếu đăng ký khám
+* **Method & URL:** `GET /api/v1/examinations/visits/{examSheetId}`
+* **Route Parameter:** `examSheetId` *(int)*: Khóa chính `ExamSheetId`.
+* **Output:** `200 OK` kèm `ExaminationVisitDto`.
+
+#### API-RECEPT-12: Hủy lượt đăng ký khám khi bệnh nhân bỏ về
+* **Method & URL:** `DELETE /api/v1/examinations/visits/{examSheetId}`
+* **Logic:** Kiểm tra phiếu khám còn ở trạng thái `"Chờ khám"`. Nếu chưa có hóa đơn, đơn thuốc hay dịch vụ trị liệu liên quan thì xóa hoàn toàn bản ghi; nếu đã có liên kết thì cập nhật trạng thái `"Đã hủy"`.
+* **Output:** `200 OK` kèm thông báo hủy thành công.
+
+---
+
+### 3. MODULE 3: TIẾP NHẬN & HÀNG ĐỢI TRỊ LIỆU THEO LIỆU TRÌNH
+
+#### API-RECEPT-13: Lấy danh sách hàng đợi chờ trị liệu hôm nay
+* **Method & URL:** `GET /api/v1/treatments/queue`
+* **Query Parameters (`TreatmentQueueQuery`):** `Date` (mặc định hôm nay), `DoctorId`, `Keyword`.
+* **Logic:** Truy vấn danh sách `UsageHistory` trong ngày mà `ResultNote` còn trống hoặc là `"Chờ điều trị"`. Tự động tính toán tiến độ buổi `SessionInfo` dạng `"Buổi 03 / 05"` dựa trên số lần trị liệu đã ghi nhận trong hồ sơ bệnh án.
+* **Output:** `200 OK` kèm `List<TreatmentQueueDto>` (`Stt`, `UsageId`, `PatientName`, `PatientCode`, `Phone`, `YcdtCode`, `ReceptionTime`, `ProtocolName`, `SessionInfo`, `DoctorName`, `Status = "Chờ điều trị"`).
+
+#### API-RECEPT-14: Tiếp nhận bệnh nhân vào hàng đợi điều trị
+* **Method & URL:** `POST /api/v1/treatments/queue`
+* **Request Body (`CreateTreatmentRequest`):** `PatientId`, `ServiceId`, `DoctorId`, `ExamSheetId` (optional), `Note`.
+* **Logic:**
+  * Xác định `ExamSheetId` hợp lệ gần nhất của bệnh nhân (hoặc tự động tạo hồ sơ bệnh án và phiếu tiếp nhận nếu bệnh nhân vào trị liệu thẳng).
+  * Thêm mới một bản ghi vào `UsageHistory` với `ServiceID`, `PerformedBy = DoctorId`, `ExecutionTime = DateTime.Now`, `Quantity = 1`, `ResultNote = Note`.
+* **Output:** `201 Created` kèm thông tin lượt trị liệu và mã yêu cầu điều trị `YCDTxxxxx`.
+
+---
+
+### 4. MODULE 4: TỔNG QUAN TIẾP TÂN (RECEPTION DASHBOARD)
+
+#### API-RECEPT-15: Lấy số liệu thống kê tổng quan trong ngày
+* **Method & URL:** `GET /api/v1/reception/dashboard/stats`
+* **Logic:**
+  * Đếm tổng lượt tiếp nhận `TodayTotalVisits` (tổng ca khám mới + ca điều trị).
+  * Đếm ca chờ khám `WaitingExaminationCount` (`FinalDiagnosis == "Chờ khám"`).
+  * Đếm ca chờ điều trị `WaitingTreatmentCount` (`ResultNote` rỗng / `"Chờ điều trị"`).
+  * Đếm ca hoàn tất `CompletedVisitsCount` (đã khám xong + đã điều trị xong).
+  * Phân rã số ca khám mới `NewExaminationCount` và số ca điều trị `TreatmentCount`.
+* **Output (`200 OK`):**
   ```json
-  [
-    {
-      "doctorId": 1,
-      "fullName": "Bác sĩ Nguyễn Văn A",
-      "specialization": "Châm cứu",
-      "phone": "0912345678",
-      "isActive": true
+  {
+    "code": 200,
+    "message": "Dashboard stats retrieved successfully.",
+    "isSuccess": true,
+    "data": {
+      "todayTotalVisits": 28,
+      "waitingExaminationCount": 6,
+      "waitingTreatmentCount": 4,
+      "completedVisitsCount": 18,
+      "newExaminationCount": 16,
+      "treatmentCount": 12
     }
-  ]
-  ```
-
----
-
-#### API-PHUC-02: Xem chi tiết bác sĩ
-* **Method & URL:** `GET /api/v1/doctors/{id}`
-* **Route Parameter:** `id` *(int)*: Khóa chính `DoctorId`.
-* **Logic:** Truy vấn `Doctors` theo `id`, kết hợp `.Include(d => d.User)`. Dùng `AsNoTracking()`. Nếu không tìm thấy, trả về `404 Not Found`.
-* **Mẫu gọi:**
-  ```text
-  GET http://localhost:5217/api/v1/doctors/1
-  ```
-* **Response Output (`200 OK`):**
-  ```json
-  {
-    "doctorId": 1,
-    "fullName": "Bs. CKI Nguyễn Văn Tuấn",
-    "specialization": "Y học cổ truyền",
-    "licenseNumber": "CCHN-00123",
-    "phone": "0987654321",
-    "isActive": true,
-    "username": "dr.nguyen",
-    "email": "dr.nguyen@clinicherb.vn"
-  }
-  ```
-* **Trường hợp lỗi (`404 Not Found`):**
-  ```json
-  {
-    "message": "Doctor with id 99999 was not found."
   }
   ```
 
----
-
-### 2. CỤM 2: MODULE DỊCH VỤ TRỊ LIỆU (TREATMENT SERVICE)
-
-#### API-PHUC-03: Danh mục bảng giá dịch vụ trị liệu
-* **Method & URL:** `GET /api/v1/services`
-* **Logic:** Lấy toàn bộ danh sách dịch vụ trong bảng `[Service]` có `IsActive == true`, dùng `AsNoTracking()`.
-* **Mẫu gọi:**
-  ```text
-  GET http://localhost:5217/api/v1/services
-  ```
-* **Response Output (`200 OK`):**
+#### API-RECEPT-16: Lấy danh sách 2 hàng đợi thu gọn hiển thị trang chủ
+* **Method & URL:** `GET /api/v1/reception/dashboard/quick-queues?top=3`
+* **Query Parameters:** `top` *(int, default = 3)*: Số lượng ca chờ lấy ra ở đầu mỗi hàng đợi.
+* **Logic:**
+  * Top ca chờ khám: sắp xếp ưu tiên `IsPriority` lên đầu, sau đó theo thời gian đến.
+  * Top ca chờ điều trị: sắp xếp theo thời gian tiếp nhận và format tiến độ buổi `"02 / 05"`.
+* **Output (`200 OK`):**
   ```json
-  [
-    {
-      "serviceId": 1,
-      "serviceCode": "DV001",
-      "serviceName": "Châm cứu trị liệu",
-      "price": 150000.0,
-      "unit": "Lần",
-      "description": "Châm cứu thông kinh hoạt lạc",
-      "isActive": true
+  {
+    "code": 200,
+    "message": "Dashboard quick queues retrieved successfully.",
+    "isSuccess": true,
+    "data": {
+      "waitingExaminations": [
+        {
+          "stt": 1,
+          "examSheetId": 105,
+          "kcbCode": "KCB00105",
+          "patientCode": "BN00021",
+          "fullName": "Nguyễn Văn An",
+          "doctorName": "BS. CKI Nguyễn Văn Tuấn",
+          "receptionTime": "2026-10-29T08:15:00",
+          "isPriority": true
+        }
+      ],
+      "waitingTreatments": [
+        {
+          "stt": 1,
+          "usageId": 88,
+          "ycdtCode": "YCDT00088",
+          "patientCode": "BN00015",
+          "fullName": "Trần Thị Bình",
+          "protocolOrServiceName": "Phác đồ phục hồi thoái hóa cột sống",
+          "doctorName": "KTV. Lê Văn C",
+          "sessionInfo": "03 / 05",
+          "receptionTime": "2026-10-29T08:30:00"
+        }
+      ]
     }
-  ]
-  ```
-
----
-
-#### API-PHUC-04: Thêm mới dịch vụ vào bảng giá
-* **Method & URL:** `POST /api/v1/services`
-* **Content-Type:** `application/json`
-* **Request Body (`CreateTreatmentServiceRequest`):**
-  ```json
-  {
-    "serviceCode": "DV002",
-    "serviceName": "Xoa bóp bấm huyệt",
-    "price": 200000,
-    "unit": "Lần",
-    "description": "Xoa bóp phục hồi chức năng cổ vai gáy"
-  }
-  ```
-* **Validation & Logic:**
-  * Bắt buộc có: `ServiceCode`, `ServiceName`, `Price`, `Unit`.
-  * `Price` bắt buộc phải `> 0`. Nếu `<= 0` $\rightarrow$ Trả về `400 Bad Request`.
-  * Kiểm tra trùng lặp: Nếu `ServiceCode` hoặc `ServiceName` đã tồn tại $\rightarrow$ Trả về `400 Bad Request`.
-  * Mặc định lưu với `IsActive = true`.
-* **Response Output (`201 Created` kèm header `Location`):**
-  ```json
-  {
-    "serviceId": 2,
-    "serviceCode": "DV002",
-    "serviceName": "Xoa bóp bấm huyệt",
-    "price": 200000.0,
-    "unit": "Lần",
-    "description": "Xoa bóp phục hồi chức năng cổ vai gáy",
-    "isActive": true
   }
   ```
 
 ---
-
-#### API-PHUC-05: Cập nhật dịch vụ trị liệu
-* **Method & URL:** `PUT /api/v1/services/{id}`
-* **Route Parameter:** `id` *(int)*: ID dịch vụ cần cập nhật.
-* **Content-Type:** `application/json`
-* **Request Body (`UpdateTreatmentServiceRequest`):**
-  ```json
-  {
-    "serviceName": "Châm cứu trị liệu nâng cao",
-    "price": 180000,
-    "unit": "Lần",
-    "description": "Châm cứu kết hợp điện châm",
-    "isActive": true
-  }
-  ```
-* **Validation & Logic:**
-  * Tìm dịch vụ theo `id`. Nếu không tồn tại $\rightarrow$ Trả về `404 Not Found`.
-  * Kiểm tra `Price > 0`. Nếu `<= 0` $\rightarrow$ Trả về `400 Bad Request`.
-  * Kiểm tra trùng tên: Nếu `ServiceName` mới bị trùng với 1 dịch vụ khác $\rightarrow$ Trả về `400 Bad Request`.
-  * Cập nhật các trường và lưu vào database.
-* **Response Output (`200 OK`):**
-  ```json
-  {
-    "serviceId": 1,
-    "serviceCode": "DV001",
-    "serviceName": "Châm cứu trị liệu nâng cao",
-    "price": 180000.0,
-    "unit": "Lần",
-    "description": "Châm cứu kết hợp điện châm",
-    "isActive": true
-  }
-  ```
-
----
-
-## IV. HƯỚNG DẪN CHẠY CHƯƠNG TRÌNH ĐỂ TEST API
-
-### 1. Khởi động ứng dụng
-Chạy lệnh tại thư mục `COSGeniusSystem`:
-```bash
-dotnet run
-```
-Hoặc bấm phím **F5** trong Visual Studio. Server sẽ chạy tại: `http://localhost:5217`.
-
-### 2. Kiểm thử API bằng trình duyệt (Đối với các API GET)
-* Xem danh sách dịch vụ: [http://localhost:5217/api/v1/services](http://localhost:5217/api/v1/services)
-* Xem danh sách bác sĩ: [http://localhost:5217/api/v1/doctors](http://localhost:5217/api/v1/doctors)
-* Xem chi tiết bác sĩ 1: [http://localhost:5217/api/v1/doctors/1](http://localhost:5217/api/v1/doctors/1)
-
-### 3. Kiểm thử API bằng cURL / Postman (Dành cho POST & PUT)
-
-* **Thêm mới dịch vụ (POST):**
-  ```bash
-  curl -X POST http://localhost:5217/api/v1/services \
-    -H "Content-Type: application/json" \
-    -d "{\"serviceCode\":\"DV003\",\"serviceName\":\"Thủy châm trị liệu\",\"price\":250000,\"unit\":\"Lần\",\"description\":\"Tiêm thuốc vào huyệt\"}"
-  ```
-
-* **Cập nhật dịch vụ (PUT):**
-  ```bash
-  curl -X PUT http://localhost:5217/api/v1/services/1 \
-    -H "Content-Type: application/json" \
-    -d "{\"serviceName\":\"Châm cứu phục hồi\",\"price\":180000,\"unit\":\"Lần\",\"description\":\"Cập nhật mô tả\",\"isActive\":true}"
-  ```
-
----
-
-## V. ĐẶC TẢ VÀ HƯỚNG DẪN CHẠY UNIT TEST
-
-Toàn bộ Unit Test được lập trình độc lập bằng **xUnit** và **Entity Framework Core InMemory**, chạy hoàn toàn trên RAM, không phụ thuộc vào SQL Server và không làm biến đổi dữ liệu thực tế.
-
-### 1. Danh sách 11 Test Cases đã triển khai
-
-| Mã Task | Tên Test Method | Mô tả & Kiểm tra |
-| :--- | :--- | :--- |
-| **UT-PHUC-01** | `GetDoctorsAsync_FilterByIsActive_ReturnsOnlyActiveDoctors` | Seed bác sĩ active/inactive $\rightarrow$ Chỉ trả về các bác sĩ có `IsActive = true`. |
-| **UT-PHUC-01** | `GetDoctorsAsync_FilterBySpecialization_ReturnsMatchingSpecialization` | Seed nhiều chuyên môn $\rightarrow$ Trả về chính xác danh sách bác sĩ theo chuyên môn lọc. |
-| **UT-PHUC-02** | `GetDoctorByIdAsync_NonExistingId_ReturnsNull` | Truy vấn ID không tồn tại `99999` $\rightarrow$ Trả về `null` để Controller map thành 404. |
-| **UT-PHUC-02** | `GetDoctorByIdAsync_ExistingIdWithLinkedUser_ReturnsMappedDoctorDetailAndUser` | Seed Doctor có liên kết `User` $\rightarrow$ Map đầy đủ thông tin bác sĩ, Username, Email. |
-| **UT-PHUC-03** | `GetActiveServicesAsync_ReturnsOnlyActiveServicesWithValidPrice` | Seed dịch vụ active/inactive $\rightarrow$ Chỉ trả về dịch vụ active và kiểm tra `Price > 0`. |
-| **UT-PHUC-04** | `CreateServiceAsync_PriceLessOrEqualToZero_ReturnsValidationError` (Giá = 0) | Truyền `Price = 0` $\rightarrow$ Trả về lỗi validation, không lưu vào database. |
-| **UT-PHUC-04** | `CreateServiceAsync_PriceLessOrEqualToZero_ReturnsValidationError` (Giá = -1000) | Truyền `Price = -1000` $\rightarrow$ Trả về lỗi validation, không lưu vào database. |
-| **UT-PHUC-04** | `CreateServiceAsync_DuplicateServiceNameOrCode_ReturnsConflictError` | Tạo mới với tên dịch vụ đã tồn tại $\rightarrow$ Báo lỗi trùng lặp tên/mã (Conflict/Bad Request). |
-| **UT-PHUC-04** | `CreateServiceAsync_ValidData_CreatesSuccessfullyWithActiveStatus` | Dữ liệu hợp lệ $\rightarrow$ Thêm mới thành công vào DB với `IsActive = true`. |
-| **UT-PHUC-05** | `UpdateServiceAsync_ValidRequest_UpdatesServicePriceSuccessfully` | Cập nhật giá và thông tin $\rightarrow$ Bản ghi trong bảng `[Service]` đổi giá thành công. |
-| **UT-PHUC-05** | `UpdateServiceAsync_PriceChange_PreservesHistoricInvoiceDetailUnitPrice` | Cập nhật giá dịch vụ từ 100k lên 150k $\rightarrow$ **Đơn giá trong `InvoiceDetail` của hóa đơn cũ vẫn giữ nguyên 100k**. |
-
----
-
-### 2. Cách chạy Unit Test
-
-#### Cách A: Chạy bằng dòng lệnh Terminal (Nhanh nhất)
-Mở terminal tại thư mục `COSGeniusSystem` và gõ lệnh:
-```bash
-dotnet test UnitTests/UnitTests.csproj
-```
-
-Để xem danh sách chi tiết từng test case được thực thi:
-```bash
-dotnet test UnitTests/UnitTests.csproj --logger "console;verbosity=normal"
-```
-
-#### Cách B: Chạy qua giao diện Visual Studio
-1. Vào menu **Test** $\rightarrow$ chọn **Test Explorer** (hoặc bấm `Ctrl + E, T`).
-2. Bấm nút **Run All Tests in View** (biểu tượng 2 tam giác xanh $\blacktriangleright\blacktriangleright$).
-3. Quan sát kết quả: Tất cả 11 test cases đều sáng xanh.
-
----
-
-### 3. Kết quả chạy thực tế
-```text
-Test run for E:\DoAnTotNghiep\COSGeniusSystem\COSGeniusSystem\UnitTests\bin\Debug\net10.0\UnitTests.dll (.NETCoreApp,Version=v10.0)
-
-Passed!  - Failed: 0, Passed: 11, Skipped: 0, Total: 11, Duration: 1.4s
-```
