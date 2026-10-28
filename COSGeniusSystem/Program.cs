@@ -3,7 +3,6 @@ using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
-using COSGeniusSystem.Repositories.Interfaces;
 using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Services.Interfaces;
