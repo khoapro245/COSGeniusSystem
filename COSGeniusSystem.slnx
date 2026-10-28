@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="COSGeniusSystem/COSGeniusSystem.csproj" />
+  <Project Path="COSGeniusSystem/UnitTests/UnitTests.csproj" />
   <Project Path="docker-compose.dcproj">
     <Build />
   </Project>

@@ -1,6 +1,43 @@
-@COSGeniusSystem_HostAddress = http://localhost:5217
+# Chạy qua Docker: http://localhost:8080
+# Chạy trực tiếp Visual Studio: http://localhost:5217
+@COSGeniusSystem_HostAddress = http://localhost:8080
 
-GET {{COSGeniusSystem_HostAddress}}/weatherforecast/
+### 1. Register a new user
+POST {{COSGeniusSystem_HostAddress}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "khoa_admin",
+  "password": "Password@123",
+  "fullName": "Nguyen Van Khoa",
+  "email": "khoa@example.com",
+  "phone": "0901234567",
+  "roleCode": "ADMIN"
+}
+
+### 2. Login to get token
+# @name login
+POST {{COSGeniusSystem_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "khoa_admin",
+  "password": "Password@123"
+}
+
+### Save Token from Login response
+@authToken = {{login.response.body.data.accessToken}}
+
+### 3. Get Current User Info (Requires Bearer Token)
+GET {{COSGeniusSystem_HostAddress}}/api/auth/me
+Authorization: Bearer {{authToken}}
 Accept: application/json
 
-###
+### 4. Logout (Blacklists current token)
+POST {{COSGeniusSystem_HostAddress}}/api/auth/logout
+Authorization: Bearer {{authToken}}
+
+### 5. Access profile again after logout (Should be rejected with 401 Unauthorized)
+GET {{COSGeniusSystem_HostAddress}}/api/auth/me
+Authorization: Bearer {{authToken}}
+Accept: application/json

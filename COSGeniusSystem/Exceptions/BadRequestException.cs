@@ -1,8 +1,9 @@
+using COSGeniusSystem.Commons;
+
 namespace COSGeniusSystem.Exceptions;
 
-public class BadRequestException : Exception
+public sealed class BadRequestException : ApiException
 {
-    public BadRequestException(string message) : base(message)
-    {
-    }
+    public BadRequestException(string message = "Invalid request.") : base(400, message) { }
+    public BadRequestException(SystemMessage message) : base(400, message) { }
 }

@@ -1,8 +1,18 @@
-using Microsoft.EntityFrameworkCore;
+using System.Text;
 using COSGeniusSystem.Data;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.Middlewares;
+using COSGeniusSystem.Repositories;
 using COSGeniusSystem.Services;
+using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Services.Interfaces;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Scalar.AspNetCore;
+using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services.TreatmentServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -10,14 +20,100 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-// Register Application Services
-builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+// Register MemoryCache
+builder.Services.AddMemoryCache();
 
-builder.Services.AddControllers();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
-// Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
+// Register Repositories and Services
+builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
+builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSGeniusSystem.Services.Doctors.DoctorService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
+builder.Services.AddScoped<IPatientService, PatientService>();
+builder.Services.AddScoped<IPatientContactService, PatientContactService>();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    // Avoid MVC's default ProblemDetails wrapper alongside ApiResponseModel.
+    options.SuppressMapClientErrors = true;
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var message = SystemMessages.ValidationFailed;
+        var data = ValidationErrorData.FromModelState(context.ModelState);
+        return new BadRequestObjectResult(new ApiResponseModel<ValidationErrorData>(message.Code, message.Message, false, data));
+    };
+});
+
+// Configure JWT Authentication
+var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
+    ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
+var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "COSGeniusClient";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.RequireHttpsMetadata = false;
+    options.SaveToken = true;
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuerSigningKey = true,
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+        ValidateIssuer = true,
+        ValidIssuer = jwtIssuer,
+        ValidateAudience = true,
+        ValidAudience = jwtAudience,
+        ValidateLifetime = true,
+        ClockSkew = TimeSpan.Zero
+    };
+
+    options.Events = new JwtBearerEvents
+    {
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.Headers.WWWAuthenticate = "Bearer";
+            await context.Response.WriteAsJsonAsync(
+                new ApiResponseModel<object?>(401, "Authentication is required.", false, null), context.HttpContext.RequestAborted);
+        },
+        OnForbidden = async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(
+                new ApiResponseModel<object?>(403, "Access is forbidden.", false, null), context.HttpContext.RequestAborted);
+        },
+        OnTokenValidated = context =>
+        {
+            var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
+            var authHeader = context.Request.Headers.Authorization.ToString();
+            var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                ? authHeader["Bearer ".Length..].Trim()
+                : authHeader.Trim();
+
+            if (blacklistService.IsTokenBlacklisted(token))
+            {
+                context.Fail("This token has been revoked.");
+            }
+
+            return Task.CompletedTask;
+        }
+    };
+});
+// Đăng ký các Service vào DI container
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<ITreatmentService, TreatmentService>();
+builder.Services.AddScoped<IHerbService, HerbService>();
+
+builder.Services.AddAuthorization();
+
+// Configure OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -56,10 +152,35 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
     app.MapOpenApi();
+    app.MapScalarApiReference();
 }
+
+// Supply a wrapper fallback so the middleware needs no ProblemDetails service.
+// Registered IExceptionHandler implementations run before this fallback.
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    ExceptionHandler = async context =>
+    {
+        var message = SystemMessages.InternalError;
+        context.Response.StatusCode = message.Code;
+        await context.Response.WriteAsJsonAsync(
+            new ApiResponseModel<object?>(message.Code, message.Message, false, null), context.RequestAborted);
+    }
+});
+
+app.UseStatusCodePages(async statusContext =>
+{
+    var context = statusContext.HttpContext;
+    if (!context.Request.Path.StartsWithSegments("/api")) return;
+    var code = context.Response.StatusCode;
+    await context.Response.WriteAsJsonAsync(
+        new ApiResponseModel<object?>(code,
+            Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(code), false, null), context.RequestAborted);
+});
 
 app.UseHttpsRedirection();
 
+app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
