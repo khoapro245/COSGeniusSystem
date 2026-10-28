@@ -1,3 +1,5 @@
+using COSGeniusSystem.Commons;
+using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.DTOs.Doctors;
 using COSGeniusSystem.Services.Doctors;
 using Microsoft.AspNetCore.Mvc;
@@ -6,7 +8,7 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/doctors")]
-public class DoctorsController : ControllerBase
+public class DoctorsController : BaseApiController
 {
     private readonly IDoctorService _doctorService;
 
@@ -20,10 +22,10 @@ public class DoctorsController : ControllerBase
     /// GET /api/v1/doctors
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<List<DoctorResponseDto>>> GetDoctors([FromQuery] DoctorFilterQuery query)
+    public async Task<ActionResult<ApiResponseModel<List<DoctorResponseDto>>>> GetDoctors([FromQuery] DoctorFilterQuery query)
     {
         var result = await _doctorService.GetDoctorsAsync(query);
-        return Ok(result);
+        return SuccessResponse(SystemMessages.DoctorsRetrieved, result);
     }
 
     /// <summary>
@@ -31,12 +33,12 @@ public class DoctorsController : ControllerBase
     /// GET /api/v1/doctors/{id}
     /// </summary>
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<DoctorDetailDto>> GetDoctorById(int id)
+    public async Task<ActionResult<ApiResponseModel<DoctorDetailDto>>> GetDoctorById(int id)
     {
         var doctor = await _doctorService.GetDoctorByIdAsync(id);
         if (doctor is null)
-            return NotFound(new { message = $"Doctor with id {id} was not found." });
+            throw new NotFoundException($"Doctor with id {id} was not found.");
 
-        return Ok(doctor);
+        return SuccessResponse(SystemMessages.DoctorRetrieved, doctor);
     }
 }

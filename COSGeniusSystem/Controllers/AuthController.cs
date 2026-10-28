@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using COSGeniusSystem.Common;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Auth;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Services;
@@ -10,7 +10,7 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]
-public class AuthController : ControllerBase
+public class AuthController : BaseApiController
 {
     private readonly IAuthService _authService;
 
@@ -23,26 +23,26 @@ public class AuthController : ControllerBase
     /// Register a new user account
     /// </summary>
     [HttpPost("register")]
-    [ProducesResponseType(typeof(ApiResponse<AuthResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> Register([FromBody] RegisterRequestDto request)
+    [ProducesResponseType(typeof(ApiResponseModel<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseModel<ValidationErrorData>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status409Conflict)]
+    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Register([FromBody] RegisterRequestDto request)
     {
         var result = await _authService.RegisterAsync(request);
-        return Ok(ApiResponse<AuthResponseDto>.Ok(result, "User registered successfully."));
+        return SuccessResponse(SystemMessages.UserRegistered, result);
     }
 
     /// <summary>
     /// Authenticate user and receive JWT access token
     /// </summary>
     [HttpPost("login")]
-    [ProducesResponseType(typeof(ApiResponse<AuthResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> Login([FromBody] LoginRequestDto request)
+    [ProducesResponseType(typeof(ApiResponseModel<AuthResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Login([FromBody] LoginRequestDto request)
     {
         var result = await _authService.LoginAsync(request);
-        return Ok(ApiResponse<AuthResponseDto>.Ok(result, "Login successful."));
+        return SuccessResponse(SystemMessages.LoginSuccessful, result);
     }
 
     /// <summary>
@@ -50,13 +50,13 @@ public class AuthController : ControllerBase
     /// </summary>
     [Authorize]
     [HttpPost("logout")]
-    [ProducesResponseType(typeof(ApiResponse<object>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> Logout()
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
+    public async Task<ActionResult<ApiResponseModel<object?>>> Logout()
     {
         var authHeader = Request.Headers.Authorization.ToString();
         await _authService.LogoutAsync(authHeader);
-        return Ok(ApiResponse<object>.Ok(new { }, "Logged out successfully."));
+        return SuccessResponse(SystemMessages.LogoutSuccessful);
     }
 
     /// <summary>
@@ -64,10 +64,10 @@ public class AuthController : ControllerBase
     /// </summary>
     [Authorize]
     [HttpGet("me")]
-    [ProducesResponseType(typeof(ApiResponse<UserInfoResponseDto>), StatusCodes.Status200OK)]
-    [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetCurrentUser()
+    [ProducesResponseType(typeof(ApiResponseModel<UserInfoResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponseModel<UserInfoResponseDto>>> GetCurrentUser()
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!int.TryParse(userIdClaim, out var userId))
@@ -76,6 +76,6 @@ public class AuthController : ControllerBase
         }
 
         var profile = await _authService.GetCurrentUserProfileAsync(userId);
-        return Ok(ApiResponse<UserInfoResponseDto>.Ok(profile, "User profile retrieved successfully."));
+        return SuccessResponse(SystemMessages.UserProfileRetrieved, profile);
     }
 }

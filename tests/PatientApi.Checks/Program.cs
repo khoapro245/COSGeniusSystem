@@ -7,34 +7,42 @@ using System.ComponentModel.DataAnnotations;
 using COSGeniusSystem.DTOs.Requests;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Repositories.Interfaces;
+using COSGeniusSystem.Data;
+using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Services;
 
-var patients = new FakePatients();
-var contacts = new FakeContacts();
-var service = new PatientContactService(contacts, patients);
+using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
+    .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
+db.Patients.AddRange(new Patient { PatientId = 1, FullName = "One" }, new Patient { PatientId = 2, FullName = "Two" });
+await db.SaveChangesAsync();
+var service = new PatientContactService(db);
 var ct = CancellationToken.None;
 
 await ExpectStatus(404, async () => { await service.CreateAsync(99, new() { FullName = "Relative" }, ct); });
-Check(contacts.Items.Count == 0, "Missing parent must prevent contact creation");
+Check(!await db.PatientContacts.AnyAsync(), "Missing parent must prevent contact creation");
 var created = await service.CreateAsync(1, new() { FullName = " Relative ", Phone = "0123456789" }, ct);
 Check(created.PatientId == 1 && created.FullName == "Relative", "Contact is assigned to the route patient");
 await ExpectStatus(404, async () => { await service.GetByIdAsync(2, created.ContactId, ct); });
 await ExpectStatus(404, () => service.UpdateAsync(2, created.ContactId, new() { FullName = "Wrong patient" }, ct));
 await ExpectStatus(404, () => service.DeleteAsync(2, created.ContactId, ct));
-Check(contacts.Items.Single().FullName == "Relative", "Cross-patient operations cannot change contacts");
+Check(db.PatientContacts.Single().FullName == "Relative", "Cross-patient operations cannot change contacts");
 await service.UpdateAsync(1, created.ContactId, new() { FullName = "Updated", Relationship = "Sibling" }, ct);
 Check((await service.GetByIdAsync(1, created.ContactId, ct)).Relationship == "Sibling", "Contact update persists fields");
 await service.DeleteAsync(1, created.ContactId, ct);
 Check((await service.GetAllAsync(1, 1, 20, ct)).Items.Count == 0, "Deleted contact no longer appears");
 
-var patientService = new PatientService(patients);
-patients.HasDependents = true;
+var patientService = new PatientService(db);
+var dependent = new PatientContact { PatientId = 1, FullName = "Dependent" };
+db.PatientContacts.Add(dependent);
+await db.SaveChangesAsync();
 await ExpectStatus(409, () => patientService.DeleteAsync(1, ct));
-Check(!patients.Removed, "Patient deletion with dependents is blocked");
-patients.HasDependents = false;
+Check(await db.Patients.AnyAsync(p => p.PatientId == 1), "Patient deletion with dependents is blocked");
+db.PatientContacts.Remove(dependent);
+await db.SaveChangesAsync();
 await patientService.DeleteAsync(1, ct);
-Check(patients.Removed, "Patient without dependents can be deleted");
+Check(!await db.Patients.AnyAsync(p => p.PatientId == 1), "Patient without dependents can be deleted");
+db.Patients.Add(new Patient { PatientId = 1, FullName = "One" });
+await db.SaveChangesAsync();
 await ExpectStatus(400, async () => { await patientService.CreateAsync(new() { FullName = "Name", DateOfBirth = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(1) }, ct); });
 await ExpectStatus(400, async () => { await patientService.GetAllAsync(0, 20, ct); });
 await ExpectStatus(404, async () => { await patientService.GetByIdAsync(99, ct); });
@@ -98,33 +106,4 @@ static async Task ExpectStatus(int status, Func<Task> action)
     try { await action(); }
     catch (ApiException ex) when (ex.StatusCode == status) { return; }
     throw new Exception($"Expected API status {status}.");
-}
-
-sealed class FakePatients : IPatientRepository
-{
-    public bool HasDependents { get; set; }
-    public bool Removed { get; private set; }
-    public Task<IReadOnlyList<Patient>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct) => Task.FromResult<IReadOnlyList<Patient>>(new[] { new Patient { PatientId = 1, FullName = "One" }, new Patient { PatientId = 2, FullName = "Two" } }.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList());
-    public Task<Patient?> GetByIdAsync(int patientId, CancellationToken ct) => Task.FromResult<Patient?>(patientId is 1 or 2 ? new Patient { PatientId = patientId, FullName = "Patient" } : null);
-    public Task<bool> ExistsAsync(int patientId, CancellationToken ct) => Task.FromResult(patientId is 1 or 2);
-    public Task<bool> HasDependentsAsync(int patientId, CancellationToken ct) => Task.FromResult(HasDependents);
-    public Task<int> CountAsync(CancellationToken ct) => Task.FromResult(2);
-    public Task AddAsync(Patient entity, CancellationToken ct) => Task.CompletedTask;
-    public void Remove(Patient entity) => Removed = true;
-    public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
-}
-sealed class FakeContacts : IPatientContactRepository
-{
-    public List<PatientContact> Items { get; } = [];
-    public Task<IReadOnlyList<PatientContact>> GetAllAsync(int patientId, int pageNumber, int pageSize, CancellationToken ct) => Task.FromResult<IReadOnlyList<PatientContact>>(Items.Where(c => c.PatientId == patientId).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToList());
-    public Task<int> CountAsync(int patientId, CancellationToken ct) => Task.FromResult(Items.Count(c => c.PatientId == patientId));
-    public Task<PatientContact?> GetByIdAsync(int patientId, int contactId, CancellationToken ct) => Task.FromResult(Items.SingleOrDefault(c => c.PatientId == patientId && c.ContactId == contactId));
-    public Task AddAsync(PatientContact entity, CancellationToken ct)
-    {
-        entity.ContactId = Items.Count + 1;
-        Items.Add(entity);
-        return Task.CompletedTask;
-    }
-    public void Remove(PatientContact entity) => Items.Remove(entity);
-    public Task SaveChangesAsync(CancellationToken ct) => Task.CompletedTask;
 }
