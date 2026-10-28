@@ -1,5 +1,7 @@
 using System.Text;
 using COSGeniusSystem.Data;
+using COSGeniusSystem.Commons;
+using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
 using COSGeniusSystem.Services;
@@ -25,6 +27,22 @@ builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSGeniusSystem.Services.Doctors.DoctorService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
+builder.Services.AddScoped<IPatientRepository, PatientRepository>();
+builder.Services.AddScoped<IPatientContactRepository, PatientContactRepository>();
+builder.Services.AddScoped<IPatientService, PatientService>();
+builder.Services.AddScoped<IPatientContactService, PatientContactService>();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    // Avoid MVC's default ProblemDetails wrapper alongside ApiResponseModel.
+    options.SuppressMapClientErrors = true;
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var message = SystemMessages.ValidationFailed;
+        var data = ValidationErrorData.FromModelState(context.ModelState);
+        return new BadRequestObjectResult(new ApiResponseModel<ValidationErrorData>(message.Code, message.Message, false, data));
+    };
+});
 
 // Configure JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
@@ -116,6 +134,19 @@ if (app.Environment.IsDevelopment())
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
+
+// Supply a wrapper fallback so the middleware needs no ProblemDetails service.
+// Registered IExceptionHandler implementations run before this fallback.
+app.UseExceptionHandler(new ExceptionHandlerOptions
+{
+    ExceptionHandler = async context =>
+    {
+        var message = SystemMessages.InternalError;
+        context.Response.StatusCode = message.Code;
+        await context.Response.WriteAsJsonAsync(
+            new ApiResponseModel<object?>(message.Code, message.Message, false, null), context.RequestAborted);
+    }
+});
 
 app.UseHttpsRedirection();
 
