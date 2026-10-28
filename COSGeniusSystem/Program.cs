@@ -9,6 +9,9 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services.TreatmentServices;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -90,6 +93,10 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
+// Đăng ký các Service vào DI container
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<ITreatmentService, TreatmentService>();
+builder.Services.AddScoped<IHerbService, HerbService>();
 
 builder.Services.AddAuthorization();
 builder.Services.AddControllers();
