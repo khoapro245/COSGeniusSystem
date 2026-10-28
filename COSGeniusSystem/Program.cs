@@ -1,11 +1,10 @@
 using System.Text;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
-using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
-using COSGeniusSystem.Repositories.Interfaces;
 using COSGeniusSystem.Services;
+using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -32,8 +31,6 @@ builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSGeniusSystem.Services.Doctors.DoctorService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
-builder.Services.AddScoped<IPatientRepository, PatientRepository>();
-builder.Services.AddScoped<IPatientContactRepository, PatientContactRepository>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IPatientContactService, PatientContactService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -78,6 +75,20 @@ builder.Services.AddAuthentication(options =>
 
     options.Events = new JwtBearerEvents
     {
+        OnChallenge = async context =>
+        {
+            context.HandleResponse();
+            context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            context.Response.Headers.WWWAuthenticate = "Bearer";
+            await context.Response.WriteAsJsonAsync(
+                new ApiResponseModel<object?>(401, "Authentication is required.", false, null), context.HttpContext.RequestAborted);
+        },
+        OnForbidden = async context =>
+        {
+            context.Response.StatusCode = StatusCodes.Status403Forbidden;
+            await context.Response.WriteAsJsonAsync(
+                new ApiResponseModel<object?>(403, "Access is forbidden.", false, null), context.HttpContext.RequestAborted);
+        },
         OnTokenValidated = context =>
         {
             var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
@@ -101,15 +112,11 @@ builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 builder.Services.AddScoped<IHerbService, HerbService>();
 
 builder.Services.AddAuthorization();
-builder.Services.AddControllers();
 
 // Configure OpenAPI
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
-
-// Global Exception Handler Middleware
-app.UseMiddleware<ExceptionMiddleware>();
 
 // Automatically apply migrations on startup (with retry for container startup)
 if (app.Environment.IsDevelopment())
@@ -155,6 +162,16 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
         await context.Response.WriteAsJsonAsync(
             new ApiResponseModel<object?>(message.Code, message.Message, false, null), context.RequestAborted);
     }
+});
+
+app.UseStatusCodePages(async statusContext =>
+{
+    var context = statusContext.HttpContext;
+    if (!context.Request.Path.StartsWithSegments("/api")) return;
+    var code = context.Response.StatusCode;
+    await context.Response.WriteAsJsonAsync(
+        new ApiResponseModel<object?>(code,
+            Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(code), false, null), context.RequestAborted);
 });
 
 app.UseHttpsRedirection();
