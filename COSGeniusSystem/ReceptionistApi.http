@@ -1,0 +1,260 @@
+# Cấu hình môi trường chạy
+# Visual Studio / Kestrel trực tiếp: http://localhost:5217
+# Docker Container: http://localhost:8080
+@host = http://localhost:5217
+@contentType = application/json
+
+
+@patientId = 1
+@doctorId = 1
+@serviceId = 1
+@examSheetId = 1
+@protocolId = 1
+@contactId = 1
+
+
+###############################################################################
+#1: MÀN HÌNH TỔNG QUAN TIẾP TÂN (RECEPTION DASHBOARD)
+# Mockup: Trang chủ điều hành Tiếp tân
+
+### 1.1. Lấy dữ liệu 4 thẻ thống kê số liệu tổng quan trong ngày
+# Trả về: TodayTotalVisits, WaitingExaminationCount, WaitingTreatmentCount, CompletedVisitsCount, NewExaminationCount, TreatmentCount
+GET {{host}}/api/v1/reception/dashboard/stats
+Accept: {{contentType}}
+
+### 1.2. Lấy 2 danh sách hàng đợi thu gọn hiển thị trang chủ (Top 3 ca chờ khám & Top 3 ca chờ trị liệu)
+GET {{host}}/api/v1/reception/dashboard/quick-queues?top=3
+Accept: {{contentType}}
+
+
+###############################################################################
+#2: MÀN HÌNH ĐĂNG KÝ & HÀNG ĐỢI KHÁM BỆNH (EXAMINATIONS)
+# Mockup: 01-danh-sach-dang-ky, 02-phieu-dang-ky-kham
+
+### 2.1. Lấy toàn bộ danh sách hàng đợi khám bệnh trong ngày hôm nay (mặc định)
+# Sắp xếp tự động: Ca ưu tiên (IsPriority == true) lên đầu, sau đó theo giờ đến
+GET {{host}}/api/v1/examinations/visits
+Accept: {{contentType}}
+
+### 2.2. Lọc hàng đợi khám bệnh theo nhiều tiêu chí (Bác sĩ, Từ khóa tên/SĐT, Trạng thái)
+GET {{host}}/api/v1/examinations/visits?doctorId={{doctorId}}&keyword=Nguyen&status=Chờ khám
+Accept: {{contentType}}
+
+### 2.3. Đăng ký lượt khám bệnh mới vào hàng đợi (Ca khám thông thường)
+# @name createExamVisit
+POST {{host}}/api/v1/examinations/visits
+Content-Type: {{contentType}}
+
+{
+  "patientId": {{patientId}},
+  "doctorId": {{doctorId}},
+  "symptoms": "Đau mỏi vai gáy lan xuống cánh tay, mất ngủ 3 đêm",
+  "doctorAdvice": "Ưu tiên bấm huyệt giảm đau tức thì",
+  "isPriority": false
+}
+
+### Lưu mã ExamSheet vừa tạo vào biến kiểm thử
+@newExamSheetId = {{createExamVisit.response.body.data.examSheetId}}
+
+### 2.4. Đăng ký lượt khám bệnh mới vào hàng đợi (Ca ưu tiên / Cấp cứu / Người già)
+# Hệ thống tự động gắn cờ [Ưu tiên] và đưa lên đầu danh sách chờ
+POST {{host}}/api/v1/examinations/visits
+Content-Type: {{contentType}}
+
+{
+  "patientId": {{patientId}},
+  "doctorId": {{doctorId}},
+  "symptoms": "Chóng mặt dữ dội, hoa mắt, huyết áp tăng nhẹ",
+  "doctorAdvice": "Cần đo huyết áp và vào phòng khám ngay",
+  "isPriority": true
+}
+
+### 2.5. Xem chi tiết phiếu đăng ký khám theo ExamSheetID
+GET {{host}}/api/v1/examinations/visits/{{examSheetId}}
+Accept: {{contentType}}
+
+### 2.6. Hủy lượt đăng ký khám khi bệnh nhân bỏ về (Chỉ áp dụng khi còn 'Chờ khám')
+DELETE {{host}}/api/v1/examinations/visits/{{newExamSheetId}}
+Accept: {{contentType}}
+
+### 2.7. [API Bổ trợ] Lấy danh mục Bác sĩ khả dụng phục vụ chọn BS phân công khám
+GET {{host}}/api/v1/doctors?isActive=true
+Accept: {{contentType}}
+
+
+###############################################################################
+#3: MÀN HÌNH TIẾP NHẬN & HÀNG ĐỢI TRỊ LIỆU (TREATMENTS)
+# Mockup: 12-tao-yeu-cau-dieu-tri, 13-v2-danh-sach-cho-dieu-tri
+
+### 3.1. Lấy danh sách hàng đợi chờ điều trị/trị liệu theo liệu trình hôm nay
+# Trả về mã YCDTxxxxx, tên phác đồ và tiến độ buổi (ví dụ: 'Buổi 03 / 05')
+GET {{host}}/api/v1/treatments/queue
+Accept: {{contentType}}
+
+### 3.2. Lọc hàng đợi trị liệu theo Bác sĩ/KTV phụ trách hoặc Từ khóa bệnh nhân
+GET {{host}}/api/v1/treatments/queue?doctorId={{doctorId}}&keyword=Nguyen
+Accept: {{contentType}}
+
+### 3.3. Tiếp nhận bệnh nhân vào hàng đợi trị liệu theo phác đồ (Sinh mã YCDTxxxxx)
+# @name createTreatmentQueue
+POST {{host}}/api/v1/treatments/queue
+Content-Type: {{contentType}}
+
+{
+  "patientId": {{patientId}},
+  "serviceId": {{serviceId}},
+  "doctorId": {{doctorId}},
+  "examSheetId": {{examSheetId}},
+  "note": "Bệnh nhân có tiền sử đau dạ dày, tránh châm cứu vùng bụng"
+}
+
+### 3.4. [API Bổ trợ] Tra cứu danh mục bảng giá Dịch vụ trị liệu để chỉ định thủ thuật
+GET {{host}}/api/v1/services
+Accept: {{contentType}}
+
+
+###############################################################################
+#4: MÀN HÌNH QUẢN LÝ HỒ SƠ BỆNH NHÂN (PATIENTS)
+# Mockup: 08-danh-sach-benh-nhan, 09-tao-ho-so, 10-chi-tiet-benh-nhan
+
+### 4.1. Tra cứu / Tìm kiếm tương đối hồ sơ bệnh nhân theo Mã BN, Tên hoặc SĐT
+# Trả về danh sách mảng thuần túy List<PatientResponseDto> không phân trang ở backend
+GET {{host}}/api/v1/patients?keyword=Nguyen
+Accept: {{contentType}}
+
+### 4.2. Lấy toàn bộ danh sách bệnh nhân
+GET {{host}}/api/v1/patients
+Accept: {{contentType}}
+
+### 4.3. Xem chi tiết hồ sơ bệnh nhân kèm toàn bộ thông tin mở rộng & danh sách người liên hệ
+GET {{host}}/api/v1/patients/{{patientId}}
+Accept: {{contentType}}
+
+### 4.4. Tiếp nhận & Tạo mới hồ sơ bệnh nhân
+# Tự động: Lưu Patient -> Lưu PatientContact -> Tự động khởi tạo 1 MedicalRecord mặc định
+# @name createPatient
+POST {{host}}/api/v1/patients
+Content-Type: {{contentType}}
+
+{
+  "fullName": "Phan Hoàng Yến",
+  "gender": "Nữ",
+  "dateOfBirth": "1994-08-22",
+  "phone": "0988776655",
+  "address": "456 Nguyễn Thị Minh Khai, Phường Bến Nghé, Quận 1",
+  "identityCard": "079194001234",
+  "email": "hoangyen.phan@example.com",
+  "identityCardIssuedDate": "2020-05-15",
+  "identityCardIssuedPlace": "Cục CS QLHC về TTXH",
+  "photoUrl": "https://example.com/photos/patient_yen.jpg",
+  "province": "TP. Hồ Chí Minh",
+  "ward": "Phường Bến Nghé",
+  "occupation": "Kế toán viên",
+  "workplace": "Công ty TNHH Giải Pháp Tài Chính Á Châu",
+  "nationality": "Việt Nam",
+  "ethnicity": "Kinh",
+  "contactFullName": "Phan Văn Nam",
+  "contactRelationship": "Bố đẻ",
+  "contactPhone": "0912345678"
+}
+
+### Lưu ID bệnh nhân mới tạo vào biến kiểm thử
+@createdPatientId = {{createPatient.response.body.data.patientId}}
+
+### 4.5. Cập nhật thông tin hành chính của bệnh nhân và cập nhật/bổ sung người liên hệ
+PUT {{host}}/api/v1/patients/{{createdPatientId}}
+Content-Type: {{contentType}}
+
+{
+  "fullName": "Phan Hoàng Yến",
+  "gender": "Nữ",
+  "dateOfBirth": "1994-08-22",
+  "phone": "0988776655",
+  "address": "789 Cách Mạng Tháng 8, Phường 5, Quận Tân Bình",
+  "identityCard": "079194001234",
+  "email": "hoangyen.phan@newdomain.vn",
+  "identityCardIssuedDate": "2020-05-15",
+  "identityCardIssuedPlace": "Cục CS QLHC về TTXH",
+  "photoUrl": "https://example.com/photos/patient_yen_updated.jpg",
+  "province": "TP. Hồ Chí Minh",
+  "ward": "Phường 5",
+  "occupation": "Kế toán trưởng",
+  "workplace": "Tập đoàn Đầu tư & Công nghệ Sao Mai",
+  "nationality": "Việt Nam",
+  "ethnicity": "Kinh",
+  "contacts": [
+    {
+      "contactId": null,
+      "fullName": "Lê Thị Thu",
+      "relationship": "Mẹ đẻ",
+      "phone": "0908889999"
+    }
+  ]
+}
+
+### 4.6. Xóa hồ sơ bệnh nhân (Chỉ xóa thành công khi chưa phát sinh phiếu khám/liên hệ)
+DELETE {{host}}/api/v1/patients/{{createdPatientId}}
+Accept: {{contentType}}
+
+
+###############################################################################
+#5: MÀN HÌNH LỊCH SỬ KHÁM, BỆNH ÁN & LIỆU TRÌNH BỆNH NHÂN
+# Mockup: 04-lich-su-kham, 05-chi-tiet-medical-record, 06-lieu-trinh
+
+
+### 5.1. Lịch sử các lần khám bệnh của bệnh nhân
+# Trả về: ExamDate, KcbCode (KCB00001), MrCode (MR00001), DoctorName, Symptoms, Status
+GET {{host}}/api/v1/patients/{{patientId}}/visit-history
+Accept: {{contentType}}
+
+### 5.2. Xem chi tiết phiếu khám một lần KCB
+# Trả về đầy đủ: Bác sĩ, chẩn đoán, mạch, lưỡi, lời dặn + Dịch vụ chỉ định (YCDT) + Đơn thuốc thang (Formula & Vị thuốc)
+GET {{host}}/api/v1/patients/exam-sheets/{{examSheetId}}
+Accept: {{contentType}}
+
+### 5.3. Danh sách phác đồ / liệu trình điều trị của bệnh nhân
+# Trả về: ProtocolCode (LT00001), ProtocolName, DoctorName, StartDate, CompletedSessions, TotalSessions, Status
+GET {{host}}/api/v1/patients/{{patientId}}/treatment-protocols
+Accept: {{contentType}}
+
+### 5.4. Chi tiết các buổi trị liệu đã thực hiện trong một phác đồ
+# Trả về: SessionNo (Buổi 1, 2...), ExecutionTime, ServiceName, DoctorName, ResultNote, Status
+GET {{host}}/api/v1/patients/treatment-protocols/{{protocolId}}/sessions
+Accept: {{contentType}}
+
+
+##################################################################
+#6: QUẢN LÝ NGƯỜI LIÊN HỆ ĐẠI DIỆN BỆNH NHÂN (PATIENT CONTACTS)
+
+### 6.1. Lấy danh sách người liên hệ của bệnh nhân
+GET {{host}}/api/patients/{{patientId}}/contacts
+Accept: {{contentType}}
+
+### 6.2. Thêm người liên hệ mới cho bệnh nhân
+# @name createContact
+POST {{host}}/api/patients/{{patientId}}/contacts
+Content-Type: {{contentType}}
+
+{
+  "fullName": "Nguyễn Thị Ngọc Lan",
+  "relationship": "Em gái",
+  "phone": "0933112233"
+}
+
+### 6.3. Xem chi tiết 1 người liên hệ
+GET {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+Accept: {{contentType}}
+
+### 6.4. Cập nhật thông tin người liên hệ
+PUT {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+Content-Type: {{contentType}}
+
+{
+  "fullName": "Nguyễn Thị Ngọc Lan",
+  "relationship": "Em gái ruột",
+  "phone": "0933998877"
+}
+
+### 6.5. Xóa thông tin người liên hệ
+DELETE {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+Accept: {{contentType}}
