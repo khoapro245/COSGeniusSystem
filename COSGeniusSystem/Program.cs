@@ -118,6 +118,8 @@ builder.Services.AddOpenApi();
 
 var app = builder.Build();
 
+app.UseMiddleware<ExceptionHandlingMiddleware>();
+
 // Automatically apply migrations on startup (with retry for container startup)
 if (app.Environment.IsDevelopment())
 {
@@ -147,6 +149,8 @@ if (app.Environment.IsDevelopment())
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    app.UseSwagger();
+    app.UseSwaggerUI();
     app.MapOpenApi();
     app.MapScalarApiReference();
 }
