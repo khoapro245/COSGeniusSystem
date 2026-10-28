@@ -1,0 +1,62 @@
+@host = http://localhost:5217
+@patientId = 1
+@contactId = 1
+
+### Create patient (copy returned patientId into variable above)
+POST {{host}}/api/patients
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Van An",
+  "dateOfBirth": "1990-01-15",
+  "phone": "0901234567",
+  "email": "an@example.com"
+}
+
+### List patients
+GET {{host}}/api/patients?pageNumber=1&pageSize=20
+
+### Get patient
+GET {{host}}/api/patients/{{patientId}}
+
+### Replace patient fields
+PUT {{host}}/api/patients/{{patientId}}
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Van An",
+  "dateOfBirth": "1990-01-15",
+  "phone": "0907654321"
+}
+
+### Create contact (copy returned contactId into variable above)
+POST {{host}}/api/patients/{{patientId}}/contacts
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Thi Binh",
+  "relationship": "Sibling",
+  "phone": "0909876543"
+}
+
+### List contacts
+GET {{host}}/api/patients/{{patientId}}/contacts?pageNumber=1&pageSize=20
+
+### Get contact
+GET {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+
+### Replace contact fields
+PUT {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+Content-Type: application/json
+
+{
+  "fullName": "Nguyen Thi Binh",
+  "relationship": "Sibling",
+  "phone": "0901111111"
+}
+
+### Delete contact before patient
+DELETE {{host}}/api/patients/{{patientId}}/contacts/{{contactId}}
+
+### Delete patient (409 if medical records or contacts still exist)
+DELETE {{host}}/api/patients/{{patientId}}
