@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
+using COSGeniusSystem.Middlewares;
+using COSGeniusSystem.Services;
+using COSGeniusSystem.Services.Interfaces;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -7,11 +10,19 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// Register Application Services
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
+
+app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // Automatically apply migrations on startup (with retry for container startup)
 if (app.Environment.IsDevelopment())
@@ -42,6 +53,8 @@ if (app.Environment.IsDevelopment())
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
+    app.UseSwagger();
+    app.UseSwaggerUI();
     app.MapOpenApi();
 }
 
