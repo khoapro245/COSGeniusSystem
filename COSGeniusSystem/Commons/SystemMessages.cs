@@ -21,6 +21,18 @@ public static class SystemMessages
     public static readonly SystemMessage ContactCreated = new(201, "Patient contact created successfully.", true);
     public static readonly SystemMessage ContactUpdated = new(200, "Patient contact updated successfully.", true);
     public static readonly SystemMessage ContactDeleted = new(200, "Patient contact deleted successfully.", true);
+    public static readonly SystemMessage ExaminationVisitsRetrieved = new(200, "Examination visits retrieved successfully.", true);
+    public static readonly SystemMessage ExaminationVisitRetrieved = new(200, "Examination visit retrieved successfully.", true);
+    public static readonly SystemMessage ExaminationVisitCreated = new(201, "Examination visit created successfully.", true);
+    public static readonly SystemMessage ExaminationVisitCancelled = new(200, "Examination visit cancelled successfully.", true);
+    public static readonly SystemMessage TreatmentQueueRetrieved = new(200, "Treatment queue retrieved successfully.", true);
+    public static readonly SystemMessage TreatmentRequestCreated = new(201, "Treatment request created successfully.", true);
+    public static readonly SystemMessage VisitHistoryRetrieved = new(200, "Patient visit history retrieved successfully.", true);
+    public static readonly SystemMessage ExamSheetDetailRetrieved = new(200, "Exam sheet detail retrieved successfully.", true);
+    public static readonly SystemMessage TreatmentProtocolsRetrieved = new(200, "Treatment protocols retrieved successfully.", true);
+    public static readonly SystemMessage TreatmentSessionsRetrieved = new(200, "Treatment sessions retrieved successfully.", true);
+    public static readonly SystemMessage DashboardStatsRetrieved = new(200, "Dashboard stats retrieved successfully.", true);
+    public static readonly SystemMessage DashboardQuickQueuesRetrieved = new(200, "Dashboard quick queues retrieved successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }

@@ -13,6 +13,9 @@ using Scalar.AspNetCore;
 using COSGeniusSystem.Services.Doctors;
 using COSGeniusSystem.Services.Herbs;
 using COSGeniusSystem.Services.TreatmentServices;
+using COSGeniusSystem.Services.Examinations;
+using COSGeniusSystem.Services.Treatments;
+using COSGeniusSystem.Services.Reception;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -106,12 +109,18 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
+
 // Đăng ký các Service vào DI container
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 builder.Services.AddScoped<IHerbService, HerbService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IExaminationService, ExaminationService>();
+builder.Services.AddScoped<IExamSheetService, ExaminationService>();
+builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
+builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
+builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 
 builder.Services.AddAuthorization();
 

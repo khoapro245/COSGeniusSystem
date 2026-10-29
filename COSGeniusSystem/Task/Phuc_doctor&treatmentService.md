@@ -56,7 +56,7 @@ COSGeniusSystem/
 │   └── TreatmentServices/
 │       └── TreatmentServiceTests.cs               # Unit Test UT-PHUC-03, UT-PHUC-04, UT-PHUC-05
 └── Task/
-    └── Phuc.md                                    # File báo cáo & tài liệu kiểm thử
+    └── Phuc_doctor&treatmentService.md                                    # File báo cáo
 ```
 
 ---
@@ -211,86 +211,3 @@ COSGeniusSystem/
     "isActive": true
   }
   ```
-
----
-
-## IV. HƯỚNG DẪN CHẠY CHƯƠNG TRÌNH ĐỂ TEST API
-
-### 1. Khởi động ứng dụng
-Chạy lệnh tại thư mục `COSGeniusSystem`:
-```bash
-dotnet run
-```
-Hoặc bấm phím **F5** trong Visual Studio. Server sẽ chạy tại: `http://localhost:5217`.
-
-### 2. Kiểm thử API bằng trình duyệt (Đối với các API GET)
-* Xem danh sách dịch vụ: [http://localhost:5217/api/v1/services](http://localhost:5217/api/v1/services)
-* Xem danh sách bác sĩ: [http://localhost:5217/api/v1/doctors](http://localhost:5217/api/v1/doctors)
-* Xem chi tiết bác sĩ 1: [http://localhost:5217/api/v1/doctors/1](http://localhost:5217/api/v1/doctors/1)
-
-### 3. Kiểm thử API bằng cURL / Postman (Dành cho POST & PUT)
-
-* **Thêm mới dịch vụ (POST):**
-  ```bash
-  curl -X POST http://localhost:5217/api/v1/services \
-    -H "Content-Type: application/json" \
-    -d "{\"serviceCode\":\"DV003\",\"serviceName\":\"Thủy châm trị liệu\",\"price\":250000,\"unit\":\"Lần\",\"description\":\"Tiêm thuốc vào huyệt\"}"
-  ```
-
-* **Cập nhật dịch vụ (PUT):**
-  ```bash
-  curl -X PUT http://localhost:5217/api/v1/services/1 \
-    -H "Content-Type: application/json" \
-    -d "{\"serviceName\":\"Châm cứu phục hồi\",\"price\":180000,\"unit\":\"Lần\",\"description\":\"Cập nhật mô tả\",\"isActive\":true}"
-  ```
-
----
-
-## V. ĐẶC TẢ VÀ HƯỚNG DẪN CHẠY UNIT TEST
-
-Toàn bộ Unit Test được lập trình độc lập bằng **xUnit** và **Entity Framework Core InMemory**, chạy hoàn toàn trên RAM, không phụ thuộc vào SQL Server và không làm biến đổi dữ liệu thực tế.
-
-### 1. Danh sách 11 Test Cases đã triển khai
-
-| Mã Task | Tên Test Method | Mô tả & Kiểm tra |
-| :--- | :--- | :--- |
-| **UT-PHUC-01** | `GetDoctorsAsync_FilterByIsActive_ReturnsOnlyActiveDoctors` | Seed bác sĩ active/inactive $\rightarrow$ Chỉ trả về các bác sĩ có `IsActive = true`. |
-| **UT-PHUC-01** | `GetDoctorsAsync_FilterBySpecialization_ReturnsMatchingSpecialization` | Seed nhiều chuyên môn $\rightarrow$ Trả về chính xác danh sách bác sĩ theo chuyên môn lọc. |
-| **UT-PHUC-02** | `GetDoctorByIdAsync_NonExistingId_ReturnsNull` | Truy vấn ID không tồn tại `99999` $\rightarrow$ Trả về `null` để Controller map thành 404. |
-| **UT-PHUC-02** | `GetDoctorByIdAsync_ExistingIdWithLinkedUser_ReturnsMappedDoctorDetailAndUser` | Seed Doctor có liên kết `User` $\rightarrow$ Map đầy đủ thông tin bác sĩ, Username, Email. |
-| **UT-PHUC-03** | `GetActiveServicesAsync_ReturnsOnlyActiveServicesWithValidPrice` | Seed dịch vụ active/inactive $\rightarrow$ Chỉ trả về dịch vụ active và kiểm tra `Price > 0`. |
-| **UT-PHUC-04** | `CreateServiceAsync_PriceLessOrEqualToZero_ReturnsValidationError` (Giá = 0) | Truyền `Price = 0` $\rightarrow$ Trả về lỗi validation, không lưu vào database. |
-| **UT-PHUC-04** | `CreateServiceAsync_PriceLessOrEqualToZero_ReturnsValidationError` (Giá = -1000) | Truyền `Price = -1000` $\rightarrow$ Trả về lỗi validation, không lưu vào database. |
-| **UT-PHUC-04** | `CreateServiceAsync_DuplicateServiceNameOrCode_ReturnsConflictError` | Tạo mới với tên dịch vụ đã tồn tại $\rightarrow$ Báo lỗi trùng lặp tên/mã (Conflict/Bad Request). |
-| **UT-PHUC-04** | `CreateServiceAsync_ValidData_CreatesSuccessfullyWithActiveStatus` | Dữ liệu hợp lệ $\rightarrow$ Thêm mới thành công vào DB với `IsActive = true`. |
-| **UT-PHUC-05** | `UpdateServiceAsync_ValidRequest_UpdatesServicePriceSuccessfully` | Cập nhật giá và thông tin $\rightarrow$ Bản ghi trong bảng `[Service]` đổi giá thành công. |
-| **UT-PHUC-05** | `UpdateServiceAsync_PriceChange_PreservesHistoricInvoiceDetailUnitPrice` | Cập nhật giá dịch vụ từ 100k lên 150k $\rightarrow$ **Đơn giá trong `InvoiceDetail` của hóa đơn cũ vẫn giữ nguyên 100k**. |
-
----
-
-### 2. Cách chạy Unit Test
-
-#### Cách A: Chạy bằng dòng lệnh Terminal (Nhanh nhất)
-Mở terminal tại thư mục `COSGeniusSystem` và gõ lệnh:
-```bash
-dotnet test UnitTests/UnitTests.csproj
-```
-
-Để xem danh sách chi tiết từng test case được thực thi:
-```bash
-dotnet test UnitTests/UnitTests.csproj --logger "console;verbosity=normal"
-```
-
-#### Cách B: Chạy qua giao diện Visual Studio
-1. Vào menu **Test** $\rightarrow$ chọn **Test Explorer** (hoặc bấm `Ctrl + E, T`).
-2. Bấm nút **Run All Tests in View** (biểu tượng 2 tam giác xanh $\blacktriangleright\blacktriangleright$).
-3. Quan sát kết quả: Tất cả 11 test cases đều sáng xanh.
-
----
-
-### 3. Kết quả chạy thực tế
-```text
-Test run for E:\DoAnTotNghiep\COSGeniusSystem\COSGeniusSystem\UnitTests\bin\Debug\net10.0\UnitTests.dll (.NETCoreApp,Version=v10.0)
-
-Passed!  - Failed: 0, Passed: 11, Skipped: 0, Total: 11, Duration: 1.4s
-```
