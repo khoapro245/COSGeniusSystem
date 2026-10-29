@@ -44,7 +44,7 @@ public class AuthService : IAuthService
 
         // Determine role to assign
         var targetRoleCode = string.IsNullOrWhiteSpace(request.RoleCode)
-            ? RoleConstants.User
+            ? throw new BadRequestException("RoleCode is required.")
             : request.RoleCode.Trim().ToUpper();
 
         var role = await _userRepository.GetRoleByCodeAsync(targetRoleCode);
