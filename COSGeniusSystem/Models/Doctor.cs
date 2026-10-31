@@ -19,6 +19,10 @@ public partial class Doctor
 
     public bool IsActive { get; set; }
 
+    public virtual ICollection<ExamSheet> ExamSheets { get; set; } = new List<ExamSheet>();
+
+    public virtual ICollection<TreatmentProtocol> TreatmentProtocols { get; set; } = new List<TreatmentProtocol>();
+
     public virtual ICollection<ExaminationRegistration> ExaminationRegistrations { get; set; } = new List<ExaminationRegistration>();
 
     public virtual ICollection<HerbalFormula> HerbalFormulas { get; set; } = new List<HerbalFormula>();

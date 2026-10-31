@@ -1,4 +1,4 @@
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.Linq.Expressions;
 using System.Security.Claims;
 using COSGeniusSystem.Commons;
@@ -11,7 +11,7 @@ using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Services.Examinations;
 
-public sealed partial class ExaminationService(ApplicationDbContext db, IPatientService patients) : IExaminationService
+public sealed partial class ExaminationService(ApplicationDbContext db, IPatientService? patients = null) : IExaminationService, IExamSheetService
 {
     private static int UserId(ClaimsPrincipal actor) =>
         int.TryParse(actor.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id > 0

@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Middlewares;
@@ -119,7 +119,6 @@ builder.Services.AddScoped<IHerbService, HerbService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IExaminationService, ExaminationService>();
-builder.Services.AddScoped<IExamSheetService, ExaminationService>();
 builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();

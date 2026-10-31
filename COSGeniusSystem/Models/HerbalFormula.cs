@@ -33,7 +33,7 @@ public partial class HerbalFormula
 
     public DateTime? UpdatedAt { get; set; }
 
-    public byte[] RowVersion { get; set; } = null!;
+    public byte[] RowVersion { get; set; } = new byte[8];
 
     public virtual ICollection<HerbalFormulaDetail> HerbalFormulaDetails { get; set; } = new List<HerbalFormulaDetail>();
 

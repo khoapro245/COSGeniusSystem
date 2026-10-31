@@ -24,6 +24,10 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Doctor> Doctors { get; set; }
 
+    public virtual DbSet<ExamSheet> ExamSheets { get; set; }
+
+    public virtual DbSet<FormulaDetail> FormulaDetails { get; set; }
+
     public virtual DbSet<ExaminationQueueCounter> ExaminationQueueCounters { get; set; }
 
     public virtual DbSet<ExaminationRegistration> ExaminationRegistrations { get; set; }
@@ -70,11 +74,15 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<ReceiptHistory> ReceiptHistories { get; set; }
 
+    public virtual DbSet<RemedyFormula> RemedyFormulas { get; set; }
+
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<Service> Services { get; set; }
 
     public virtual DbSet<Supplier> Suppliers { get; set; }
+
+    public virtual DbSet<TreatmentProtocol> TreatmentProtocols { get; set; }
 
     public virtual DbSet<TreatmentPlan> TreatmentPlans { get; set; }
 
@@ -262,6 +270,100 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.User).WithOne(p => p.Doctor)
                 .HasForeignKey<Doctor>(d => d.UserId)
                 .HasConstraintName("FK_Doctor_User");
+        });
+
+        modelBuilder.Entity<ExamSheet>(entity =>
+        {
+            entity.HasKey(e => e.ExamSheetId).HasName("PK__ExamShee__31F9A9581FDCAC59");
+
+            entity.ToTable("ExamSheet");
+
+            entity.HasIndex(e => e.RecordId, "IX_ExamSheet_RecordID");
+
+            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
+            entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
+            entity.Property(e => e.ExamDate)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.FinalDiagnosis).HasMaxLength(500);
+            entity.Property(e => e.PulseDiagnosis).HasMaxLength(255);
+            entity.Property(e => e.RecordId).HasColumnName("RecordID");
+            entity.Property(e => e.TongueDiagnosis).HasMaxLength(255);
+
+            entity.HasOne(d => d.Doctor).WithMany(p => p.ExamSheets)
+                .HasForeignKey(d => d.DoctorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ExamSheet_Doctor");
+
+            entity.HasOne(d => d.Record).WithMany(p => p.ExamSheets)
+                .HasForeignKey(d => d.RecordId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_ExamSheet_Record");
+        });
+
+        modelBuilder.Entity<FormulaDetail>(entity =>
+        {
+            entity.HasKey(e => e.FormulaDetailId).HasName("PK__FormulaD__DC9CD7F03E6B94FA");
+
+            entity.ToTable("FormulaDetail");
+
+            entity.Property(e => e.FormulaDetailId).HasColumnName("FormulaDetailID");
+            entity.Property(e => e.DosagePerDose).HasColumnType("decimal(10, 2)");
+            entity.Property(e => e.FormulaId).HasColumnName("FormulaID");
+            entity.Property(e => e.HerbId).HasColumnName("HerbID");
+            entity.Property(e => e.Note).HasMaxLength(255);
+            entity.Property(e => e.RoleInFormula).HasMaxLength(50);
+
+            entity.HasOne(d => d.Formula).WithMany(p => p.FormulaDetails)
+                .HasForeignKey(d => d.FormulaId)
+                .HasConstraintName("FK_FormulaDetail_RemedyFormula");
+
+            entity.HasOne(d => d.Herb).WithMany()
+                .HasForeignKey(d => d.HerbId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_FormulaDetail_Herb");
+        });
+
+        modelBuilder.Entity<RemedyFormula>(entity =>
+        {
+            entity.HasKey(e => e.FormulaId).HasName("PK__RemedyFo__2274564543758D58");
+
+            entity.ToTable("RemedyFormula");
+
+            entity.Property(e => e.FormulaId).HasColumnName("FormulaID");
+            entity.Property(e => e.CreatedAt)
+                .HasDefaultValueSql("(getdate())")
+                .HasColumnType("datetime");
+            entity.Property(e => e.DosageDays).HasDefaultValue(1);
+            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
+            entity.Property(e => e.FormulaName).HasMaxLength(150);
+            entity.Property(e => e.TotalDoses).HasDefaultValue(1);
+
+            entity.HasOne(d => d.ExamSheet).WithMany(p => p.RemedyFormulas)
+                .HasForeignKey(d => d.ExamSheetId)
+                .HasConstraintName("FK_RemedyFormula_ExamSheet");
+        });
+
+        modelBuilder.Entity<TreatmentProtocol>(entity =>
+        {
+            entity.HasKey(e => e.ProtocolId).HasName("PK__Treatmen__C1131837F07CA261");
+
+            entity.ToTable("TreatmentProtocol");
+
+            entity.Property(e => e.ProtocolId).HasColumnName("ProtocolID");
+            entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
+            entity.Property(e => e.ProtocolName).HasMaxLength(200);
+            entity.Property(e => e.RecordId).HasColumnName("RecordID");
+
+            entity.HasOne(d => d.Doctor).WithMany(p => p.TreatmentProtocols)
+                .HasForeignKey(d => d.DoctorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TreatmentProtocol_Doctor");
+
+            entity.HasOne(d => d.Record).WithMany(p => p.TreatmentProtocols)
+                .HasForeignKey(d => d.RecordId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_TreatmentProtocol_Record");
         });
 
         modelBuilder.Entity<ExaminationQueueCounter>(entity =>

@@ -61,7 +61,7 @@ public partial class MedicalRecord
 
     public DateTime? UpdatedAt { get; set; }
 
-    public byte[] RowVersion { get; set; } = null!;
+    public byte[] RowVersion { get; set; } = new byte[8];
 
     public virtual Doctor Doctor { get; set; } = null!;
 
@@ -72,6 +72,10 @@ public partial class MedicalRecord
     public virtual Patient Patient { get; set; } = null!;
 
     public virtual ExaminationRegistration Registration { get; set; } = null!;
+
+    public virtual ICollection<ExamSheet> ExamSheets { get; set; } = new List<ExamSheet>();
+
+    public virtual ICollection<TreatmentProtocol> TreatmentProtocols { get; set; } = new List<TreatmentProtocol>();
 
     public virtual ICollection<TreatmentPlan> TreatmentPlans { get; set; } = new List<TreatmentPlan>();
 }

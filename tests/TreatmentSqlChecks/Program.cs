@@ -1,5 +1,5 @@
-using System.Security.Claims;
-using COSGeniusSystem.Common;
+﻿using System.Security.Claims;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs.Examinations;
 using COSGeniusSystem.DTOs.Treatments;

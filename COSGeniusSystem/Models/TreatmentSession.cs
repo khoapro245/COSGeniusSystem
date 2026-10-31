@@ -31,7 +31,7 @@ public partial class TreatmentSession
 
     public DateTime CreatedAt { get; set; }
 
-    public byte[] RowVersion { get; set; } = null!;
+    public byte[] RowVersion { get; set; } = new byte[8];
 
     public virtual Doctor? AssignedDoctor { get; set; }
 

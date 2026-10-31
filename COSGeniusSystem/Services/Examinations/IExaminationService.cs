@@ -1,4 +1,4 @@
-using System.Security.Claims;
+﻿using System.Security.Claims;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Examinations;
 
@@ -27,3 +27,11 @@ public interface IExaminationService
     Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct);
 }
 
+
+public interface IExamSheetService
+{
+    Task<List<ExaminationVisitDto>> GetVisitsAsync(ExaminationFilterQuery query, CancellationToken ct = default);
+    Task<ExaminationVisitDto> CreateVisitAsync(CreateExaminationVisitRequest request, CancellationToken ct = default);
+    Task<ExaminationVisitDto> GetVisitByIdAsync(int examSheetId, CancellationToken ct = default);
+    Task CancelVisitAsync(int examSheetId, CancellationToken ct = default);
+}

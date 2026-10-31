@@ -1,11 +1,13 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using COSGeniusSystem.Commons;
+using COSGeniusSystem.Data;
+using COSGeniusSystem.DTOs.Patients;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
-using COSGeniusSystem.DTOs.Patients.Requests;
-using COSGeniusSystem.DTOs.Patients.Responses;
 
 namespace COSGeniusSystem.Services;
 
@@ -41,7 +43,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<PatientResponse> GetByIdAsync(int patientId, CancellationToken ct) =>
         PatientMapping.ToResponse(await FindAsync(patientId, ct));
 
-    public async Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.Requests.CreatePatientRequest request, CancellationToken ct)
+    public async Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.Patients.Requests.CreatePatientRequest request, CancellationToken ct)
     {
         ValidateLegacy(request);
         var entity = new Patient();
@@ -51,7 +53,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         return PatientMapping.ToResponse(entity);
     }
 
-    public async Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.Requests.UpdatePatientRequest request, CancellationToken ct)
+    public async Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.Patients.Requests.UpdatePatientRequest request, CancellationToken ct)
     {
         ValidateLegacy(request);
         var entity = await FindAsync(patientId, ct);
@@ -193,9 +195,9 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
         var defaultRecord = new MedicalRecord
         {
-            CreatedDate = DateTime.Now,
+            ExamDate = DateTime.Now,
             Status = "Đang theo dõi",
-            InitialDiagnosis = "Tiếp nhận hồ sơ ban đầu"
+            PreliminaryDiagnosis = "Tiếp nhận hồ sơ ban đầu"
         };
         patient.MedicalRecords.Add(defaultRecord);
 
@@ -405,7 +407,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
                 ProtocolCode = $"LT{tp.ProtocolId:D5}",
                 ProtocolName = tp.ProtocolName,
                 DoctorName = tp.Doctor.FullName,
-                StartDate = tp.StartDate,
+                StartDate = tp.StartDate ?? DateOnly.FromDateTime(DateTime.Today),
                 EndDate = tp.EndDate,
                 CompletedSessions = completedSessions,
                 TotalSessions = totalSessions,

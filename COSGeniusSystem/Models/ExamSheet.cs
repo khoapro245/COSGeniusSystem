@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -25,7 +25,7 @@ public partial class ExamSheet
 
     public int? RegistrationId { get; set; }
 
-    public string ExaminationStatus { get; set; } = null!;
+    public string ExaminationStatus { get; set; } = "WAITING";
 
     public DateTime? StartedAt { get; set; }
 
@@ -67,7 +67,7 @@ public partial class ExamSheet
 
     public string? AllergyNoteSnapshot { get; set; }
 
-    public byte[] RowVersion { get; set; } = null!;
+    public byte[] RowVersion { get; set; } = new byte[8];
 
     public virtual Doctor Doctor { get; set; } = null!;
 

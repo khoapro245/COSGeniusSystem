@@ -1,4 +1,4 @@
-using COSGeniusSystem.Common;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Auth;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;

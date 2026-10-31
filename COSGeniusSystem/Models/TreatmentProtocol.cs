@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -25,7 +25,7 @@ public partial class TreatmentProtocol
 
     public int? PlannedSessionCount { get; set; }
 
-    public string PlanStatus { get; set; } = null!;
+    public string PlanStatus { get; set; } = "ACTIVE";
 
     public bool IsLegacy { get; set; }
 
@@ -35,7 +35,7 @@ public partial class TreatmentProtocol
 
     public DateTime? UpdatedAt { get; set; }
 
-    public byte[] RowVersion { get; set; } = null!;
+    public byte[] RowVersion { get; set; } = new byte[8];
 
     public virtual Doctor Doctor { get; set; } = null!;
 
