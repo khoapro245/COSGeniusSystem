@@ -1,12 +1,15 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class Invoice
 {
     public int InvoiceId { get; set; }
 
-    public string InvoiceCode { get; set; } = null!;
+    public string? InvoiceCode { get; set; }
 
-    public int ExamSheetId { get; set; }
+    public int RecordId { get; set; }
 
     public int CashierId { get; set; }
 
@@ -24,7 +27,7 @@ public partial class Invoice
 
     public virtual User Cashier { get; set; } = null!;
 
-    public virtual ExamSheet ExamSheet { get; set; } = null!;
-
     public virtual ICollection<InvoiceDetail> InvoiceDetails { get; set; } = new List<InvoiceDetail>();
+
+    public virtual MedicalRecord Record { get; set; } = null!;
 }

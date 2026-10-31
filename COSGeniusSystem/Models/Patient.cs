@@ -1,4 +1,7 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class Patient
 {
@@ -39,6 +42,10 @@ public partial class Patient
     public string? Nationality { get; set; }
 
     public string? Ethnicity { get; set; }
+
+    public string? AllergyNote { get; set; }
+
+    public virtual ICollection<ExaminationRegistration> ExaminationRegistrations { get; set; } = new List<ExaminationRegistration>();
 
     public virtual ICollection<MedicalRecord> MedicalRecords { get; set; } = new List<MedicalRecord>();
 

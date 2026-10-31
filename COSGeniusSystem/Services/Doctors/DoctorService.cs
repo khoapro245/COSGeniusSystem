@@ -1,3 +1,4 @@
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs.Doctors;
 using Microsoft.EntityFrameworkCore;
@@ -13,9 +14,12 @@ public class DoctorService : IDoctorService
         _context = context;
     }
 
-    public async Task<List<DoctorResponseDto>> GetDoctorsAsync(DoctorFilterQuery query)
+    public async Task<List<DoctorResponseDto>> GetDoctorsAsync(DoctorFilterQuery query, CancellationToken ct = default)
     {
         var q = _context.Doctors.AsNoTracking();
+        if (query.AssignableOnly)
+            q = q.Where(d => d.IsActive && d.User != null && d.User.IsActive
+                && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor));
 
         // Lọc IsActive (mặc định true)
         if (query.IsActive.HasValue)
@@ -42,7 +46,7 @@ public class DoctorService : IDoctorService
             Specialization = d.Specialization,
             Phone = d.Phone,
             IsActive = d.IsActive
-        }).ToListAsync();
+        }).ToListAsync(ct);
     }
 
     public async Task<DoctorDetailDto?> GetDoctorByIdAsync(int id)

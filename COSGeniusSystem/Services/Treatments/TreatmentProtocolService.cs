@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs.Treatments;
 using COSGeniusSystem.Exceptions;
@@ -138,9 +138,9 @@ public sealed class TreatmentProtocolService(ApplicationDbContext db) : ITreatme
                     record = new MedicalRecord
                     {
                         PatientId = request.PatientId,
-                        CreatedDate = DateTime.Now,
+                        ExamDate = DateTime.Now,
                         Status = "Đang theo dõi",
-                        InitialDiagnosis = "Tiếp nhận điều trị theo liệu trình"
+                        PreliminaryDiagnosis = "Tiếp nhận điều trị theo liệu trình"
                     };
                     await db.MedicalRecords.AddAsync(record, ct);
                     await db.SaveChangesAsync(ct);

@@ -1,12 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Requests;
+namespace COSGeniusSystem.DTOs.Patients.Requests;
 
 public abstract class PatientContactRequest
 {
     [Required]
     [StringLength(150)]
-    public string FullName { get; set; } = null!;
+    public string FullName { get; set; } = string.Empty;
 
     [StringLength(50)]
     public string? Relationship { get; set; }

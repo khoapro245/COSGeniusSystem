@@ -1,4 +1,7 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class Service
 {
@@ -16,5 +19,5 @@ public partial class Service
 
     public bool IsActive { get; set; }
 
-    public virtual ICollection<UsageHistory> UsageHistories { get; set; } = new List<UsageHistory>();
+    public virtual ICollection<TreatmentPlanDetail> TreatmentPlanDetails { get; set; } = new List<TreatmentPlanDetail>();
 }

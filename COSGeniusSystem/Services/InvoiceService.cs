@@ -43,8 +43,8 @@ public class InvoiceService : IInvoiceService
         if (!string.IsNullOrWhiteSpace(queryParams.Keyword))
         {
             var keyword = queryParams.Keyword.Trim();
-            query = query.Where(i => i.InvoiceCode.Contains(keyword) ||
-                                     i.ExamSheet.Record.Patient.FullName.Contains(keyword));
+            query = query.Where(i => (i.InvoiceCode != null && i.InvoiceCode.Contains(keyword)) ||
+                                     i.Record.Patient.FullName.Contains(keyword));
         }
 
         var totalCount = await query.CountAsync();
@@ -56,8 +56,8 @@ public class InvoiceService : IInvoiceService
             .Select(i => new InvoiceListDto
             {
                 InvoiceId = i.InvoiceId,
-                InvoiceCode = i.InvoiceCode,
-                PatientName = i.ExamSheet.Record.Patient.FullName,
+                InvoiceCode = i.InvoiceCode ?? string.Empty,
+                PatientName = i.Record.Patient.FullName,
                 CashierName = i.Cashier.FullName,
                 TotalAmount = i.TotalAmount,
                 Discount = i.Discount,
@@ -76,11 +76,10 @@ public class InvoiceService : IInvoiceService
         var invoice = await _context.Invoices
             .AsNoTracking()
             .Include(i => i.Cashier)
-            .Include(i => i.ExamSheet)
-                .ThenInclude(e => e.Doctor)
-            .Include(i => i.ExamSheet)
-                .ThenInclude(e => e.Record)
-                    .ThenInclude(r => r.Patient)
+            .Include(i => i.Record)
+                .ThenInclude(r => r.Doctor)
+            .Include(i => i.Record)
+                .ThenInclude(r => r.Patient)
             .Include(i => i.InvoiceDetails)
             .FirstOrDefaultAsync(i => i.InvoiceId == id);
 
@@ -92,13 +91,13 @@ public class InvoiceService : IInvoiceService
         var dto = new InvoiceDetailDto
         {
             InvoiceId = invoice.InvoiceId,
-            InvoiceCode = invoice.InvoiceCode,
+            InvoiceCode = invoice.InvoiceCode ?? string.Empty,
             IssuedDate = invoice.IssuedDate,
             PaymentMethod = invoice.PaymentMethod,
             PaymentStatus = invoice.PaymentStatus,
-            PatientName = invoice.ExamSheet?.Record?.Patient?.FullName ?? string.Empty,
-            PatientCode = invoice.ExamSheet?.Record?.Patient?.PatientCode,
-            DoctorName = invoice.ExamSheet?.Doctor?.FullName ?? string.Empty,
+            PatientName = invoice.Record.Patient.FullName,
+            PatientCode = invoice.Record.Patient.PatientCode,
+            DoctorName = invoice.Record.Doctor.FullName,
             CashierName = invoice.Cashier?.FullName ?? string.Empty,
             TotalAmount = invoice.TotalAmount,
             Discount = invoice.Discount,
@@ -107,7 +106,8 @@ public class InvoiceService : IInvoiceService
             {
                 InvoiceDetailId = d.InvoiceDetailId,
                 ItemType = d.ItemType,
-                ReferenceId = d.ReferenceId,
+                // Preserve the response field while reading the V2 foreign keys.
+                ReferenceId = d.PrescriptionId ?? d.PlanDetailId ?? 0,
                 ItemName = d.ItemName,
                 Quantity = d.Quantity,
                 UnitPrice = d.UnitPrice,

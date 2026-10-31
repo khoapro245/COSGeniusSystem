@@ -1,7 +1,7 @@
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Patients;
-using COSGeniusSystem.DTOs.Requests;
-using COSGeniusSystem.DTOs.Responses;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 
 namespace COSGeniusSystem.Services.Interfaces;
 
@@ -9,9 +9,10 @@ public interface IPatientService
 {
     // Legacy methods
     Task<PagedResult<PatientResponse>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct);
+    Task<PagedResult<PatientResponse>> SearchAsync(string? search, int pageNumber, int pageSize, CancellationToken ct);
     Task<PatientResponse> GetByIdAsync(int patientId, CancellationToken ct);
-    Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.Requests.CreatePatientRequest request, CancellationToken ct);
-    Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.Requests.UpdatePatientRequest request, CancellationToken ct);
+    Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.Patients.Requests.CreatePatientRequest request, CancellationToken ct);
+    Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.Patients.Requests.UpdatePatientRequest request, CancellationToken ct);
     Task DeleteAsync(int patientId, CancellationToken ct);
 
     // Module 1: Hồ sơ & Thông tin bệnh nhân (Phân hệ Tiếp tân)

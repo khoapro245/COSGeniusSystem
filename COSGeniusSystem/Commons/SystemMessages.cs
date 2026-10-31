@@ -2,6 +2,8 @@ namespace COSGeniusSystem.Commons;
 
 public static class SystemMessages
 {
+    public static readonly SystemMessage TreatmentsRetrieved = new(200, "Treatment data retrieved.", true);
+    public static readonly SystemMessage TreatmentSaved = new(200, "Treatment data saved.", true);
     public static readonly SystemMessage UserRegistered = new(200, "User registered successfully.", true);
     public static readonly SystemMessage LoginSuccessful = new(200, "Login successful.", true);
     public static readonly SystemMessage LogoutSuccessful = new(200, "Logged out successfully.", true);

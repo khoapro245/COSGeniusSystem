@@ -245,7 +245,15 @@ public class TreatmentServiceTests
             InvoiceDetailId = 1,
             InvoiceId = 100,
             ItemType = "Service",
-            ReferenceId = treatmentService.ServiceId,
+            PlanDetail = new TreatmentPlanDetail
+            {
+                PlanDetailId = 1,
+                ServiceId = treatmentService.ServiceId,
+                ServiceNameSnapshot = treatmentService.ServiceName,
+                UnitSnapshot = treatmentService.Unit,
+                UnitPrice = 100000m,
+                PlannedQuantity = 1
+            },
             ItemName = treatmentService.ServiceName,
             Quantity = 1,
             UnitPrice = 100000m, // Đơn giá tại thời điểm lập hóa đơn cũ

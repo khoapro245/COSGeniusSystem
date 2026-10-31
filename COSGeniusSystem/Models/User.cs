@@ -25,7 +25,13 @@ public partial class User
 
     public virtual Doctor? Doctor { get; set; }
 
+    public virtual ICollection<ExaminationRegistration> ExaminationRegistrations { get; set; } = new List<ExaminationRegistration>();
+
     public virtual ICollection<GoodsReceipt> GoodsReceipts { get; set; } = new List<GoodsReceipt>();
+
+    public virtual ICollection<HerbalFormula> HerbalFormulas { get; set; } = new List<HerbalFormula>();
+
+    public virtual ICollection<HerbalPrescription> HerbalPrescriptions { get; set; } = new List<HerbalPrescription>();
 
     public virtual ICollection<ImportRequest> ImportRequests { get; set; } = new List<ImportRequest>();
 
@@ -38,6 +44,8 @@ public partial class User
     public virtual ICollection<Notification> Notifications { get; set; } = new List<Notification>();
 
     public virtual ICollection<PurchaseOrder> PurchaseOrders { get; set; } = new List<PurchaseOrder>();
+
+    public virtual ICollection<TreatmentSession> TreatmentSessions { get; set; } = new List<TreatmentSession>();
 
     public virtual ICollection<UserRole> UserRoles { get; set; } = new List<UserRole>();
 }

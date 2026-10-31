@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -22,6 +22,10 @@ public partial class RemedyFormula
     public virtual ExamSheet? ExamSheet { get; set; }
 
     public virtual ICollection<FormulaDetail> FormulaDetails { get; set; } = new List<FormulaDetail>();
+
+    public virtual HerbalFormula? HerbalFormula { get; set; }
+
+    public virtual HerbalPrescription? HerbalPrescription { get; set; }
 
     public virtual ICollection<MedicineDispense> MedicineDispenses { get; set; } = new List<MedicineDispense>();
 }

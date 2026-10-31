@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Middlewares;
@@ -36,6 +36,8 @@ builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSG
 builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IPatientContactService, PatientContactService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Examinations.IExaminationService, COSGeniusSystem.Services.Examinations.ExaminationService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Treatments.ITreatmentWorkflowService, COSGeniusSystem.Services.Treatments.TreatmentWorkflowService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
@@ -117,7 +119,6 @@ builder.Services.AddScoped<IHerbService, HerbService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IExaminationService, ExaminationService>();
-builder.Services.AddScoped<IExamSheetService, ExaminationService>();
 builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
