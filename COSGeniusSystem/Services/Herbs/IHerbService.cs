@@ -7,7 +7,7 @@ public interface IHerbService
     /// <summary>
     /// API-TU-01: Lấy danh sách vị thuốc có lọc và phân trang.
     /// </summary>
-    Task<List<HerbResponseDto>> GetHerbsAsync(HerbFilterQuery query);
+    Task<List<HerbResponseDto>> GetHerbsAsync(HerbFilterQuery query, CancellationToken ct = default);
 
     /// <summary>
     /// API-TU-02: Xem chi tiết vị thuốc theo Id.

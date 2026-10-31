@@ -1,5 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using System;
+using System.Collections.Generic;
 using COSGeniusSystem.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Data;
 
@@ -22,13 +24,23 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Doctor> Doctors { get; set; }
 
-    public virtual DbSet<ExamSheet> ExamSheets { get; set; }
+    public virtual DbSet<ExaminationQueueCounter> ExaminationQueueCounters { get; set; }
 
-    public virtual DbSet<FormulaDetail> FormulaDetails { get; set; }
+    public virtual DbSet<ExaminationRegistration> ExaminationRegistrations { get; set; }
+
+    public virtual DbSet<GeniusSchemaMigration> GeniusSchemaMigrations { get; set; }
 
     public virtual DbSet<GoodsReceipt> GoodsReceipts { get; set; }
 
     public virtual DbSet<Herb> Herbs { get; set; }
+
+    public virtual DbSet<HerbalFormula> HerbalFormulas { get; set; }
+
+    public virtual DbSet<HerbalFormulaDetail> HerbalFormulaDetails { get; set; }
+
+    public virtual DbSet<HerbalPrescription> HerbalPrescriptions { get; set; }
+
+    public virtual DbSet<HerbalPrescriptionDetail> HerbalPrescriptionDetails { get; set; }
 
     public virtual DbSet<ImportRequest> ImportRequests { get; set; }
 
@@ -58,15 +70,17 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<ReceiptHistory> ReceiptHistories { get; set; }
 
-    public virtual DbSet<RemedyFormula> RemedyFormulas { get; set; }
-
     public virtual DbSet<Role> Roles { get; set; }
 
     public virtual DbSet<Service> Services { get; set; }
 
     public virtual DbSet<Supplier> Suppliers { get; set; }
 
-    public virtual DbSet<TreatmentProtocol> TreatmentProtocols { get; set; }
+    public virtual DbSet<TreatmentPlan> TreatmentPlans { get; set; }
+
+    public virtual DbSet<TreatmentPlanDetail> TreatmentPlanDetails { get; set; }
+
+    public virtual DbSet<TreatmentSession> TreatmentSessions { get; set; }
 
     public virtual DbSet<UsageHistory> UsageHistories { get; set; }
 
@@ -108,7 +122,7 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.HasKey(e => e.BatchId).HasName("PK__Batch__5D55CE38A4FE232B");
 
-            entity.ToTable("Batch");
+            entity.ToTable("Batch", tb => tb.HasTrigger("TR_C2_BatchHerbGuard"));
 
             entity.HasIndex(e => new { e.HerbId, e.ExpiryDate }, "IX_Batch_Herb_ExpiryDate");
 
@@ -143,11 +157,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<DispenseDetail>(entity =>
         {
-            entity.HasKey(e => e.DispenseDetailId).HasName("PK__Dispense__991E2D4BB797A4DE");
+            entity.HasKey(e => e.DispenseDetailId).HasName("PK_C2_DispenseDetail");
 
-            entity.ToTable("DispenseDetail");
+            entity.ToTable("DispenseDetail", tb => tb.HasTrigger("TR_C2_DispenseBatchHerb"));
 
-            entity.HasIndex(e => e.BatchId, "IX_DispenseDetail_BatchID");
+            entity.HasIndex(e => new { e.DispenseId, e.BatchId }, "UQ_C2_DispenseBatch").IsUnique();
 
             entity.Property(e => e.DispenseDetailId).HasColumnName("DispenseDetailID");
             entity.Property(e => e.BatchId).HasColumnName("BatchID");
@@ -158,16 +172,17 @@ public partial class ApplicationDbContext : DbContext
             entity.HasOne(d => d.Batch).WithMany(p => p.DispenseDetails)
                 .HasForeignKey(d => d.BatchId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DispenseDetail_Batch");
+                .HasConstraintName("FK_C2_DispenseDetail_Batch");
 
             entity.HasOne(d => d.Dispense).WithMany(p => p.DispenseDetails)
                 .HasForeignKey(d => d.DispenseId)
-                .HasConstraintName("FK_DispenseDetail_Dispense");
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_DispenseDetail_Header");
 
             entity.HasOne(d => d.Herb).WithMany(p => p.DispenseDetails)
                 .HasForeignKey(d => d.HerbId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_DispenseDetail_Herb");
+                .HasConstraintName("FK_C2_DispenseDetail_Herb");
         });
 
         modelBuilder.Entity<Disposal>(entity =>
@@ -249,56 +264,83 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_Doctor_User");
         });
 
-        modelBuilder.Entity<ExamSheet>(entity =>
+        modelBuilder.Entity<ExaminationQueueCounter>(entity =>
         {
-            entity.HasKey(e => e.ExamSheetId).HasName("PK__ExamShee__31F9A9581FDCAC59");
+            entity.HasKey(e => e.BusinessDate).HasName("PK_C2_QueueCounter");
 
-            entity.ToTable("ExamSheet");
-
-            entity.HasIndex(e => e.RecordId, "IX_ExamSheet_RecordID");
-
-            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
-            entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
-            entity.Property(e => e.ExamDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.FinalDiagnosis).HasMaxLength(500);
-            entity.Property(e => e.PulseDiagnosis).HasMaxLength(255);
-            entity.Property(e => e.RecordId).HasColumnName("RecordID");
-            entity.Property(e => e.TongueDiagnosis).HasMaxLength(255);
-
-            entity.HasOne(d => d.Doctor).WithMany(p => p.ExamSheets)
-                .HasForeignKey(d => d.DoctorId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ExamSheet_Doctor");
-
-            entity.HasOne(d => d.Record).WithMany(p => p.ExamSheets)
-                .HasForeignKey(d => d.RecordId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_ExamSheet_Record");
+            entity.ToTable("ExaminationQueueCounter");
         });
 
-        modelBuilder.Entity<FormulaDetail>(entity =>
+        modelBuilder.Entity<ExaminationRegistration>(entity =>
         {
-            entity.HasKey(e => e.FormulaDetailId).HasName("PK__FormulaD__DC9CD7F03E6B94FA");
+            entity.HasKey(e => e.RegistrationId).HasName("PK_C2_Registration");
 
-            entity.ToTable("FormulaDetail");
+            entity.ToTable("ExaminationRegistration", tb => tb.HasTrigger("TR_C2_RegConsistency"));
 
-            entity.Property(e => e.FormulaDetailId).HasColumnName("FormulaDetailID");
-            entity.Property(e => e.DosagePerDose).HasColumnType("decimal(10, 2)");
-            entity.Property(e => e.FormulaId).HasColumnName("FormulaID");
-            entity.Property(e => e.HerbId).HasColumnName("HerbID");
-            entity.Property(e => e.Note).HasMaxLength(255);
-            entity.Property(e => e.RoleInFormula).HasMaxLength(50);
+            entity.HasIndex(e => new { e.DoctorId, e.BusinessDate, e.Status, e.IsPriority, e.QueueNumber }, "IX_C2_RegDoctor");
 
-            entity.HasOne(d => d.Formula).WithMany(p => p.FormulaDetails)
-                .HasForeignKey(d => d.FormulaId)
-                .HasConstraintName("FK_FormulaDetail_Formula");
+            entity.HasIndex(e => new { e.PatientId, e.RegisteredAt }, "IX_C2_RegPatient");
 
-            entity.HasOne(d => d.Herb).WithMany(p => p.FormulaDetails)
-                .HasForeignKey(d => d.HerbId)
+            entity.HasIndex(e => new { e.BusinessDate, e.QueueNumber }, "UQ_C2_Queue").IsUnique();
+
+            entity.HasIndex(e => e.RegistrationCode, "UX_C2_RegCode").IsUnique();
+
+            entity.Property(e => e.RegistrationId).HasColumnName("RegistrationID");
+            entity.Property(e => e.CancelledAt).HasPrecision(3);
+            entity.Property(e => e.CompletedAt).HasPrecision(3);
+            entity.Property(e => e.ContactId).HasColumnName("ContactID");
+            entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
+            entity.Property(e => e.PatientId).HasColumnName("PatientID");
+            entity.Property(e => e.RegisteredAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_RegAt");
+            entity.Property(e => e.RegistrationCode)
+                .HasMaxLength(23)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('KCB'+CONVERT([varchar](20),[RegistrationID]))", true);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.StartedAt).HasPrecision(3);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("WAITING", "DF_C2_RegStatus");
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.Contact).WithMany(p => p.ExaminationRegistrations)
+                .HasForeignKey(d => d.ContactId)
+                .HasConstraintName("FK_C2_Reg_Contact");
+
+            entity.HasOne(d => d.Doctor).WithMany(p => p.ExaminationRegistrations)
+                .HasForeignKey(d => d.DoctorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_FormulaDetail_Herb");
+                .HasConstraintName("FK_C2_Reg_Doctor");
+
+            entity.HasOne(d => d.Patient).WithMany(p => p.ExaminationRegistrations)
+                .HasForeignKey(d => d.PatientId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Reg_Patient");
+
+            entity.HasOne(d => d.RegisteredByNavigation).WithMany(p => p.ExaminationRegistrations)
+                .HasForeignKey(d => d.RegisteredBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Reg_User");
+        });
+
+        modelBuilder.Entity<GeniusSchemaMigration>(entity =>
+        {
+            entity.HasKey(e => e.MigrationId).HasName("PK____Genius__E5D3571BC99E4434");
+
+            entity.ToTable("__GeniusSchemaMigration");
+
+            entity.Property(e => e.MigrationId)
+                .HasMaxLength(100)
+                .IsUnicode(false)
+                .HasColumnName("MigrationID");
+            entity.Property(e => e.AppliedAtUtc)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())");
         });
 
         modelBuilder.Entity<GoodsReceipt>(entity =>
@@ -355,6 +397,147 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.StandardPrice).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.TasteProperties).HasMaxLength(255);
             entity.Property(e => e.Unit).HasMaxLength(30);
+        });
+
+        modelBuilder.Entity<HerbalFormula>(entity =>
+        {
+            entity.HasKey(e => e.HerbalFormulaId).HasName("PK_C2_HerbalFormula");
+
+            entity.ToTable("HerbalFormula");
+
+            entity.HasIndex(e => new { e.Status, e.IsActive, e.FormulaName }, "IX_C2_FormulaStatus");
+
+            entity.HasIndex(e => e.FormulaCode, "UX_C2_FormulaCode").IsUnique();
+
+            entity.Property(e => e.HerbalFormulaId).HasColumnName("HerbalFormulaID");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_FormulaAt");
+            entity.Property(e => e.FormulaCode)
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('CT'+CONVERT([varchar](20),[HerbalFormulaID]))", true);
+            entity.Property(e => e.FormulaName).HasMaxLength(150);
+            entity.Property(e => e.IsActive).HasDefaultValue(true, "DF_C2_FormulaActive");
+            entity.Property(e => e.ProposedByDoctorId).HasColumnName("ProposedByDoctorID");
+            entity.Property(e => e.ReviewedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("DRAFT", "DF_C2_FormulaStatus");
+            entity.Property(e => e.SubmittedAt).HasPrecision(3);
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.ProposedByDoctor).WithMany(p => p.HerbalFormulas)
+                .HasForeignKey(d => d.ProposedByDoctorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Formula_Doctor");
+
+            entity.HasOne(d => d.ReviewedByNavigation).WithMany(p => p.HerbalFormulas)
+                .HasForeignKey(d => d.ReviewedBy)
+                .HasConstraintName("FK_C2_Formula_Reviewer");
+        });
+
+        modelBuilder.Entity<HerbalFormulaDetail>(entity =>
+        {
+            entity.HasKey(e => e.HerbalFormulaDetailId).HasName("PK_C2_HerbalFormulaDetail");
+
+            entity.ToTable("HerbalFormulaDetail");
+
+            entity.HasIndex(e => new { e.HerbalFormulaId, e.HerbId }, "UQ_C2_FormulaHerb").IsUnique();
+
+            entity.Property(e => e.HerbalFormulaDetailId).HasColumnName("HerbalFormulaDetailID");
+            entity.Property(e => e.DosagePerDose).HasColumnType("decimal(18, 3)");
+            entity.Property(e => e.HerbId).HasColumnName("HerbID");
+            entity.Property(e => e.HerbalFormulaId).HasColumnName("HerbalFormulaID");
+            entity.Property(e => e.Note).HasMaxLength(255);
+            entity.Property(e => e.RoleInFormula).HasMaxLength(50);
+
+            entity.HasOne(d => d.Herb).WithMany(p => p.HerbalFormulaDetails)
+                .HasForeignKey(d => d.HerbId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_FormulaDetail_Herb");
+
+            entity.HasOne(d => d.HerbalFormula).WithMany(p => p.HerbalFormulaDetails)
+                .HasForeignKey(d => d.HerbalFormulaId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_FormulaDetail_Formula");
+        });
+
+        modelBuilder.Entity<HerbalPrescription>(entity =>
+        {
+            entity.HasKey(e => e.PrescriptionId).HasName("PK_C2_HerbalPrescription");
+
+            entity.ToTable("HerbalPrescription", tb => tb.HasTrigger("TR_C2_RxNoReassign"));
+
+            entity.HasIndex(e => new { e.RecordId, e.Status }, "IX_C2_RxRecord");
+
+            entity.HasIndex(e => e.PrescriptionCode, "UX_C2_RxCode").IsUnique();
+
+            entity.Property(e => e.PrescriptionId).HasColumnName("PrescriptionID");
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_RxAt");
+            entity.Property(e => e.PrescriptionCode)
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('DT'+CONVERT([varchar](20),[PrescriptionID]))", true);
+            entity.Property(e => e.PrescriptionName).HasMaxLength(150);
+            entity.Property(e => e.RecordId).HasColumnName("RecordID");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.SentAt).HasPrecision(3);
+            entity.Property(e => e.SourceHerbalFormulaId).HasColumnName("SourceHerbalFormulaID");
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("DRAFT", "DF_C2_RxStatus");
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+
+            entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.HerbalPrescriptions)
+                .HasForeignKey(d => d.CreatedBy)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Rx_User");
+
+            entity.HasOne(d => d.Record).WithMany(p => p.HerbalPrescriptions)
+                .HasForeignKey(d => d.RecordId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Rx_Record");
+
+            entity.HasOne(d => d.SourceHerbalFormula).WithMany(p => p.HerbalPrescriptions)
+                .HasForeignKey(d => d.SourceHerbalFormulaId)
+                .HasConstraintName("FK_C2_Rx_Formula");
+        });
+
+        modelBuilder.Entity<HerbalPrescriptionDetail>(entity =>
+        {
+            entity.HasKey(e => e.PrescriptionDetailId).HasName("PK_C2_HerbalPrescriptionDetail");
+
+            entity.ToTable("HerbalPrescriptionDetail");
+
+            entity.HasIndex(e => new { e.PrescriptionId, e.HerbId }, "UQ_C2_RxHerb").IsUnique();
+
+            entity.Property(e => e.PrescriptionDetailId).HasColumnName("PrescriptionDetailID");
+            entity.Property(e => e.DosagePerDose).HasColumnType("decimal(18, 3)");
+            entity.Property(e => e.HerbId).HasColumnName("HerbID");
+            entity.Property(e => e.HerbNameSnapshot).HasMaxLength(150);
+            entity.Property(e => e.Note).HasMaxLength(255);
+            entity.Property(e => e.PrescriptionId).HasColumnName("PrescriptionID");
+            entity.Property(e => e.RoleInFormula).HasMaxLength(50);
+
+            entity.HasOne(d => d.Herb).WithMany(p => p.HerbalPrescriptionDetails)
+                .HasForeignKey(d => d.HerbId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_RxDetail_Herb");
+
+            entity.HasOne(d => d.Prescription).WithMany(p => p.HerbalPrescriptionDetails)
+                .HasForeignKey(d => d.PrescriptionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_RxDetail_Rx");
         });
 
         modelBuilder.Entity<ImportRequest>(entity =>
@@ -438,49 +621,50 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Invoice>(entity =>
         {
-            entity.HasKey(e => e.InvoiceId).HasName("PK__Invoice__D796AAD5A9A943D8");
+            entity.HasKey(e => e.InvoiceId).HasName("PK_C2_Invoice");
 
-            entity.ToTable("Invoice");
+            entity.ToTable("Invoice", tb => tb.HasTrigger("TR_C2_InvoiceNoReassign"));
 
-            entity.HasIndex(e => e.ExamSheetId, "IX_Invoice_ExamSheetID");
+            entity.HasIndex(e => e.RecordId, "IX_C2_InvoiceRecord");
 
-            entity.HasIndex(e => e.InvoiceCode, "UQ__Invoice__0D9D7FF35ACA6B70").IsUnique();
+            entity.HasIndex(e => e.InvoiceCode, "UX_C2_InvoiceCode").IsUnique();
 
             entity.Property(e => e.InvoiceId).HasColumnName("InvoiceID");
             entity.Property(e => e.CashierId).HasColumnName("CashierID");
             entity.Property(e => e.Discount).HasColumnType("decimal(18, 2)");
-            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
             entity.Property(e => e.FinalAmount).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.InvoiceCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('HD'+CONVERT([varchar](20),[InvoiceID]))", true);
             entity.Property(e => e.IssuedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_InvoiceDate");
             entity.Property(e => e.PaymentMethod)
                 .HasMaxLength(50)
-                .HasDefaultValue("Tiền mặt");
+                .HasDefaultValue("Tiền mặt", "DF_C2_InvoiceMethod");
             entity.Property(e => e.PaymentStatus)
                 .HasMaxLength(50)
-                .HasDefaultValue("Chưa thanh toán");
+                .HasDefaultValue("Chưa thanh toán", "DF_C2_InvoiceStatus");
+            entity.Property(e => e.RecordId).HasColumnName("RecordID");
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
 
             entity.HasOne(d => d.Cashier).WithMany(p => p.Invoices)
                 .HasForeignKey(d => d.CashierId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Invoice_Cashier");
+                .HasConstraintName("FK_C2_Invoice_Cashier");
 
-            entity.HasOne(d => d.ExamSheet).WithMany(p => p.Invoices)
-                .HasForeignKey(d => d.ExamSheetId)
+            entity.HasOne(d => d.Record).WithMany(p => p.Invoices)
+                .HasForeignKey(d => d.RecordId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_Invoice_ExamSheet");
+                .HasConstraintName("FK_C2_Invoice_Record");
         });
 
         modelBuilder.Entity<InvoiceDetail>(entity =>
         {
-            entity.HasKey(e => e.InvoiceDetailId).HasName("PK__InvoiceD__1F1578F167D12318");
+            entity.HasKey(e => e.InvoiceDetailId).HasName("PK_C2_InvoiceDetail");
 
-            entity.ToTable("InvoiceDetail");
+            entity.ToTable("InvoiceDetail", tb => tb.HasTrigger("TR_C2_InvoiceItemRecord"));
 
             entity.Property(e => e.InvoiceDetailId).HasColumnName("InvoiceDetailID");
             entity.Property(e => e.InvoiceId).HasColumnName("InvoiceID");
@@ -488,8 +672,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.ItemType)
                 .HasMaxLength(20)
                 .IsUnicode(false);
+            entity.Property(e => e.PlanDetailId).HasColumnName("PlanDetailID");
+            entity.Property(e => e.PrescriptionId).HasColumnName("PrescriptionID");
             entity.Property(e => e.Quantity).HasColumnType("decimal(10, 2)");
-            entity.Property(e => e.ReferenceId).HasColumnName("ReferenceID");
             entity.Property(e => e.SubTotal)
                 .HasComputedColumnSql("([Quantity]*[UnitPrice])", false)
                 .HasColumnType("decimal(29, 4)");
@@ -497,69 +682,115 @@ public partial class ApplicationDbContext : DbContext
 
             entity.HasOne(d => d.Invoice).WithMany(p => p.InvoiceDetails)
                 .HasForeignKey(d => d.InvoiceId)
-                .HasConstraintName("FK_InvoiceDetail_Invoice");
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_InvoiceDetail_Header");
+
+            entity.HasOne(d => d.PlanDetail).WithMany(p => p.InvoiceDetails)
+                .HasForeignKey(d => d.PlanDetailId)
+                .HasConstraintName("FK_C2_InvoiceDetail_Plan");
+
+            entity.HasOne(d => d.Prescription).WithMany(p => p.InvoiceDetails)
+                .HasForeignKey(d => d.PrescriptionId)
+                .HasConstraintName("FK_C2_InvoiceDetail_Rx");
         });
 
         modelBuilder.Entity<MedicalRecord>(entity =>
         {
-            entity.HasKey(e => e.RecordId).HasName("PK__MedicalR__FBDF78C9F4FA2F15");
+            entity.HasKey(e => e.RecordId).HasName("PK_C2_MedicalRecord");
 
-            entity.ToTable("MedicalRecord");
+            entity.ToTable("MedicalRecord", tb => tb.HasTrigger("TR_C2_RecordConsistency"));
+
+            entity.HasIndex(e => new { e.DoctorId, e.Status, e.ExamDate }, "IX_C2_RecordDoctor");
+
+            entity.HasIndex(e => new { e.PatientId, e.ExamDate }, "IX_C2_RecordPatient");
+
+            entity.HasIndex(e => e.RegistrationId, "UQ_C2_Record_Reg").IsUnique();
 
             entity.Property(e => e.RecordId).HasColumnName("RecordID");
-            entity.Property(e => e.CreatedDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.InitialDiagnosis).HasMaxLength(500);
+            entity.Property(e => e.CompletedAt).HasPrecision(3);
+            entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
+            entity.Property(e => e.ExamDate)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_ExamDate");
+            entity.Property(e => e.FinalDiagnosis).HasMaxLength(500);
+            entity.Property(e => e.HeightCm).HasColumnType("decimal(6, 2)");
+            entity.Property(e => e.Icdcode)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasColumnName("ICDCode");
+            entity.Property(e => e.Icddescription)
+                .HasMaxLength(500)
+                .HasColumnName("ICDDescription");
             entity.Property(e => e.PatientId).HasColumnName("PatientID");
+            entity.Property(e => e.PreliminaryDiagnosis).HasMaxLength(500);
+            entity.Property(e => e.RegistrationId).HasColumnName("RegistrationID");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.SpO2).HasColumnType("decimal(5, 2)");
             entity.Property(e => e.Status)
-                .HasMaxLength(50)
-                .HasDefaultValue("Đang theo dõi");
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("IN_PROGRESS", "DF_C2_RecordStatus");
+            entity.Property(e => e.Temperature).HasColumnType("decimal(4, 1)");
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
+            entity.Property(e => e.WeightKg).HasColumnType("decimal(6, 2)");
+
+            entity.HasOne(d => d.Doctor).WithMany(p => p.MedicalRecords)
+                .HasForeignKey(d => d.DoctorId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Record_Doctor");
 
             entity.HasOne(d => d.Patient).WithMany(p => p.MedicalRecords)
                 .HasForeignKey(d => d.PatientId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_MedicalRecord_Patient");
+                .HasConstraintName("FK_C2_Record_Patient");
+
+            entity.HasOne(d => d.Registration).WithOne(p => p.MedicalRecord)
+                .HasForeignKey<MedicalRecord>(d => d.RegistrationId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Record_Reg");
         });
 
         modelBuilder.Entity<MedicineDispense>(entity =>
         {
-            entity.HasKey(e => e.DispenseId).HasName("PK__Medicine__26DF670A51035B13");
+            entity.HasKey(e => e.DispenseId).HasName("PK_C2_MedicineDispense");
 
             entity.ToTable("MedicineDispense");
 
-            entity.HasIndex(e => e.FormulaId, "IX_MedicineDispense_FormulaID");
+            entity.HasIndex(e => e.PrescriptionId, "UQ_C2_DispenseRx").IsUnique();
 
-            entity.HasIndex(e => e.DispenseCode, "UQ__Medicine__126E0A48B9E5C8B4").IsUnique();
+            entity.HasIndex(e => e.DispenseCode, "UX_C2_DispenseCode").IsUnique();
 
             entity.Property(e => e.DispenseId).HasColumnName("DispenseID");
             entity.Property(e => e.DispenseCode)
-                .HasMaxLength(50)
-                .IsUnicode(false);
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('BT'+CONVERT([varchar](20),[DispenseID]))", true);
             entity.Property(e => e.DispenseDate)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.FormulaId).HasColumnName("FormulaID");
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_DispenseDate");
             entity.Property(e => e.Note).HasMaxLength(255);
+            entity.Property(e => e.PrescriptionId).HasColumnName("PrescriptionID");
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
-                .HasDefaultValue("Đã hoàn thành");
+                .HasDefaultValue("Đã hoàn thành", "DF_C2_DispenseStatus");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
 
             entity.HasOne(d => d.DispensedByNavigation).WithMany(p => p.MedicineDispenses)
                 .HasForeignKey(d => d.DispensedBy)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_MedicineDispense_User");
+                .HasConstraintName("FK_C2_Dispense_User");
 
-            entity.HasOne(d => d.Formula).WithMany(p => p.MedicineDispenses)
-                .HasForeignKey(d => d.FormulaId)
+            entity.HasOne(d => d.Prescription).WithOne(p => p.MedicineDispense)
+                .HasForeignKey<MedicineDispense>(d => d.PrescriptionId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_MedicineDispense_Formula");
+                .HasConstraintName("FK_C2_Dispense_Rx");
 
             entity.HasOne(d => d.Warehouse).WithMany(p => p.MedicineDispenses)
                 .HasForeignKey(d => d.WarehouseId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_MedicineDispense_Warehouse");
+                .HasConstraintName("FK_C2_Dispense_Warehouse");
         });
 
         modelBuilder.Entity<Notification>(entity =>
@@ -620,7 +851,11 @@ public partial class ApplicationDbContext : DbContext
         {
             entity.HasKey(e => e.ContactId).HasName("PK__PatientC__5C6625BB39DDE3F1");
 
-            entity.ToTable("PatientContact");
+            entity.ToTable("PatientContact", tb =>
+                {
+                    tb.HasTrigger("TR_C2_ContactNoReassign");
+                    tb.HasTrigger("TR_G79_Contact_NoReassign");
+                });
 
             entity.HasIndex(e => e.PatientId, "IX_PatientContact_PatientID");
 
@@ -752,26 +987,6 @@ public partial class ApplicationDbContext : DbContext
                 .HasConstraintName("FK_ReceiptHistory_Receipt");
         });
 
-        modelBuilder.Entity<RemedyFormula>(entity =>
-        {
-            entity.HasKey(e => e.FormulaId).HasName("PK__RemedyFo__2274564543758D58");
-
-            entity.ToTable("RemedyFormula");
-
-            entity.Property(e => e.FormulaId).HasColumnName("FormulaID");
-            entity.Property(e => e.CreatedAt)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.DosageDays).HasDefaultValue(1);
-            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
-            entity.Property(e => e.FormulaName).HasMaxLength(150);
-            entity.Property(e => e.TotalDoses).HasDefaultValue(1);
-
-            entity.HasOne(d => d.ExamSheet).WithMany(p => p.RemedyFormulas)
-                .HasForeignKey(d => d.ExamSheetId)
-                .HasConstraintName("FK_RemedyFormula_ExamSheet");
-        });
-
         modelBuilder.Entity<Role>(entity =>
         {
             entity.HasKey(e => e.RoleId).HasName("PK__Role__8AFACE3AC2F1042A");
@@ -833,56 +1048,153 @@ public partial class ApplicationDbContext : DbContext
                 .IsUnicode(false);
         });
 
-        modelBuilder.Entity<TreatmentProtocol>(entity =>
+        modelBuilder.Entity<TreatmentPlan>(entity =>
         {
-            entity.HasKey(e => e.ProtocolId).HasName("PK__Treatmen__C1131837F07CA261");
+            entity.HasKey(e => e.PlanId).HasName("PK_C2_TreatmentPlan");
 
-            entity.ToTable("TreatmentProtocol");
+            entity.ToTable("TreatmentPlan", tb => tb.HasTrigger("TR_C2_PlanNoReassign"));
 
-            entity.Property(e => e.ProtocolId).HasColumnName("ProtocolID");
+            entity.HasIndex(e => new { e.RecordId, e.Status }, "IX_C2_PlanRecord");
+
+            entity.HasIndex(e => e.PlanCode, "UX_C2_PlanCode").IsUnique();
+
+            entity.Property(e => e.PlanId).HasColumnName("PlanID");
+            entity.Property(e => e.ConfirmedAt).HasPrecision(3);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_PlanAt");
             entity.Property(e => e.DoctorId).HasColumnName("DoctorID");
-            entity.Property(e => e.ProtocolName).HasMaxLength(200);
+            entity.Property(e => e.PlanCode)
+                .HasMaxLength(22)
+                .IsUnicode(false)
+                .HasComputedColumnSql("('LT'+CONVERT([varchar](20),[PlanID]))", true);
+            entity.Property(e => e.PlanName).HasMaxLength(200);
             entity.Property(e => e.RecordId).HasColumnName("RecordID");
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("DRAFT", "DF_C2_PlanStatus");
+            entity.Property(e => e.TreatmentType)
+                .HasMaxLength(10)
+                .IsUnicode(false);
+            entity.Property(e => e.UpdatedAt).HasPrecision(3);
 
-            entity.HasOne(d => d.Doctor).WithMany(p => p.TreatmentProtocols)
+            entity.HasOne(d => d.Doctor).WithMany(p => p.TreatmentPlans)
                 .HasForeignKey(d => d.DoctorId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_TreatmentProtocol_Doctor");
+                .HasConstraintName("FK_C2_Plan_Doctor");
 
-            entity.HasOne(d => d.Record).WithMany(p => p.TreatmentProtocols)
+            entity.HasOne(d => d.Record).WithMany(p => p.TreatmentPlans)
                 .HasForeignKey(d => d.RecordId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_TreatmentProtocol_Record");
+                .HasConstraintName("FK_C2_Plan_Record");
+        });
+
+        modelBuilder.Entity<TreatmentPlanDetail>(entity =>
+        {
+            entity.HasKey(e => e.PlanDetailId).HasName("PK_C2_TreatmentPlanDetail");
+
+            entity.ToTable("TreatmentPlanDetail", tb => tb.HasTrigger("TR_C2_PlanDetailNoReassign"));
+
+            entity.HasIndex(e => new { e.PlanId, e.ServiceId }, "UQ_C2_PlanService").IsUnique();
+
+            entity.Property(e => e.PlanDetailId).HasColumnName("PlanDetailID");
+            entity.Property(e => e.PlanId).HasColumnName("PlanID");
+            entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
+            entity.Property(e => e.ServiceNameSnapshot).HasMaxLength(150);
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UnitSnapshot).HasMaxLength(50);
+
+            entity.HasOne(d => d.Plan).WithMany(p => p.TreatmentPlanDetails)
+                .HasForeignKey(d => d.PlanId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_PlanDetail_Plan");
+
+            entity.HasOne(d => d.Service).WithMany(p => p.TreatmentPlanDetails)
+                .HasForeignKey(d => d.ServiceId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_PlanDetail_Service");
+        });
+
+        modelBuilder.Entity<TreatmentSession>(entity =>
+        {
+            entity.HasKey(e => e.SessionId).HasName("PK_C2_TreatmentSession");
+
+            entity.ToTable("TreatmentSession", tb => tb.HasTrigger("TR_C2_SessionNoReassign"));
+
+            entity.HasIndex(e => new { e.AssignedDoctorId, e.Status, e.ScheduledDate }, "IX_C2_SessionDoctor");
+
+            entity.HasIndex(e => new { e.PlanId, e.SessionNumber }, "UQ_C2_SessionNumber").IsUnique();
+
+            entity.Property(e => e.SessionId).HasColumnName("SessionID");
+            entity.Property(e => e.AssignedDoctorId).HasColumnName("AssignedDoctorID");
+            entity.Property(e => e.CompletedAt).HasPrecision(3);
+            entity.Property(e => e.CreatedAt)
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_SessionAt");
+            entity.Property(e => e.PlanId).HasColumnName("PlanID");
+            entity.Property(e => e.RequestedAt).HasPrecision(3);
+            entity.Property(e => e.RowVersion)
+                .IsRowVersion()
+                .IsConcurrencyToken();
+            entity.Property(e => e.StartedAt).HasPrecision(3);
+            entity.Property(e => e.Status)
+                .HasMaxLength(20)
+                .IsUnicode(false)
+                .HasDefaultValue("PLANNED", "DF_C2_SessionStatus");
+
+            entity.HasOne(d => d.AssignedDoctor).WithMany(p => p.TreatmentSessionAssignedDoctors)
+                .HasForeignKey(d => d.AssignedDoctorId)
+                .HasConstraintName("FK_C2_Session_Assigned");
+
+            entity.HasOne(d => d.PerformedByNavigation).WithMany(p => p.TreatmentSessionPerformedByNavigations)
+                .HasForeignKey(d => d.PerformedBy)
+                .HasConstraintName("FK_C2_Session_Performer");
+
+            entity.HasOne(d => d.Plan).WithMany(p => p.TreatmentSessions)
+                .HasForeignKey(d => d.PlanId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Session_Plan");
+
+            entity.HasOne(d => d.RequestedByNavigation).WithMany(p => p.TreatmentSessions)
+                .HasForeignKey(d => d.RequestedBy)
+                .HasConstraintName("FK_C2_Session_User");
         });
 
         modelBuilder.Entity<UsageHistory>(entity =>
         {
-            entity.HasKey(e => e.UsageId).HasName("PK__UsageHis__29B197C0C7D02719");
+            entity.HasKey(e => e.UsageId).HasName("PK_C2_UsageHistory");
 
-            entity.ToTable("UsageHistory");
+            entity.ToTable("UsageHistory", tb => tb.HasTrigger("TR_C2_UsageConsistency"));
+
+            entity.HasIndex(e => new { e.SessionId, e.PlanDetailId }, "UQ_C2_UsageService").IsUnique();
 
             entity.Property(e => e.UsageId).HasColumnName("UsageID");
-            entity.Property(e => e.ExamSheetId).HasColumnName("ExamSheetID");
             entity.Property(e => e.ExecutionTime)
-                .HasDefaultValueSql("(getdate())")
-                .HasColumnType("datetime");
-            entity.Property(e => e.Quantity).HasDefaultValue(1);
+                .HasPrecision(3)
+                .HasDefaultValueSql("(sysutcdatetime())", "DF_C2_ExecutionTime");
+            entity.Property(e => e.PlanDetailId).HasColumnName("PlanDetailID");
+            entity.Property(e => e.Quantity).HasDefaultValue(1, "DF_C2_UsageQty");
             entity.Property(e => e.ResultNote).HasMaxLength(500);
-            entity.Property(e => e.ServiceId).HasColumnName("ServiceID");
-
-            entity.HasOne(d => d.ExamSheet).WithMany(p => p.UsageHistories)
-                .HasForeignKey(d => d.ExamSheetId)
-                .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_UsageHistory_ExamSheet");
+            entity.Property(e => e.SessionId).HasColumnName("SessionID");
 
             entity.HasOne(d => d.PerformedByNavigation).WithMany(p => p.UsageHistories)
                 .HasForeignKey(d => d.PerformedBy)
-                .HasConstraintName("FK_UsageHistory_Doctor");
-
-            entity.HasOne(d => d.Service).WithMany(p => p.UsageHistories)
-                .HasForeignKey(d => d.ServiceId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
-                .HasConstraintName("FK_UsageHistory_Service");
+                .HasConstraintName("FK_C2_Usage_Doctor");
+
+            entity.HasOne(d => d.PlanDetail).WithMany(p => p.UsageHistories)
+                .HasForeignKey(d => d.PlanDetailId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Usage_PlanDetail");
+
+            entity.HasOne(d => d.Session).WithMany(p => p.UsageHistories)
+                .HasForeignKey(d => d.SessionId)
+                .OnDelete(DeleteBehavior.ClientSetNull)
+                .HasConstraintName("FK_C2_Usage_Session");
         });
 
         modelBuilder.Entity<User>(entity =>

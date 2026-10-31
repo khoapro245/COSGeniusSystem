@@ -3,6 +3,7 @@ using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.DTOs.Doctors;
 using COSGeniusSystem.Services.Doctors;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace COSGeniusSystem.Controllers;
 
@@ -22,9 +23,10 @@ public class DoctorsController : BaseApiController
     /// GET /api/v1/doctors
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponseModel<List<DoctorResponseDto>>>> GetDoctors([FromQuery] DoctorFilterQuery query)
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    public async Task<ActionResult<ApiResponseModel<List<DoctorResponseDto>>>> GetDoctors([FromQuery] DoctorFilterQuery query, CancellationToken ct = default)
     {
-        var result = await _doctorService.GetDoctorsAsync(query);
+        var result = await _doctorService.GetDoctorsAsync(query, ct);
         return SuccessResponse(SystemMessages.DoctorsRetrieved, result);
     }
 

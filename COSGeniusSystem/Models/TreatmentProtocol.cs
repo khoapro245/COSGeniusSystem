@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -13,13 +13,38 @@ public partial class TreatmentProtocol
 
     public string ProtocolName { get; set; } = null!;
 
-    public DateOnly StartDate { get; set; }
+    public DateOnly? StartDate { get; set; }
 
     public DateOnly? EndDate { get; set; }
 
     public string? Description { get; set; }
 
+    public int? ExamSheetId { get; set; }
+
+    public string? TreatmentType { get; set; }
+
+    public int? PlannedSessionCount { get; set; }
+
+    public string PlanStatus { get; set; } = null!;
+
+    public bool IsLegacy { get; set; }
+
+    public DateTime CreatedAt { get; set; }
+
+    public DateTime? ConfirmedAt { get; set; }
+
+    public DateTime? UpdatedAt { get; set; }
+
+    public byte[] RowVersion { get; set; } = null!;
+
     public virtual Doctor Doctor { get; set; } = null!;
 
+    public virtual ExamSheet? ExamSheet { get; set; }
+
     public virtual MedicalRecord Record { get; set; } = null!;
+
+    public virtual ICollection<TreatmentPlanDetail> TreatmentPlanDetails { get; set; } = new List<TreatmentPlanDetail>();
+
+    public virtual ICollection<TreatmentSession> TreatmentSessions { get; set; } = new List<TreatmentSession>();
+
 }

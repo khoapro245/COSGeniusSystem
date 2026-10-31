@@ -27,7 +27,9 @@ public partial class Herb
 
     public virtual ICollection<DispenseDetail> DispenseDetails { get; set; } = new List<DispenseDetail>();
 
-    public virtual ICollection<FormulaDetail> FormulaDetails { get; set; } = new List<FormulaDetail>();
+    public virtual ICollection<HerbalFormulaDetail> HerbalFormulaDetails { get; set; } = new List<HerbalFormulaDetail>();
+
+    public virtual ICollection<HerbalPrescriptionDetail> HerbalPrescriptionDetails { get; set; } = new List<HerbalPrescriptionDetail>();
 
     public virtual ICollection<ImportRequestDetail> ImportRequestDetails { get; set; } = new List<ImportRequestDetail>();
 

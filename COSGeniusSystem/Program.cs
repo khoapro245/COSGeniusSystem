@@ -36,6 +36,8 @@ builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSG
 builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IPatientContactService, PatientContactService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Examinations.IExaminationService, COSGeniusSystem.Services.Examinations.ExaminationService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Treatments.ITreatmentWorkflowService, COSGeniusSystem.Services.Treatments.TreatmentWorkflowService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {

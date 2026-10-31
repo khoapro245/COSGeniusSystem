@@ -1,12 +1,15 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class MedicineDispense
 {
     public int DispenseId { get; set; }
 
-    public string DispenseCode { get; set; } = null!;
+    public string? DispenseCode { get; set; }
 
-    public int FormulaId { get; set; }
+    public int PrescriptionId { get; set; }
 
     public int WarehouseId { get; set; }
 
@@ -22,7 +25,7 @@ public partial class MedicineDispense
 
     public virtual User DispensedByNavigation { get; set; } = null!;
 
-    public virtual RemedyFormula Formula { get; set; } = null!;
+    public virtual HerbalPrescription Prescription { get; set; } = null!;
 
     public virtual Warehouse Warehouse { get; set; } = null!;
 }

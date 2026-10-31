@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Requests;
-using COSGeniusSystem.DTOs.Responses;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
 

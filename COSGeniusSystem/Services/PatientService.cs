@@ -1,13 +1,11 @@
 using System.Text.RegularExpressions;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Patients;
-using COSGeniusSystem.DTOs.Requests;
-using COSGeniusSystem.DTOs.Responses;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 
 namespace COSGeniusSystem.Services;
 
@@ -21,15 +19,22 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
     #region Legacy Methods
     public async Task<PagedResult<PatientResponse>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct)
+        => await SearchAsync(null, pageNumber, pageSize, ct);
+
+    public async Task<PagedResult<PatientResponse>> SearchAsync(string? search, int pageNumber, int pageSize, CancellationToken ct)
     {
         if (pageNumber < 1 || pageNumber > 1000000 || pageSize < 1 || pageSize > 100)
             throw new BadRequestException("Page number must be 1 to 1000000 and page size must be 1 to 100.");
-
-        var totalCount = await db.Patients.CountAsync(ct);
-        var items = (await db.Patients.AsNoTracking().OrderBy(p => p.PatientId)
-            .Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(ct))
-            .Select(PatientMapping.ToResponse).ToList();
-
+        var query = db.Patients.AsNoTracking();
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var keyword = search.Trim();
+            query = query.Where(p => p.FullName.Contains(keyword) || (p.Phone != null && p.Phone.Contains(keyword))
+                || (p.PatientCode != null && p.PatientCode.Contains(keyword)));
+        }
+        var totalCount = await query.CountAsync(ct);
+        var items = await query.OrderBy(p => p.PatientId).Skip((pageNumber - 1) * pageSize).Take(pageSize)
+            .Select(PatientMapping.Projection).ToListAsync(ct);
         return new(items, pageNumber, pageSize, totalCount);
     }
 
@@ -58,7 +63,8 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     {
         var entity = await FindAsync(patientId, ct);
         if (await db.PatientContacts.AnyAsync(p => p.PatientId == patientId, ct)
-            || await db.MedicalRecords.AnyAsync(p => p.PatientId == patientId, ct))
+            || await db.MedicalRecords.AnyAsync(p => p.PatientId == patientId, ct)
+            || await db.ExaminationRegistrations.AnyAsync(p => p.PatientId == patientId, ct))
             throw new ConflictException("Patient has contacts or medical records. Remove related records before deleting the patient.");
 
         db.Patients.Remove(entity);

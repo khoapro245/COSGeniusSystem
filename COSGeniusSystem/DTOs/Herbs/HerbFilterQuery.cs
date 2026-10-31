@@ -13,8 +13,10 @@ public class HerbFilterQuery
 
     // ---------- Phân trang ----------
     /// <summary>Trang hiện tại (bắt đầu từ 1).</summary>
+    [System.ComponentModel.DataAnnotations.Range(1, 1000000)]
     public int Page { get; set; } = 1;
 
     /// <summary>Số bản ghi mỗi trang.</summary>
+    [System.ComponentModel.DataAnnotations.Range(1, 100)]
     public int PageSize { get; set; } = 20;
 }

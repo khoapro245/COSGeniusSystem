@@ -7,11 +7,11 @@ public partial class UsageHistory
 {
     public int UsageId { get; set; }
 
-    public int ExamSheetId { get; set; }
+    public int SessionId { get; set; }
 
-    public int ServiceId { get; set; }
+    public int PlanDetailId { get; set; }
 
-    public int? PerformedBy { get; set; }
+    public int PerformedBy { get; set; }
 
     public int Quantity { get; set; }
 
@@ -19,9 +19,9 @@ public partial class UsageHistory
 
     public string? ResultNote { get; set; }
 
-    public virtual ExamSheet ExamSheet { get; set; } = null!;
+    public virtual Doctor PerformedByNavigation { get; set; } = null!;
 
-    public virtual Doctor? PerformedByNavigation { get; set; }
+    public virtual TreatmentPlanDetail PlanDetail { get; set; } = null!;
 
-    public virtual Service Service { get; set; } = null!;
+    public virtual TreatmentSession Session { get; set; } = null!;
 }

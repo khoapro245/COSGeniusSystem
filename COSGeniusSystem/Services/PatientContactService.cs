@@ -1,11 +1,11 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Requests;
-using COSGeniusSystem.DTOs.Responses;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 
 namespace COSGeniusSystem.Services;
 

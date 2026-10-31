@@ -14,13 +14,17 @@ public class TreatmentService : ITreatmentService
         _context = context;
     }
 
-    public async Task<List<TreatmentServiceResponseDto>> GetActiveServicesAsync()
+    public async Task<List<TreatmentServiceResponseDto>> GetActiveServicesAsync(CancellationToken ct = default)
     {
         return await _context.Services
             .AsNoTracking()
             .Where(s => s.IsActive)
-            .Select(s => ToResponseDto(s))
-            .ToListAsync();
+            .Select(s => new TreatmentServiceResponseDto
+            {
+                ServiceId = s.ServiceId, ServiceCode = s.ServiceCode, ServiceName = s.ServiceName,
+                Price = s.Price, Unit = s.Unit, Description = s.Description, IsActive = s.IsActive
+            })
+            .ToListAsync(ct);
     }
 
     public async Task<(TreatmentServiceResponseDto? Dto, string? ErrorMessage)> CreateServiceAsync(
