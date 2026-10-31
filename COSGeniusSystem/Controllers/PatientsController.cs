@@ -1,127 +1,68 @@
+using System.ComponentModel.DataAnnotations;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Patients;
+using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs.Patients.Responses;
 using COSGeniusSystem.Services.Interfaces;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
-namespace COSGeniusSystem.Controllers;
-
-[ApiController]
-[Route("api/v1/patients")]
-[Route("api/patients")]
-public sealed class PatientsController : BaseApiController
+namespace COSGeniusSystem.Controllers
 {
-    private readonly IPatientService _patientService;
-
-    public PatientsController(IPatientService patientService)
+    [Route("api/patients")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    public sealed class PatientsController : BaseApiController
     {
-        _patientService = patientService;
-    }
+        private readonly IPatientService _patientService;
 
-    /// <summary>
-    /// Lấy danh sách hồ sơ bệnh nhân (hỗ trợ tìm kiếm theo Mã BN, Tên, Số điện thoại).
-    /// GET /api/v1/patients
-    /// </summary>
-    [HttpGet]
-    public async Task<ActionResult<ApiResponseModel<List<PatientResponseDto>>>> GetPatients(
-        [FromQuery] PatientSearchQuery query, CancellationToken ct = default)
-    {
-        var result = await _patientService.SearchPatientsAsync(query, ct);
-        return SuccessResponse(SystemMessages.PatientsRetrieved, result);
-    }
+        public PatientsController(IPatientService patientService)
+        {
+            _patientService = patientService;
+        }
 
-    /// <summary>
-    /// Xem chi tiết thông tin bệnh nhân kèm danh sách người liên hệ.
-    /// GET /api/v1/patients/{id}
-    /// </summary>
-    [HttpGet("{id:int}")]
-    public async Task<ActionResult<ApiResponseModel<PatientDetailDto>>> GetPatientById(
-        int id, CancellationToken ct = default)
-    {
-        var result = await _patientService.GetPatientDetailAsync(id, ct);
-        return SuccessResponse(SystemMessages.PatientRetrieved, result);
-    }
+        // GET: api/patients
+        [HttpGet]
+        public async Task<ActionResult<ApiResponseModel<PagedResult<PatientResponse>>>> GetAll(
+            [FromQuery, Range(1, 1000000)] int pageNumber = 1,
+            [FromQuery, Range(1, 100)] int pageSize = 20, CancellationToken ct = default,
+            [FromQuery, StringLength(150)] string? search = null)
+        {
+            var patients = await _patientService.SearchAsync(search, pageNumber, pageSize, ct);
+            return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
+        }
 
-    /// <summary>
-    /// Tạo mới hồ sơ bệnh nhân, tự động tạo MedicalRecord và thông tin người liên hệ.
-    /// POST /api/v1/patients
-    /// </summary>
-    [HttpPost]
-    public async Task<ActionResult<ApiResponseModel<PatientDetailDto>>> CreatePatient(
-        [FromBody] CreatePatientRequest request, CancellationToken ct = default)
-    {
-        var result = await _patientService.CreatePatientV1Async(request, ct);
-        return CreatedResponse(nameof(GetPatientById), new { id = result.PatientId }, SystemMessages.PatientCreated, result);
-    }
+        // GET: api/patients/{patientId}
+        [HttpGet("{patientId:int:min(1)}")]
+        public async Task<ActionResult<ApiResponseModel<PatientResponse>>> GetById(int patientId, CancellationToken ct)
+        {
+            var patientResponse = await _patientService.GetByIdAsync(patientId, ct);
+            return SuccessResponse(SystemMessages.PatientRetrieved, patientResponse);
+        }
 
-    /// <summary>
-    /// Cập nhật thông tin bệnh nhân và danh sách người liên hệ.
-    /// PUT /api/v1/patients/{id}
-    /// </summary>
-    [HttpPut("{id:int}")]
-    public async Task<ActionResult<ApiResponseModel<PatientDetailDto>>> UpdatePatient(
-        int id, [FromBody] UpdatePatientRequest request, CancellationToken ct = default)
-    {
-        var result = await _patientService.UpdatePatientV1Async(id, request, ct);
-        return SuccessResponse(SystemMessages.PatientUpdated, result);
-    }
+        // POST: api/patients
+        [HttpPost]
+        [Authorize(Roles = RoleConstants.ReceptionStaff)]
+        public async Task<ActionResult<ApiResponseModel<PatientResponse>>> Create([FromBody] CreatePatientRequest request, CancellationToken ct)
+        {
+            var response = await _patientService.CreateAsync(request, ct);
+            return CreatedResponse(nameof(GetById), new { patientId = response.PatientId }, SystemMessages.PatientCreated, response);
+        }
 
-    /// <summary>
-    /// Lịch sử các lần khám bệnh của bệnh nhân.
-    /// GET /api/v1/patients/{id}/visit-history
-    /// </summary>
-    [HttpGet("{id:int}/visit-history")]
-    public async Task<ActionResult<ApiResponseModel<List<PatientVisitHistoryDto>>>> GetVisitHistory(
-        int id, CancellationToken ct = default)
-    {
-        var result = await _patientService.GetVisitHistoryAsync(id, ct);
-        return SuccessResponse(SystemMessages.VisitHistoryRetrieved, result);
-    }
+        // PUT: api/patients/{patientId}
+        [HttpPut("{patientId:int:min(1)}")]
+        [Authorize(Roles = RoleConstants.ReceptionStaff)]
+        public async Task<ActionResult<ApiResponseModel<object?>>> Update(int patientId, [FromBody] UpdatePatientRequest request, CancellationToken ct)
+        {
+            await _patientService.UpdateAsync(patientId, request, ct);
+            return SuccessResponse(SystemMessages.PatientUpdated);
+        }
 
-    /// <summary>
-    /// Xem chi tiết một lần khám bệnh (thông tin khám, dịch vụ chỉ định, đơn thuốc).
-    /// GET /api/v1/patients/exam-sheets/{examSheetId}
-    /// </summary>
-    [HttpGet("exam-sheets/{examSheetId:int}")]
-    public async Task<ActionResult<ApiResponseModel<MedicalRecordDetailDto>>> GetExamSheetDetail(
-        int examSheetId, CancellationToken ct = default)
-    {
-        var result = await _patientService.GetExamSheetDetailAsync(examSheetId, ct);
-        return SuccessResponse(SystemMessages.ExamSheetDetailRetrieved, result);
-    }
-
-    /// <summary>
-    /// Danh sách phác đồ / liệu trình điều trị của bệnh nhân.
-    /// GET /api/v1/patients/{id}/treatment-protocols
-    /// </summary>
-    [HttpGet("{id:int}/treatment-protocols")]
-    public async Task<ActionResult<ApiResponseModel<List<TreatmentProtocolDto>>>> GetTreatmentProtocols(
-        int id, CancellationToken ct = default)
-    {
-        var result = await _patientService.GetTreatmentProtocolsAsync(id, ct);
-        return SuccessResponse(SystemMessages.TreatmentProtocolsRetrieved, result);
-    }
-
-    /// <summary>
-    /// Chi tiết các buổi trị liệu đã thực hiện của một phác đồ.
-    /// GET /api/v1/patients/treatment-protocols/{protocolId}/sessions
-    /// </summary>
-    [HttpGet("treatment-protocols/{protocolId:int}/sessions")]
-    public async Task<ActionResult<ApiResponseModel<List<TreatmentSessionDto>>>> GetTreatmentSessions(
-        int protocolId, CancellationToken ct = default)
-    {
-        var result = await _patientService.GetTreatmentSessionsAsync(protocolId, ct);
-        return SuccessResponse(SystemMessages.TreatmentSessionsRetrieved, result);
-    }
-
-    /// <summary>
-    /// Xóa hồ sơ bệnh nhân (chỉ xóa được khi không có lịch sử khám/liên hệ).
-    /// DELETE /api/v1/patients/{patientId}
-    /// </summary>
-    [HttpDelete("{patientId:int:min(1)}")]
-    public async Task<ActionResult<ApiResponseModel<object?>>> Delete(
-        int patientId, CancellationToken ct = default)
-    {
-        await _patientService.DeleteAsync(patientId, ct);
-        return SuccessResponse(SystemMessages.PatientDeleted);
+        // DELETE: api/patients/{patientId}
+        [HttpDelete("{patientId:int:min(1)}")]
+        [Authorize(Roles = RoleConstants.ReceptionStaff)]
+        public async Task<ActionResult<ApiResponseModel<object?>>> Delete(int patientId, CancellationToken ct)
+        {
+            await _patientService.DeleteAsync(patientId, ct);
+            return SuccessResponse(SystemMessages.PatientDeleted);
+        }
     }
 }

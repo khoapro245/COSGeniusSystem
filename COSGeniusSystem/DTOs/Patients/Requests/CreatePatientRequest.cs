@@ -1,3 +1,3 @@
-namespace COSGeniusSystem.DTOs.Requests;
+namespace COSGeniusSystem.DTOs.Patients.Requests;
 
 public sealed class CreatePatientRequest : PatientRequest { }

@@ -1,4 +1,7 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class PatientContact
 {
@@ -11,6 +14,8 @@ public partial class PatientContact
     public string? Relationship { get; set; }
 
     public string? Phone { get; set; }
+
+    public virtual ICollection<ExaminationRegistration> ExaminationRegistrations { get; set; } = new List<ExaminationRegistration>();
 
     public virtual Patient Patient { get; set; } = null!;
 }

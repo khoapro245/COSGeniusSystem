@@ -15,7 +15,7 @@ public class HerbService : IHerbService
     }
 
     // ─── API-TU-01 ────────────────────────────────────────────────────────────
-    public async Task<List<HerbResponseDto>> GetHerbsAsync(HerbFilterQuery query)
+    public async Task<List<HerbResponseDto>> GetHerbsAsync(HerbFilterQuery query, CancellationToken ct = default)
     {
         var q = _context.Herbs.AsNoTracking();
 
@@ -45,8 +45,13 @@ public class HerbService : IHerbService
             .OrderBy(h => h.CommonName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
-            .Select(h => ToResponseDto(h))
-            .ToListAsync();
+            .Select(h => new HerbResponseDto
+            {
+                HerbId = h.HerbId, HerbCode = h.HerbCode, CommonName = h.CommonName,
+                ScientificName = h.ScientificName, Unit = h.Unit, TasteProperties = h.TasteProperties,
+                StandardPrice = h.StandardPrice, IsActive = h.IsActive
+            })
+            .ToListAsync(ct);
     }
 
     // ─── API-TU-02 ────────────────────────────────────────────────────────────

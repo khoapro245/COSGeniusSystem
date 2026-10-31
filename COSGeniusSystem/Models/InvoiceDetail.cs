@@ -1,4 +1,7 @@
-﻿namespace COSGeniusSystem.Models;
+﻿using System;
+using System.Collections.Generic;
+
+namespace COSGeniusSystem.Models;
 
 public partial class InvoiceDetail
 {
@@ -8,7 +11,9 @@ public partial class InvoiceDetail
 
     public string ItemType { get; set; } = null!;
 
-    public int ReferenceId { get; set; }
+    public int? PrescriptionId { get; set; }
+
+    public int? PlanDetailId { get; set; }
 
     public string ItemName { get; set; } = null!;
 
@@ -19,4 +24,8 @@ public partial class InvoiceDetail
     public decimal? SubTotal { get; set; }
 
     public virtual Invoice Invoice { get; set; } = null!;
+
+    public virtual TreatmentPlanDetail? PlanDetail { get; set; }
+
+    public virtual HerbalPrescription? Prescription { get; set; }
 }

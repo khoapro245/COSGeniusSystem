@@ -3,6 +3,7 @@ using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.DTOs.TreatmentServices;
 using COSGeniusSystem.Services.TreatmentServices;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace COSGeniusSystem.Controllers;
 
@@ -22,9 +23,10 @@ public class TreatmentServicesController : BaseApiController
     /// GET /api/v1/services
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<ApiResponseModel<List<TreatmentServiceResponseDto>>>> GetServices()
+    [Authorize]
+    public async Task<ActionResult<ApiResponseModel<List<TreatmentServiceResponseDto>>>> GetServices(CancellationToken ct = default)
     {
-        var result = await _treatmentService.GetActiveServicesAsync();
+        var result = await _treatmentService.GetActiveServicesAsync(ct);
         return SuccessResponse(SystemMessages.ServicesRetrieved, result);
     }
 

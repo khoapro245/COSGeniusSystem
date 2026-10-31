@@ -1,12 +1,14 @@
 using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.Services.Herbs;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Authorization;
 
 namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/herbs")]
-public class HerbsController : ControllerBase
+public class HerbsController : BaseApiController
 {
     private readonly IHerbService _herbService;
 
@@ -20,10 +22,11 @@ public class HerbsController : ControllerBase
     /// GET /api/v1/herbs
     /// </summary>
     [HttpGet]
-    public async Task<ActionResult<List<HerbResponseDto>>> GetHerbs([FromQuery] HerbFilterQuery query)
+    [Authorize]
+    public async Task<ActionResult<ApiResponseModel<List<HerbResponseDto>>>> GetHerbs([FromQuery] HerbFilterQuery query, CancellationToken ct = default)
     {
-        var result = await _herbService.GetHerbsAsync(query);
-        return Ok(result);
+        var result = await _herbService.GetHerbsAsync(query, ct);
+        return SuccessResponse(ExaminationMessages.Retrieved, result);
     }
 
     /// <summary>

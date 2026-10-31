@@ -2,6 +2,7 @@ namespace COSGeniusSystem.DTOs.Doctors;
 
 public class DoctorFilterQuery
 {
+    public bool AssignableOnly { get; set; }
     /// <summary>Tìm kiếm tương đối theo FullName hoặc Phone (không phân biệt hoa thường).</summary>
     public string? Keyword { get; set; }
 
