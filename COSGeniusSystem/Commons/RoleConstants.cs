@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.Common;
+namespace COSGeniusSystem.Commons;
 
 public static class RoleConstants
 {

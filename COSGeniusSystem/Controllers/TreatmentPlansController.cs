@@ -1,4 +1,3 @@
-using COSGeniusSystem.Common;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Treatments;
 using COSGeniusSystem.Services.Treatments;

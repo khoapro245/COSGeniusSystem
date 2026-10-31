@@ -1,5 +1,4 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.Common;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.DTOs.Doctors;
 using COSGeniusSystem.Services.Doctors;

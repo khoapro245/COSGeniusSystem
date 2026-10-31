@@ -2,7 +2,6 @@ using System.ComponentModel.DataAnnotations;
 using System.Data;
 using System.Linq.Expressions;
 using System.Security.Claims;
-using COSGeniusSystem.Common;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs.Examinations;

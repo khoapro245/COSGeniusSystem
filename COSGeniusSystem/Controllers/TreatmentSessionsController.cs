@@ -1,4 +1,3 @@
-using COSGeniusSystem.Common;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs.Examinations;
 using COSGeniusSystem.DTOs.Treatments;
