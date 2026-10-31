@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Middlewares;
@@ -116,6 +116,7 @@ builder.Services.AddAuthentication(options =>
 builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 builder.Services.AddScoped<IHerbService, HerbService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Suppliers.ISupplierService, COSGeniusSystem.Services.Suppliers.SupplierService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IExaminationService, ExaminationService>();
