@@ -35,6 +35,11 @@ public static class SystemMessages
     public static readonly SystemMessage TreatmentSessionsRetrieved = new(200, "Treatment sessions retrieved successfully.", true);
     public static readonly SystemMessage DashboardStatsRetrieved = new(200, "Dashboard stats retrieved successfully.", true);
     public static readonly SystemMessage DashboardQuickQueuesRetrieved = new(200, "Dashboard quick queues retrieved successfully.", true);
+    public static readonly SystemMessage HerbsRetrieved = new(200, "Herbs retrieved successfully.", true);
+    public static readonly SystemMessage HerbRetrieved = new(200, "Herb retrieved successfully.", true);
+    public static readonly SystemMessage HerbCreated = new(201, "Herb created successfully.", true);
+    public static readonly SystemMessage HerbUpdated = new(200, "Herb updated successfully.", true);
+    public static readonly SystemMessage HerbDeleted = new(200, "Herb deleted successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }

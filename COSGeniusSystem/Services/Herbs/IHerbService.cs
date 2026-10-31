@@ -33,4 +33,9 @@ public interface IHerbService
     /// Trả về null nếu HerbId không tồn tại.
     /// </summary>
     Task<HerbBatchesResponseDto?> GetHerbBatchesAsync(int herbId);
+
+    /// <summary>
+    /// Xóa hoặc ngưng hoạt động vị thuốc khỏi danh mục theo id.
+    /// </summary>
+    Task<(bool Success, string? ErrorMessage)> DeleteHerbAsync(int id, CancellationToken ct = default);
 }

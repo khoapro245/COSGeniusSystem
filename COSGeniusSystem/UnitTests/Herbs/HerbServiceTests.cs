@@ -482,4 +482,53 @@ public class HerbServiceTests
     }
 
     #endregion
+    #region DeleteHerbAsync Tests
+
+    [Fact]
+    public async Task DeleteHerbAsync_NotFound_ReturnsFalse()
+    {
+        using var context = CreateInMemoryDbContext();
+        var service = new HerbService(context);
+
+        var (success, error) = await service.DeleteHerbAsync(999);
+
+        Assert.False(success);
+        Assert.Null(error);
+    }
+
+    [Fact]
+    public async Task DeleteHerbAsync_WithBatches_DeactivatesHerb()
+    {
+        using var context = CreateInMemoryDbContext();
+        var herb = new Herb { HerbId = 1, HerbCode = "VT001", CommonName = "Cam th?o", Unit = "g", StandardPrice = 5000m, IsActive = true };
+        context.Herbs.Add(herb);
+        context.Batches.Add(new Batch { BatchId = 1, BatchNumber = "B01", HerbId = 1, WarehouseId = 1, ExpiryDate = new DateOnly(2027, 1, 1), OriginalQuantity = 10, CurrentQuantity = 10, UnitCost = 1000, Status = "Active" });
+        await context.SaveChangesAsync();
+
+        var service = new HerbService(context);
+        var (success, _) = await service.DeleteHerbAsync(1);
+
+        Assert.True(success);
+        var updated = await context.Herbs.FindAsync(1);
+        Assert.NotNull(updated);
+        Assert.False(updated.IsActive);
+    }
+
+    [Fact]
+    public async Task DeleteHerbAsync_WithoutReferences_RemovesHerb()
+    {
+        using var context = CreateInMemoryDbContext();
+        var herb = new Herb { HerbId = 2, HerbCode = "VT002", CommonName = "Hoàng k?", Unit = "g", StandardPrice = 8000m, IsActive = true };
+        context.Herbs.Add(herb);
+        await context.SaveChangesAsync();
+
+        var service = new HerbService(context);
+        var (success, _) = await service.DeleteHerbAsync(2);
+
+        Assert.True(success);
+        var updated = await context.Herbs.FindAsync(2);
+        Assert.Null(updated);
+    }
+
+    #endregion
 }

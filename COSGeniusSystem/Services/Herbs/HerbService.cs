@@ -19,7 +19,7 @@ public class HerbService : IHerbService
     {
         var q = _context.Herbs.AsNoTracking();
 
-        // Lọc IsActive (mặc định true)
+        // Lọc IsActive (mặc định true nếu client không truyền)
         if (query.IsActive.HasValue)
             q = q.Where(h => h.IsActive == query.IsActive.Value);
 
@@ -47,9 +47,14 @@ public class HerbService : IHerbService
             .Take(pageSize)
             .Select(h => new HerbResponseDto
             {
-                HerbId = h.HerbId, HerbCode = h.HerbCode, CommonName = h.CommonName,
-                ScientificName = h.ScientificName, Unit = h.Unit, TasteProperties = h.TasteProperties,
-                StandardPrice = h.StandardPrice, IsActive = h.IsActive
+                HerbId = h.HerbId,
+                HerbCode = h.HerbCode,
+                CommonName = h.CommonName,
+                ScientificName = h.ScientificName,
+                Unit = h.Unit,
+                TasteProperties = h.TasteProperties,
+                StandardPrice = h.StandardPrice,
+                IsActive = h.IsActive
             })
             .ToListAsync(ct);
     }
@@ -186,6 +191,33 @@ public class HerbService : IHerbService
             TotalCurrentQuantity = batches.Sum(b => b.CurrentQuantity),
             Batches = batches
         };
+    }
+
+    // ─── Delete ───────────────────────────────────────────────────────────────
+    public async Task<(bool Success, string? ErrorMessage)> DeleteHerbAsync(int id, CancellationToken ct = default)
+    {
+        var entity = await _context.Herbs
+            .Include(h => h.Batches)
+            .Include(h => h.HerbalPrescriptionDetails)
+            .Include(h => h.Podetails)
+            .Include(h => h.HerbalFormulaDetails)
+            .FirstOrDefaultAsync(h => h.HerbId == id, ct);
+
+        if (entity is null)
+            return (false, null);
+
+        // Nếu đã có lô hàng hoặc được tham chiếu trong đơn thuốc / PO / công thức -> ngưng hoạt động (soft delete)
+        if (entity.Batches.Any() || entity.HerbalPrescriptionDetails.Any() || entity.Podetails.Any() || entity.HerbalFormulaDetails.Any())
+        {
+            entity.IsActive = false;
+        }
+        else
+        {
+            _context.Herbs.Remove(entity);
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return (true, null);
     }
 
     // ─── Helper ───────────────────────────────────────────────────────────────
