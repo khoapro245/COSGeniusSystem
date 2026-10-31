@@ -31,8 +31,4 @@
     <None Remove="UnitTests\**" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Folder Include="Common\" />
-  </ItemGroup>
-
 </Project>
