@@ -4,18 +4,24 @@ namespace COSGeniusSystem.Services.TreatmentServices;
 
 public interface ITreatmentService
 {
-    /// <summary>Lấy danh sách dịch vụ đang hoạt động (IsActive == true).</summary>
+    /// <summary>Lấy danh sách dịch vụ đang hoạt động (IsActive == true) - phục vụ lâm sàng.</summary>
     Task<List<TreatmentServiceResponseDto>> GetActiveServicesAsync(CancellationToken ct = default);
 
-    /// <summary>
-    /// Thêm mới dịch vụ. Trả về null nếu ServiceCode hoặc ServiceName đã tồn tại,
-    /// hoặc nếu Price &lt;= 0.
-    /// </summary>
-    Task<(TreatmentServiceResponseDto? Dto, string? ErrorMessage)> CreateServiceAsync(CreateTreatmentServiceRequest request);
+    /// <summary>Lấy danh sách dịch vụ có lọc và tìm kiếm - phục vụ quản lý.</summary>
+    Task<List<TreatmentServiceResponseDto>> GetServicesAsync(TreatmentServiceFilterQuery query, CancellationToken ct = default);
 
-    /// <summary>
-    /// Cập nhật dịch vụ theo id. Trả về null Dto nếu không tìm thấy,
-    /// hoặc ErrorMessage nếu có lỗi validation/trùng tên.
-    /// </summary>
-    Task<(TreatmentServiceResponseDto? Dto, string? ErrorMessage)> UpdateServiceAsync(int id, UpdateTreatmentServiceRequest request);
+    /// <summary>Lấy chi tiết dịch vụ theo ID.</summary>
+    Task<TreatmentServiceResponseDto?> GetServiceByIdAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Lấy chi tiết dịch vụ theo mã.</summary>
+    Task<TreatmentServiceResponseDto?> GetServiceByCodeAsync(string code, CancellationToken ct = default);
+
+    /// <summary>Thêm mới dịch vụ.</summary>
+    Task<(TreatmentServiceResponseDto? Dto, string? ErrorMessage)> CreateServiceAsync(CreateTreatmentServiceRequest request, CancellationToken ct = default);
+
+    /// <summary>Cập nhật dịch vụ.</summary>
+    Task<(TreatmentServiceResponseDto? Dto, string? ErrorMessage)> UpdateServiceAsync(int id, UpdateTreatmentServiceRequest request, CancellationToken ct = default);
+
+    /// <summary>Xóa hoặc ngưng hoạt động dịch vụ.</summary>
+    Task<(bool Success, bool IsDeactivated, string? ErrorMessage)> DeleteServiceAsync(int id, CancellationToken ct = default);
 }

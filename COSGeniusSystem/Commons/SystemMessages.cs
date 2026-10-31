@@ -11,8 +11,10 @@ public static class SystemMessages
     public static readonly SystemMessage DoctorsRetrieved = new(200, "Doctors retrieved successfully.", true);
     public static readonly SystemMessage DoctorRetrieved = new(200, "Doctor retrieved successfully.", true);
     public static readonly SystemMessage ServicesRetrieved = new(200, "Treatment services retrieved successfully.", true);
+    public static readonly SystemMessage ServiceRetrieved = new(200, "Treatment service retrieved successfully.", true);
     public static readonly SystemMessage ServiceCreated = new(201, "Treatment service created successfully.", true);
     public static readonly SystemMessage ServiceUpdated = new(200, "Treatment service updated successfully.", true);
+    public static readonly SystemMessage ServiceDeleted = new(200, "Treatment service deleted successfully.", true);
     public static readonly SystemMessage PatientsRetrieved = new(200, "Patients retrieved successfully.", true);
     public static readonly SystemMessage PatientRetrieved = new(200, "Patient retrieved successfully.", true);
     public static readonly SystemMessage PatientCreated = new(201, "Patient created successfully.", true);
