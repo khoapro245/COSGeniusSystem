@@ -47,6 +47,12 @@ public static class SystemMessages
     public static readonly SystemMessage SupplierCreated = new(201, "Supplier created successfully.", true);
     public static readonly SystemMessage SupplierUpdated = new(200, "Supplier updated successfully.", true);
     public static readonly SystemMessage SupplierDeleted = new(200, "Supplier deleted successfully.", true);
+    public static readonly SystemMessage UsersRetrieved = new(200, "Users retrieved successfully.", true);
+    public static readonly SystemMessage UserRetrieved = new(200, "User retrieved successfully.", true);
+    public static readonly SystemMessage UserCreated = new(201, "User account created successfully.", true);
+    public static readonly SystemMessage UserUpdated = new(200, "User account updated successfully.", true);
+    public static readonly SystemMessage UserStatusUpdated = new(200, "User account status updated successfully.", true);
+    public static readonly SystemMessage RolesRetrieved = new(200, "Roles retrieved successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }

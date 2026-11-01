@@ -41,3 +41,39 @@ Authorization: Bearer {{authToken}}
 GET {{COSGeniusSystem_HostAddress}}/api/auth/me
 Authorization: Bearer {{authToken}}
 Accept: application/json
+
+### 6. Login Inventory
+POST {{COSGeniusSystem_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "inventory",
+  "password": "inventory123"
+}
+
+### 7. Login Manager
+POST {{COSGeniusSystem_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "manager",
+  "password": "manager123"
+}
+
+### 8. Login Pharmacist
+POST {{COSGeniusSystem_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "pharmacist",
+  "password": "pharmacist123"
+}
+
+### 9. Login Cashier
+POST {{COSGeniusSystem_HostAddress}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "cashier",
+  "password": "cashier123"
+}

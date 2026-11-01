@@ -117,6 +117,7 @@ builder.Services.AddScoped<IDoctorService, DoctorService>();
 builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 builder.Services.AddScoped<IHerbService, HerbService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.Suppliers.ISupplierService, COSGeniusSystem.Services.Suppliers.SupplierService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Users.IUserService, COSGeniusSystem.Services.Users.UserService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<IInvoiceService, InvoiceService>();
 builder.Services.AddScoped<IExaminationService, ExaminationService>();
