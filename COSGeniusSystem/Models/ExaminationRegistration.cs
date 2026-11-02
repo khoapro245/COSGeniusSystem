@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -18,6 +18,8 @@ public partial class ExaminationRegistration
     public DateTime RegisteredAt { get; set; }
 
     public DateOnly BusinessDate { get; set; }
+
+    public string Session { get; set; } = "UNKNOWN";
 
     public int QueueNumber { get; set; }
 

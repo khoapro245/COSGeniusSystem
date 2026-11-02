@@ -96,7 +96,8 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         Validate(request);
         await ValidateAssignmentAsync(request.PatientId, request, ct);
         var now = DateTime.UtcNow;
-        var businessDate = DateOnly.FromDateTime(now.AddHours(7));
+        var businessDate = request.BusinessDate ?? DateOnly.FromDateTime(now.AddHours(7));
+        ValidateBusinessDate(businessDate);
         await using var tx = await db.Database.BeginTransactionAsync(ct);
         // HOLDLOCK protects the missing-key range on the first registration of the day.
         var counter = await db.ExaminationQueueCounters
@@ -112,7 +113,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         {
             PatientId = request.PatientId, DoctorId = request.DoctorId, ContactId = request.ContactId,
             RegisteredBy = UserId(actor), RegisteredAt = now, BusinessDate = businessDate,
-            QueueNumber = counter.LastNumber, IsPriority = request.IsPriority,
+            QueueNumber = counter.LastNumber, Session = request.Session, IsPriority = request.IsPriority,
             Symptoms = request.Symptoms, Note = request.Note, Status = "WAITING"
         };
         db.ExaminationRegistrations.Add(registration);
@@ -130,6 +131,22 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             if (registration.Status != "WAITING") throw new ConflictException("Only WAITING registrations can be updated.");
             Version(registration.RowVersion, request.RowVersion);
             await ValidateAssignmentAsync(registration.PatientId, request, ct);
+            var date = request.BusinessDate ?? registration.BusinessDate;
+            ValidateBusinessDate(date);
+            if (date != registration.BusinessDate)
+            {
+                var counter = await db.ExaminationQueueCounters
+                    .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationQueueCounter WITH (UPDLOCK, HOLDLOCK) WHERE BusinessDate = {date}")
+                    .SingleOrDefaultAsync(ct);
+                if (counter is null)
+                {
+                    counter = new ExaminationQueueCounter { BusinessDate = date };
+                    db.ExaminationQueueCounters.Add(counter);
+                }
+                registration.QueueNumber = counter.LastNumber = checked(counter.LastNumber + 1);
+                registration.BusinessDate = date;
+            }
+            registration.Session = request.Session;
             registration.DoctorId = request.DoctorId;
             registration.ContactId = request.ContactId;
             registration.Symptoms = request.Symptoms;
@@ -155,6 +172,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         if (query.FromDate.HasValue) q = q.Where(r => r.BusinessDate >= query.FromDate);
         if (query.ToDate.HasValue) q = q.Where(r => r.BusinessDate <= query.ToDate);
         if (query.Status != null) q = q.Where(r => r.Status == query.Status);
+        if (query.Session != null) q = q.Where(r => r.Session == query.Session);
         if (!string.IsNullOrWhiteSpace(query.Search))
         {
             var search = query.Search.Trim();
@@ -287,7 +305,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         new(r.RegistrationId, r.RegistrationCode, r.PatientId, r.Patient.PatientCode, r.Patient.FullName, r.Patient.Phone,
             r.DoctorId, r.Doctor.FullName, r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
             r.ContactId, r.Contact == null ? null : r.Contact.FullName, r.Symptoms, r.Note, r.Status,
-            r.StartedAt, r.CompletedAt, r.MedicalRecord == null ? null : r.MedicalRecord.RecordId, r.RowVersion);
+            r.StartedAt, r.CompletedAt, r.MedicalRecord == null ? null : r.MedicalRecord.RecordId, r.RowVersion, r.Session);
 
     private static readonly Expression<Func<MedicalRecord, MedicalRecordResponse>> RecordProjection = r => new()
     {

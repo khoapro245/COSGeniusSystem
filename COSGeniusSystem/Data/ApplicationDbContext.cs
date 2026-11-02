@@ -282,6 +282,8 @@ public partial class ApplicationDbContext : DbContext
             entity.HasIndex(e => new { e.PatientId, e.RegisteredAt }, "IX_C2_RegPatient");
 
             entity.HasIndex(e => new { e.BusinessDate, e.QueueNumber }, "UQ_C2_Queue").IsUnique();
+            entity.Property(e => e.Session).HasMaxLength(10).IsUnicode(false).IsRequired();
+            entity.HasIndex(e => new { e.BusinessDate, e.Session, e.DoctorId, e.Status }, "IX_RegSessionWorkload");
 
             entity.HasIndex(e => e.RegistrationCode, "UX_C2_RegCode").IsUnique();
 

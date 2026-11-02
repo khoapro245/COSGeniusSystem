@@ -16,6 +16,12 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         [FromQuery] RegistrationQuery query, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, false, ct));
 
+    [HttpGet("doctor-workload")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
+    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<DoctorWorkloadResponse>>>> DoctorWorkload(
+        [FromQuery] DoctorWorkloadQuery query, CancellationToken ct) =>
+        SuccessResponse(ExaminationMessages.Retrieved, await service.DoctorWorkloadAsync(User, query, ct));
+
     [HttpGet("mine")]
     [Authorize(Roles = RoleConstants.Doctor)]
     public async Task<ActionResult<ApiResponseModel<PagedResult<RegistrationResponse>>>> Mine(

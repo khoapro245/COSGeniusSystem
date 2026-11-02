@@ -6,7 +6,10 @@ public sealed record RegistrationResponse(int RegistrationId, string? Registrati
     string? PatientCode, string PatientName, string? Phone, int DoctorId, string DoctorName,
     int RegisteredBy, DateTime RegisteredAt, DateOnly BusinessDate, int QueueNumber, bool IsPriority,
     int? ContactId, string? ContactName, string? Symptoms, string? Note, string Status,
-    DateTime? StartedAt, DateTime? CompletedAt, int? RecordId, byte[] RowVersion);
+    DateTime? StartedAt, DateTime? CompletedAt, int? RecordId, byte[] RowVersion, string Session);
+
+public sealed record DoctorWorkloadResponse(int DoctorId, string DoctorName, string? Specialization,
+    DateOnly BusinessDate, string Session, int AssignedCount, int WaitingCount, int InProgressCount, int CompletedCount);
 
 public sealed class MedicalRecordResponse : MedicalRecordData
 {

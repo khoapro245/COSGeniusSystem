@@ -6,6 +6,7 @@ namespace COSGeniusSystem.Services;
 
 public interface IExaminationService
 {
+    Task<IReadOnlyList<DoctorWorkloadResponse>> DoctorWorkloadAsync(ClaimsPrincipal actor, DoctorWorkloadQuery query, CancellationToken ct);
     Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct);
     Task<RegistrationResponse> CreateAsync(ClaimsPrincipal actor, CreateRegistrationRequest request, CancellationToken ct);
     Task<RegistrationResponse> UpdateAsync(ClaimsPrincipal actor, int registrationId, UpdateRegistrationRequest request, CancellationToken ct);
