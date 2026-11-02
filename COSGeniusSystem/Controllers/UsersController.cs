@@ -1,8 +1,8 @@
 using System.Security.Claims;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Users;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Users;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

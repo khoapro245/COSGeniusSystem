@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Suppliers;
+namespace COSGeniusSystem.DTOs;
 
 public class UpdateSupplierRequest
 {

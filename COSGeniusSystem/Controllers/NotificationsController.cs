@@ -1,7 +1,7 @@
-using Microsoft.AspNetCore.Mvc;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Notifications;
-using COSGeniusSystem.Services.Interfaces;
+using COSGeniusSystem.Services;
+using Microsoft.AspNetCore.Mvc;
+using COSGeniusSystem.DTOs;
 
 namespace COSGeniusSystem.Controllers;
 

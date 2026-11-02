@@ -1,140 +1,68 @@
-using System.Text.RegularExpressions;
-using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Reception;
+﻿using COSGeniusSystem.Data;
+using COSGeniusSystem.DTOs;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Reception;
+namespace COSGeniusSystem.Services;
 
 public sealed class ReceptionDashboardService(ApplicationDbContext db) : IReceptionDashboardService
 {
+    private static DateOnly Today => DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+
     public async Task<DashboardStatsDto> GetTodayStatsAsync(CancellationToken ct = default)
     {
-        var startOfDay = DateTime.Today;
-        var endOfDay = DateTime.Today.AddDays(1).AddTicks(-1);
-
-        // Thống kê lượt khám
-        var todayExams = db.ExamSheets.AsNoTracking()
-            .Where(e => e.ExamDate >= startOfDay && e.ExamDate <= endOfDay);
-
-        var waitingExams = await todayExams.CountAsync(e => e.FinalDiagnosis == "Chờ khám", ct);
-        var completedExams = await todayExams.CountAsync(e => e.FinalDiagnosis != "Chờ khám" && e.FinalDiagnosis != "Đã hủy", ct);
-        var totalExams = await todayExams.CountAsync(e => e.FinalDiagnosis != "Đã hủy", ct);
-
-        // Thống kê lượt điều trị
-        var todayUsages = db.UsageHistories.AsNoTracking()
-            .Where(u => u.ExecutionTime >= startOfDay && u.ExecutionTime <= endOfDay);
-
-        var waitingTreatments = await todayUsages.CountAsync(u => string.IsNullOrWhiteSpace(u.ResultNote) || u.ResultNote == "Chờ điều trị", ct);
-        var completedTreatments = await todayUsages.CountAsync(u => !string.IsNullOrWhiteSpace(u.ResultNote) && u.ResultNote != "Chờ điều trị", ct);
-        var totalTreatments = await todayUsages.CountAsync(ct);
-
+        var date = Today;
+        var exams = db.ExaminationRegistrations.AsNoTracking().Where(r => r.BusinessDate == date);
+        var treatments = db.TreatmentSessions.AsNoTracking().Where(s => s.ScheduledDate == date);
+        var totalExams = await exams.CountAsync(r => r.Status != "CANCELLED", ct);
+        var totalTreatments = await treatments.CountAsync(s => s.Status == "REQUESTED" || s.Status == "IN_PROGRESS" || s.Status == "COMPLETED", ct);
         return new DashboardStatsDto
         {
             TodayTotalVisits = totalExams + totalTreatments,
-            WaitingExaminationCount = waitingExams,
-            WaitingTreatmentCount = waitingTreatments,
-            CompletedVisitsCount = completedExams + completedTreatments,
-            NewExaminationCount = totalExams,
-            TreatmentCount = totalTreatments
+            WaitingExaminationCount = await exams.CountAsync(r => r.Status == "WAITING", ct),
+            WaitingTreatmentCount = await treatments.CountAsync(s => s.Status == "REQUESTED", ct),
+            CompletedVisitsCount = await exams.CountAsync(r => r.Status == "COMPLETED", ct)
+                + await treatments.CountAsync(s => s.Status == "COMPLETED", ct),
+            NewExaminationCount = totalExams, TreatmentCount = totalTreatments
         };
     }
 
     public async Task<DashboardQueueDto> GetQuickQueuesAsync(int top = 3, CancellationToken ct = default)
     {
-        if (top <= 0) top = 3;
-
-        var startOfDay = DateTime.Today;
-        var endOfDay = DateTime.Today.AddDays(1).AddTicks(-1);
-
-        // 1. Top ca chờ khám
-        var waitingExamSheets = await db.ExamSheets.AsNoTracking()
-            .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient)
-            .Where(e => e.ExamDate >= startOfDay && e.ExamDate <= endOfDay && e.FinalDiagnosis == "Chờ khám")
-            .OrderByDescending(e => (e.Symptoms != null && e.Symptoms.Contains("[Ưu tiên]")) || (e.DoctorAdvice != null && e.DoctorAdvice.Contains("[Ưu tiên]")))
-            .ThenBy(e => e.ExamDate)
-            .Take(top)
-            .ToListAsync(ct);
-
-        var waitingExamList = waitingExamSheets.Select((es, index) =>
-        {
-            var isPriority = (es.Symptoms != null && es.Symptoms.Contains("[Ưu tiên]")) ||
-                             (es.DoctorAdvice != null && es.DoctorAdvice.Contains("[Ưu tiên]"));
-
-            return new DashboardWaitingExamDto
+        top = Math.Clamp(top <= 0 ? 3 : top, 1, 100);
+        var date = Today;
+        var exams = await db.ExaminationRegistrations.AsNoTracking()
+            .Where(r => r.BusinessDate == date && r.Status == "WAITING")
+            .OrderByDescending(r => r.IsPriority).ThenBy(r => r.QueueNumber).Take(top)
+            .Select(r => new DashboardWaitingExamDto
             {
-                Stt = index + 1,
-                ExamSheetId = es.ExamSheetId,
-                KcbCode = $"KCB{es.ExamSheetId:D5}",
-                PatientCode = es.Record.Patient.PatientCode ?? $"BN{es.Record.Patient.PatientId:D5}",
-                FullName = es.Record.Patient.FullName,
-                DoctorName = es.Doctor.FullName,
-                ReceptionTime = es.ExamDate,
-                IsPriority = isPriority
-            };
-        }).ToList();
-
-        // 2. Top ca chờ điều trị
-        var waitingUsages = await db.UsageHistories.AsNoTracking()
-            .Include(u => u.Service)
-            .Include(u => u.PerformedByNavigation)
-            .Include(u => u.ExamSheet).ThenInclude(es => es.Doctor)
-            .Include(u => u.ExamSheet).ThenInclude(es => es.Record).ThenInclude(r => r.Patient)
-            .Include(u => u.ExamSheet).ThenInclude(es => es.Record).ThenInclude(r => r.TreatmentProtocols)
-            .Where(u => u.ExecutionTime >= startOfDay && u.ExecutionTime <= endOfDay &&
-                        (string.IsNullOrWhiteSpace(u.ResultNote) || u.ResultNote == "Chờ điều trị"))
-            .OrderBy(u => u.ExecutionTime)
-            .Take(top)
-            .ToListAsync(ct);
-
-        var waitingTreatmentList = new List<DashboardWaitingTreatmentDto>();
-        for (int i = 0; i < waitingUsages.Count; i++)
-        {
-            var u = waitingUsages[i];
-            var patient = u.ExamSheet.Record.Patient;
-            var protocol = u.ExamSheet.Record.TreatmentProtocols.OrderByDescending(p => p.StartDate).FirstOrDefault();
-
-            var recordId = u.ExamSheet.RecordId;
-            var sessionCount = await db.UsageHistories.AsNoTracking()
-                .CountAsync(x => x.ExamSheet.RecordId == recordId && x.ExecutionTime <= u.ExecutionTime, ct);
-
-            int totalSessions = 5;
-            if (protocol != null && !string.IsNullOrWhiteSpace(protocol.Description))
+                RegistrationId = r.RegistrationId, KcbCode = r.RegistrationCode ?? "",
+                PatientCode = r.Patient.PatientCode, FullName = r.Patient.FullName,
+                DoctorName = r.Doctor.FullName, ReceptionTime = r.RegisteredAt, IsPriority = r.IsPriority
+            }).ToListAsync(ct);
+        var sessions = await db.TreatmentSessions.AsNoTracking()
+            .Where(s => s.ScheduledDate == date && s.Status == "REQUESTED")
+            .OrderBy(s => s.RequestedAt).ThenBy(s => s.SessionId).Take(top)
+            .Select(s => new
             {
-                var match = Regex.Match(protocol.Description, @"\b(\d+)\s*(buổi|buoi|sessions?|lần|lan)?\b", RegexOptions.IgnoreCase);
-                if (match.Success && int.TryParse(match.Groups[1].Value, out var parsedTotal) && parsedTotal > 0)
-                {
-                    totalSessions = parsedTotal;
-                }
-            }
-
-            if (sessionCount > totalSessions)
-            {
-                totalSessions = sessionCount;
-            }
-
-            var doctorName = u.PerformedByNavigation != null ? u.PerformedByNavigation.FullName : u.ExamSheet.Doctor.FullName;
-            var protocolOrServiceName = protocol != null ? protocol.ProtocolName : u.Service.ServiceName;
-
-            waitingTreatmentList.Add(new DashboardWaitingTreatmentDto
-            {
-                Stt = i + 1,
-                UsageId = u.UsageId,
-                YcdtCode = $"YCDT{u.UsageId:D5}",
-                PatientCode = patient.PatientCode ?? $"BN{patient.PatientId:D5}",
-                FullName = patient.FullName,
-                ProtocolOrServiceName = protocolOrServiceName,
-                DoctorName = doctorName,
-                SessionInfo = $"{sessionCount:D2} / {totalSessions:D2}",
-                ReceptionTime = u.ExecutionTime
-            });
-        }
-
+                s.SessionId, s.SessionNumber, s.RequestedAt, s.Plan.PlannedSessionCount,
+                s.Plan.Record.Patient.PatientCode, s.Plan.Record.Patient.FullName, s.Plan.PlanName,
+                DoctorName = s.AssignedDoctor == null ? "" : s.AssignedDoctor.FullName
+            }).ToListAsync(ct);
         return new DashboardQueueDto
         {
-            WaitingExaminations = waitingExamList,
-            WaitingTreatments = waitingTreatmentList
+            WaitingExaminations = exams.Select((e, i) => new DashboardWaitingExamDto
+            {
+                Stt = i + 1, RegistrationId = e.RegistrationId, KcbCode = e.KcbCode,
+                PatientCode = e.PatientCode, FullName = e.FullName, DoctorName = e.DoctorName,
+                ReceptionTime = e.ReceptionTime, IsPriority = e.IsPriority
+            }).ToList(),
+            WaitingTreatments = sessions.Select((s, i) => new DashboardWaitingTreatmentDto
+            {
+                Stt = i + 1, SessionId = s.SessionId, YcdtCode = $"YCDT{s.SessionId:D5}",
+                PatientCode = s.PatientCode, FullName = s.FullName, ProtocolOrServiceName = s.PlanName,
+                DoctorName = s.DoctorName, SessionInfo = $"{s.SessionNumber:D2} / {s.PlannedSessionCount:D2}",
+                ReceptionTime = s.RequestedAt ?? default
+            }).ToList()
         };
     }
 }
-

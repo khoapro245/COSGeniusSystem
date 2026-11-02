@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Herbs;
+namespace COSGeniusSystem.DTOs;
 
 public class BatchResponseDto
 {

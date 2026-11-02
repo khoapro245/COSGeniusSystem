@@ -17,13 +17,15 @@ foreach ($name in @('Microsoft.CodeAnalysis.dll', 'Microsoft.CodeAnalysis.CSharp
     $references += '/r:"' + (Join-Path $compiler $name) + '"'
     Copy-Item -LiteralPath (Join-Path $compiler $name) -Destination $outDir
 }
-$paths = @('COSGeniusSystem/DTOs/Examinations', 'COSGeniusSystem/Commons', 'COSGeniusSystem/Exceptions')
+$paths = @('COSGeniusSystem/DTOs/Examinations', 'COSGeniusSystem/DTOs/Treatments', 'COSGeniusSystem/DTOs/Reception', 'COSGeniusSystem/DTOs/Invoices', 'COSGeniusSystem/Commons', 'COSGeniusSystem/Exceptions')
 $sources = @($paths | ForEach-Object {
     Get-ChildItem (Join-Path $Workspace $_) -Filter *.cs | ForEach-Object { '"' + $_.FullName + '"' }
 })
-foreach ($path in @('COSGeniusSystem/DTOs/Patients/Responses/PatientResponse.cs', 'COSGeniusSystem/Common/RoleConstants.cs',
+foreach ($path in @('COSGeniusSystem/DTOs/Patients/Responses/PatientResponse.cs',
     'COSGeniusSystem/Controllers/BaseApiController.cs', 'COSGeniusSystem/Controllers/ExaminationsController.cs',
-    'COSGeniusSystem/Services/Examinations/IExaminationService.cs', 'tests/ExaminationApi.ContractChecks/Program.cs')) {
+    'COSGeniusSystem/Services/Examinations/IExaminationService.cs',
+    'COSGeniusSystem/Controllers/TreatmentsController.cs', 'COSGeniusSystem/Services/Treatments/ITreatmentProtocolService.cs',
+    'tests/ExaminationApi.ContractChecks/Program.cs')) {
     $sources += '"' + (Join-Path $Workspace $path) + '"'
 }
 $globalUsings = Join-Path $outDir 'GlobalUsings.cs'

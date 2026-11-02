@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Examinations;
+namespace COSGeniusSystem.DTOs;
 
 public class PageQuery
 {

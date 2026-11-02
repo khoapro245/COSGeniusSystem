@@ -1,9 +1,9 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Herbs;
+namespace COSGeniusSystem.Services;
 
 public class HerbService : IHerbService
 {

@@ -1,9 +1,11 @@
-namespace COSGeniusSystem.DTOs.Treatments;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class TreatmentQueueDto
 {
     public int Stt { get; init; }
-    public int UsageId { get; init; }
+    public int PlanId { get; init; }
+    public byte[] RowVersion { get; init; } = [];
+    public int SessionId { get; init; }
     public string PatientName { get; init; } = null!;
     public string? PatientCode { get; init; }
     public string? Phone { get; init; }

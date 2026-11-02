@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Patients.Responses;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class PatientContactResponse
 {

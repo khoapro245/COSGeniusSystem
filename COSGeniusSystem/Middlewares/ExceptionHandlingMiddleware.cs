@@ -1,6 +1,6 @@
+using COSGeniusSystem.Commons;
 using System.Net;
 using System.Text.Json;
-using COSGeniusSystem.Commons;
 using COSGeniusSystem.Exceptions;
 
 namespace COSGeniusSystem.Middlewares;

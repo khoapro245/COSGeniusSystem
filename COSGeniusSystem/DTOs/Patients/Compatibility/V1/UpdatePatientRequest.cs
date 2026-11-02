@@ -1,8 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Patients;
+namespace COSGeniusSystem.DTOs.Compatibility.V1;
 
-public sealed class CreatePatientRequest
+/// <summary>Compatibility request for UpdatePatientV1Async. Current HTTP API uses Patients.Requests.</summary>
+public sealed class UpdatePatientRequest
 {
     [Required]
     [StringLength(150)]
@@ -52,13 +53,22 @@ public sealed class CreatePatientRequest
     [StringLength(100)]
     public string? Ethnicity { get; set; }
 
-    // Thông tin người liên hệ đại diện
+    // Danh sách người liên hệ cần cập nhật/bổ sung
+    public List<ContactUpdateItem>? Contacts { get; set; }
+}
+
+/// <summary>Compatibility request for UpdatePatientV1Async. Current HTTP API uses Patients.Requests.</summary>
+public sealed class ContactUpdateItem
+{
+    public int? ContactId { get; set; }
+
+    [Required]
     [StringLength(150)]
-    public string? ContactFullName { get; set; }
+    public string FullName { get; set; } = null!;
 
     [StringLength(50)]
-    public string? ContactRelationship { get; set; }
+    public string? Relationship { get; set; }
 
     [StringLength(20)]
-    public string? ContactPhone { get; set; }
+    public string? Phone { get; set; }
 }

@@ -1,9 +1,9 @@
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Doctors;
+using COSGeniusSystem.DTOs;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Doctors;
+namespace COSGeniusSystem.Services;
 
 public class DoctorService : IDoctorService
 {

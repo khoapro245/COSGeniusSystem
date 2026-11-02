@@ -1,7 +1,7 @@
-using COSGeniusSystem.Models;
 using COSGeniusSystem.Services;
+using COSGeniusSystem.Models;
 
-namespace COSGeniusSystem.UnitTests.Invoices;
+namespace COSGeniusSystem.UnitTests;
 
 public class InvoiceServiceTests
 {

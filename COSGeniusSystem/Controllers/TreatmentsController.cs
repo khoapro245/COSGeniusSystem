@@ -1,7 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Treatments;
-using COSGeniusSystem.Services.Treatments;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace COSGeniusSystem.Controllers;

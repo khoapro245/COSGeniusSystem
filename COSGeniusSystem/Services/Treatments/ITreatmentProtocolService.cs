@@ -1,11 +1,12 @@
-using COSGeniusSystem.DTOs.Treatments;
+using System.Security.Claims;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Treatments;
+namespace COSGeniusSystem.Services;
 
 public interface ITreatmentProtocolService
 {
-    Task<List<TreatmentQueueDto>> GetQueueAsync(TreatmentQueueQuery query, CancellationToken ct = default);
-    Task<TreatmentQueueDto> CreateTreatmentRequestAsync(CreateTreatmentRequest request, CancellationToken ct = default);
+    Task<List<TreatmentQueueDto>> GetQueueAsync(ClaimsPrincipal actor, TreatmentQueueQuery query, CancellationToken ct = default);
+    Task<TreatmentQueueDto> CreateTreatmentRequestAsync(ClaimsPrincipal actor, CreateTreatmentRequest request, CancellationToken ct = default);
 }
 
 /// <summary>

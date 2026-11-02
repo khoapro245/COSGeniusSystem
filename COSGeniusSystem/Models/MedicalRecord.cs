@@ -73,9 +73,5 @@ public partial class MedicalRecord
 
     public virtual ExaminationRegistration Registration { get; set; } = null!;
 
-    public virtual ICollection<ExamSheet> ExamSheets { get; set; } = new List<ExamSheet>();
-
-    public virtual ICollection<TreatmentProtocol> TreatmentProtocols { get; set; } = new List<TreatmentProtocol>();
-
     public virtual ICollection<TreatmentPlan> TreatmentPlans { get; set; } = new List<TreatmentPlan>();
 }

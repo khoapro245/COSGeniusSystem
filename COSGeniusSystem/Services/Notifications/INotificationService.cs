@@ -1,7 +1,7 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Notifications;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Interfaces;
+namespace COSGeniusSystem.Services;
 
 public interface INotificationService
 {

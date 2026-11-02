@@ -1,10 +1,10 @@
-using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Users;
-using COSGeniusSystem.Models;
 using COSGeniusSystem.Services;
+using COSGeniusSystem.Data;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Users;
+namespace COSGeniusSystem.Services;
 
 public class UserService : IUserService
 {

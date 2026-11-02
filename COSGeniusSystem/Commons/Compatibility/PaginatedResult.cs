@@ -1,5 +1,6 @@
 namespace COSGeniusSystem.Commons;
 
+/// <summary>Compatibility pagination payload. Use PagedResult for new APIs; JSON field names differ.</summary>
 public class PaginatedResult<T>
 {
     public List<T> Items { get; set; } = new();

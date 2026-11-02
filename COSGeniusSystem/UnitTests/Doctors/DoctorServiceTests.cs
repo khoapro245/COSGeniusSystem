@@ -1,11 +1,11 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Doctors;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.Doctors;
+namespace COSGeniusSystem.UnitTests;
 
 public class DoctorServiceTests
 {

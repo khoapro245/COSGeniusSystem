@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Doctors;
+namespace COSGeniusSystem.DTOs;
 
 public class DoctorDetailDto
 {

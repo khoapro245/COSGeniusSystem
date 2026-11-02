@@ -6,11 +6,6 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace COSGeniusSystem.Services;
 
-public interface ITokenService
-{
-    (string Token, int ExpiresIn) GenerateToken(User user, IEnumerable<string> roles);
-    TimeSpan GetTokenRemainingLifetime(string token);
-}
 
 public class TokenService : ITokenService
 {

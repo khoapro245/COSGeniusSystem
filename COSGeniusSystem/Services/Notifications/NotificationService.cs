@@ -1,9 +1,8 @@
-using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Commons;
+using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Notifications;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Interfaces;
 
 namespace COSGeniusSystem.Services;
 

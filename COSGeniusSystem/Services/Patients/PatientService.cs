@@ -1,12 +1,8 @@
-﻿using System.Text.RegularExpressions;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Patients;
-using COSGeniusSystem.DTOs.Patients.Requests;
-using COSGeniusSystem.DTOs.Patients.Responses;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.Interfaces;
 using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Services;
@@ -43,7 +39,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<PatientResponse> GetByIdAsync(int patientId, CancellationToken ct) =>
         PatientMapping.ToResponse(await FindAsync(patientId, ct));
 
-    public async Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.Patients.Requests.CreatePatientRequest request, CancellationToken ct)
+    public async Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.CreatePatientRequest request, CancellationToken ct)
     {
         ValidateLegacy(request);
         var entity = new Patient();
@@ -53,7 +49,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         return PatientMapping.ToResponse(entity);
     }
 
-    public async Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.Patients.Requests.UpdatePatientRequest request, CancellationToken ct)
+    public async Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.UpdatePatientRequest request, CancellationToken ct)
     {
         ValidateLegacy(request);
         var entity = await FindAsync(patientId, ct);
@@ -154,7 +150,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         };
     }
 
-    public async Task<PatientDetailDto> CreatePatientV1Async(COSGeniusSystem.DTOs.Patients.CreatePatientRequest request, CancellationToken ct = default)
+    public async Task<PatientDetailDto> CreatePatientV1Async(COSGeniusSystem.DTOs.Compatibility.V1.CreatePatientRequest request, CancellationToken ct = default)
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
         if (request.DateOfBirth > today || request.IdentityCardIssuedDate > today)
@@ -193,21 +189,13 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
             });
         }
 
-        var defaultRecord = new MedicalRecord
-        {
-            ExamDate = DateTime.Now,
-            Status = "Đang theo dõi",
-            PreliminaryDiagnosis = "Tiếp nhận hồ sơ ban đầu"
-        };
-        patient.MedicalRecords.Add(defaultRecord);
-
         await db.Patients.AddAsync(patient, ct);
         await db.SaveChangesAsync(ct);
 
         return await GetPatientDetailAsync(patient.PatientId, ct);
     }
 
-    public async Task<PatientDetailDto> UpdatePatientV1Async(int id, COSGeniusSystem.DTOs.Patients.UpdatePatientRequest request, CancellationToken ct = default)
+    public async Task<PatientDetailDto> UpdatePatientV1Async(int id, COSGeniusSystem.DTOs.Compatibility.V1.UpdatePatientRequest request, CancellationToken ct = default)
     {
         var patient = await db.Patients
             .Include(p => p.PatientContacts)
@@ -272,81 +260,48 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
     public async Task<List<PatientVisitHistoryDto>> GetVisitHistoryAsync(int patientId, CancellationToken ct = default)
     {
-        var patientExists = await db.Patients.AnyAsync(p => p.PatientId == patientId, ct);
-        if (!patientExists)
+        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct))
             throw new NotFoundException($"Patient with id {patientId} was not found.");
-
-        var visitHistory = await db.ExamSheets.AsNoTracking()
-            .Include(es => es.Doctor)
-            .Include(es => es.Record)
-            .Where(es => es.Record.PatientId == patientId)
-            .OrderByDescending(es => es.ExamDate)
-            .Select(es => new PatientVisitHistoryDto
+        return await db.MedicalRecords.AsNoTracking().Where(r => r.PatientId == patientId)
+            .OrderByDescending(r => r.ExamDate).Select(r => new PatientVisitHistoryDto
             {
-                ExamSheetId = es.ExamSheetId,
-                ExamDate = es.ExamDate,
-                KcbCode = $"KCB{es.ExamSheetId:D5}",
-                MrCode = $"MR{es.RecordId:D5}",
-                DoctorName = es.Doctor.FullName,
-                Symptoms = es.Symptoms,
-                Status = es.FinalDiagnosis == "Chờ khám" ? "Chờ khám" : "Đã hoàn tất"
-            })
-            .ToListAsync(ct);
-
-        return visitHistory;
+                RecordId = r.RecordId, RegistrationId = r.RegistrationId, ExamDate = r.ExamDate,
+                KcbCode = r.Registration.RegistrationCode ?? "", MrCode = $"MR{r.RecordId:D5}",
+                DoctorName = r.Doctor.FullName, Symptoms = r.Symptoms, Status = r.Status
+            }).ToListAsync(ct);
     }
 
-    public async Task<MedicalRecordDetailDto> GetExamSheetDetailAsync(int examSheetId, CancellationToken ct = default)
+    public async Task<MedicalRecordDetailDto> GetMedicalRecordDetailAsync(int recordId, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets.AsNoTracking()
-            .Include(e => e.Doctor)
-            .Include(e => e.UsageHistories)
-                .ThenInclude(u => u.Service)
-            .Include(e => e.UsageHistories)
-                .ThenInclude(u => u.PerformedByNavigation)
-            .Include(e => e.RemedyFormulas)
-                .ThenInclude(r => r.FormulaDetails)
-                    .ThenInclude(fd => fd.Herb)
-            .SingleOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct);
-
-        if (es is null)
-            throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
-
+        var record = await db.MedicalRecords.AsNoTracking().Include(r => r.Doctor).Include(r => r.Registration)
+            .Include(r => r.HerbalPrescriptions).ThenInclude(p => p.HerbalPrescriptionDetails)
+            .SingleOrDefaultAsync(r => r.RecordId == recordId, ct)
+            ?? throw new NotFoundException($"Medical record with id {recordId} was not found.");
+        var services = await db.UsageHistories.AsNoTracking().Where(u => u.Session.Plan.RecordId == recordId)
+            .OrderBy(u => u.ExecutionTime).Select(u => new UsageHistoryItemDto
+            {
+                UsageId = u.UsageId, SessionId = u.SessionId, PlanDetailId = u.PlanDetailId,
+                YcdtCode = $"YCDT{u.SessionId:D5}",
+                ServiceName = u.PlanDetail.ServiceNameSnapshot, Quantity = u.Quantity,
+                ExecutionTime = u.ExecutionTime, PerformedByDoctor = u.PerformedByNavigation!.FullName,
+                ResultNote = u.ResultNote
+            }).ToListAsync(ct);
         return new MedicalRecordDetailDto
         {
-            ExamSheetId = es.ExamSheetId,
-            KcbCode = $"KCB{es.ExamSheetId:D5}",
-            ExamDate = es.ExamDate,
-            DoctorName = es.Doctor.FullName,
-            Symptoms = es.Symptoms,
-            FinalDiagnosis = es.FinalDiagnosis,
-            PulseDiagnosis = es.PulseDiagnosis,
-            TongueDiagnosis = es.TongueDiagnosis,
-            DoctorAdvice = es.DoctorAdvice,
-            Services = es.UsageHistories.OrderBy(u => u.ExecutionTime).Select(u => new UsageHistoryItemDto
+            RecordId = record.RecordId, RegistrationId = record.RegistrationId,
+            KcbCode = record.Registration.RegistrationCode ?? "", ExamDate = record.ExamDate,
+            DoctorName = record.Doctor.FullName, Symptoms = record.Symptoms, Status = record.Status,
+            FinalDiagnosis = record.FinalDiagnosis, Palpation = record.Palpation, Inspection = record.Inspection,
+            DoctorAdvice = record.DoctorAdvice, Services = services,
+            Prescriptions = record.HerbalPrescriptions.OrderByDescending(p => p.CreatedAt).Select(p => new PrescriptionDto
             {
-                UsageId = u.UsageId,
-                YcdtCode = $"YCDT{u.UsageId:D5}",
-                ServiceName = u.Service.ServiceName,
-                Quantity = u.Quantity,
-                ExecutionTime = u.ExecutionTime,
-                PerformedByDoctor = u.PerformedByNavigation != null ? u.PerformedByNavigation.FullName : null,
-                ResultNote = u.ResultNote
-            }).ToList(),
-            Prescriptions = es.RemedyFormulas.OrderByDescending(r => r.CreatedAt).Select(r => new PrescriptionDto
-            {
-                FormulaId = r.FormulaId,
-                FormulaName = r.FormulaName,
-                UsageInstructions = r.UsageInstructions,
-                DosageDays = r.DosageDays,
-                TotalDoses = r.TotalDoses,
-                Details = r.FormulaDetails.Select(fd => new FormulaDetailItemDto
+                PrescriptionId = p.PrescriptionId, PrescriptionName = p.PrescriptionName,
+                UsageInstructions = p.UsageInstructions, DosageDays = p.DosageDays,
+                TotalDoses = p.TotalDoses, Status = p.Status,
+                Details = p.HerbalPrescriptionDetails.Select(d => new FormulaDetailItemDto
                 {
-                    HerbId = fd.HerbId,
-                    HerbName = fd.Herb.CommonName,
-                    DosagePerDose = fd.DosagePerDose,
-                    RoleInFormula = fd.RoleInFormula,
-                    Note = fd.Note
+                    HerbId = d.HerbId, HerbName = d.HerbNameSnapshot, DosagePerDose = d.DosagePerDose,
+                    RoleInFormula = d.RoleInFormula, Note = d.Note
                 }).ToList()
             }).ToList()
         };
@@ -354,97 +309,29 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
     public async Task<List<TreatmentProtocolDto>> GetTreatmentProtocolsAsync(int patientId, CancellationToken ct = default)
     {
-        var patientExists = await db.Patients.AnyAsync(p => p.PatientId == patientId, ct);
-        if (!patientExists)
+        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct))
             throw new NotFoundException($"Patient with id {patientId} was not found.");
-
-        var protocols = await db.TreatmentProtocols.AsNoTracking()
-            .Include(tp => tp.Doctor)
-            .Include(tp => tp.Record)
-            .Where(tp => tp.Record.PatientId == patientId)
-            .OrderByDescending(tp => tp.StartDate)
-            .ToListAsync(ct);
-
-        var result = new List<TreatmentProtocolDto>();
-        foreach (var tp in protocols)
-        {
-            var completedSessions = await db.UsageHistories.AsNoTracking()
-                .CountAsync(u => u.ExamSheet.RecordId == tp.RecordId, ct);
-
-            int totalSessions = 10;
-            if (!string.IsNullOrWhiteSpace(tp.Description))
+        return await db.TreatmentPlans.AsNoTracking().Where(p => p.Record.PatientId == patientId)
+            .OrderByDescending(p => p.CreatedAt).Select(p => new TreatmentProtocolDto
             {
-                var match = Regex.Match(tp.Description, @"\b(\d+)\s*(buổi|buoi|sessions?|lần|lan)?\b", RegexOptions.IgnoreCase);
-                if (match.Success && int.TryParse(match.Groups[1].Value, out var parsedTotal) && parsedTotal > 0)
-                {
-                    totalSessions = parsedTotal;
-                }
-            }
-
-            if (completedSessions > totalSessions)
-            {
-                totalSessions = completedSessions;
-            }
-
-            var today = DateOnly.FromDateTime(DateTime.Today);
-            string status;
-            if (tp.EndDate.HasValue && tp.EndDate.Value < today || completedSessions >= totalSessions)
-            {
-                status = "Đã hoàn thành";
-            }
-            else if (completedSessions > 0)
-            {
-                status = "Đang điều trị";
-            }
-            else
-            {
-                status = "Mới tiếp nhận";
-            }
-
-            result.Add(new TreatmentProtocolDto
-            {
-                ProtocolId = tp.ProtocolId,
-                ProtocolCode = $"LT{tp.ProtocolId:D5}",
-                ProtocolName = tp.ProtocolName,
-                DoctorName = tp.Doctor.FullName,
-                StartDate = tp.StartDate ?? DateOnly.FromDateTime(DateTime.Today),
-                EndDate = tp.EndDate,
-                CompletedSessions = completedSessions,
-                TotalSessions = totalSessions,
-                Status = status
-            });
-        }
-
-        return result;
+                PlanId = p.PlanId, PlanCode = p.PlanCode, PlanName = p.PlanName, DoctorName = p.Doctor.FullName,
+                StartDate = p.StartDate, EndDate = p.EndDate, TotalSessions = p.PlannedSessionCount,
+                CompletedSessions = p.TreatmentSessions.Count(s => s.Status == "COMPLETED"), Status = p.Status
+            }).ToListAsync(ct);
     }
 
-    public async Task<List<TreatmentSessionDto>> GetTreatmentSessionsAsync(int protocolId, CancellationToken ct = default)
+    public async Task<List<TreatmentSessionDto>> GetTreatmentSessionsAsync(int planId, CancellationToken ct = default)
     {
-        var protocol = await db.TreatmentProtocols.AsNoTracking()
-            .SingleOrDefaultAsync(tp => tp.ProtocolId == protocolId, ct);
-
-        if (protocol is null)
-            throw new NotFoundException($"Treatment protocol with id {protocolId} was not found.");
-
-        var usageHistories = await db.UsageHistories.AsNoTracking()
-            .Include(u => u.Service)
-            .Include(u => u.PerformedByNavigation)
-            .Include(u => u.ExamSheet).ThenInclude(es => es.Doctor)
-            .Where(u => u.ExamSheet.RecordId == protocol.RecordId)
-            .OrderBy(u => u.ExecutionTime)
-            .ToListAsync(ct);
-
-        var sessions = usageHistories.Select((uh, index) => new TreatmentSessionDto
-        {
-            SessionNo = index + 1,
-            ExecutionTime = uh.ExecutionTime,
-            ServiceName = uh.Service.ServiceName,
-            DoctorName = uh.PerformedByNavigation != null ? uh.PerformedByNavigation.FullName : uh.ExamSheet.Doctor.FullName,
-            ResultNote = uh.ResultNote,
-            Status = string.IsNullOrWhiteSpace(uh.ResultNote) ? "Chờ điều trị" : "Đã hoàn thành"
-        }).ToList();
-
-        return sessions;
+        if (!await db.TreatmentPlans.AnyAsync(p => p.PlanId == planId, ct))
+            throw new NotFoundException($"Treatment plan with id {planId} was not found.");
+        return await db.TreatmentSessions.AsNoTracking().Where(s => s.PlanId == planId)
+            .OrderBy(s => s.SessionNumber).Select(s => new TreatmentSessionDto
+            {
+                SessionId = s.SessionId, SessionNo = s.SessionNumber, ExecutionTime = s.StartedAt,
+                DoctorName = s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName
+                    : s.AssignedDoctor != null ? s.AssignedDoctor.FullName : null,
+                ResultNote = s.ResultNote, Status = s.Status
+            }).ToListAsync(ct);
     }
     #endregion
 }

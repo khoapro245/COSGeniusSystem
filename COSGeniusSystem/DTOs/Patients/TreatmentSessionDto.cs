@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Patients;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class TreatmentSessionDto
 {

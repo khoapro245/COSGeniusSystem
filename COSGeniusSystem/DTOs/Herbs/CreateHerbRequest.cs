@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Herbs;
+namespace COSGeniusSystem.DTOs;
 
 public class CreateHerbRequest
 {

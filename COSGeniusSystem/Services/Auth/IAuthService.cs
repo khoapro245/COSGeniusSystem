@@ -1,4 +1,4 @@
-using COSGeniusSystem.DTOs.Auth;
+using COSGeniusSystem.DTOs;
 
 namespace COSGeniusSystem.Services;
 

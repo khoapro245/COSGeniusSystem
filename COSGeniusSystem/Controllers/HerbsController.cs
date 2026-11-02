@@ -1,7 +1,7 @@
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 

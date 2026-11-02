@@ -1,8 +1,7 @@
-﻿using System.ComponentModel.DataAnnotations;
+using COSGeniusSystem.Services;
+using System.ComponentModel.DataAnnotations;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Patients.Requests;
-using COSGeniusSystem.DTOs.Patients.Responses;
-using COSGeniusSystem.Services.Interfaces;
+using COSGeniusSystem.DTOs;
 using Microsoft.AspNetCore.Mvc;
 
 namespace COSGeniusSystem.Controllers

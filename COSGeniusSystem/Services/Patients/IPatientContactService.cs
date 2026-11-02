@@ -1,8 +1,7 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Patients.Requests;
-using COSGeniusSystem.DTOs.Patients.Responses;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Interfaces;
+namespace COSGeniusSystem.Services;
 
 public interface IPatientContactService
 {

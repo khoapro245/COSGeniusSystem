@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Patients.Responses;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.DTOs.Examinations;
+namespace COSGeniusSystem.DTOs;
 
 public sealed record RegistrationResponse(int RegistrationId, string? RegistrationCode, int PatientId,
     string? PatientCode, string PatientName, string? Phone, int DoctorId, string DoctorName,

@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace COSGeniusSystem.Commons;
 
+/// <summary>Compatibility envelope for existing Invoices and Notifications APIs. Use ApiResponseModel for new APIs.</summary>
 public class ApiResponse<T>
 {
     public bool Success { get; set; }
@@ -34,6 +35,7 @@ public class ApiResponse<T>
     }
 }
 
+/// <summary>Compatibility envelope for existing Invoices and Notifications APIs. Use ApiResponseModel for new APIs.</summary>
 public class ApiResponse : ApiResponse<object>
 {
     public static ApiResponse Ok(string message = "Thành công")

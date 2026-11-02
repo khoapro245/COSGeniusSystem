@@ -1,7 +1,7 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Suppliers;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Suppliers;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

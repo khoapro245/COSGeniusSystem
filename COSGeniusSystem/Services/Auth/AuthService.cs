@@ -1,5 +1,5 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Auth;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Repositories;

@@ -1,5 +1,4 @@
-using COSGeniusSystem.DTOs.Patients.Requests;
-using COSGeniusSystem.DTOs.Patients.Responses;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 
 namespace COSGeniusSystem.Services;

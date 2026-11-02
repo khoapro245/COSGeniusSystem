@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Auth;
+namespace COSGeniusSystem.DTOs;
 
 public class UserInfoResponseDto
 {

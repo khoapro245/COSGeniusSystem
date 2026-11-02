@@ -1,9 +1,8 @@
-using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Commons;
+using Microsoft.EntityFrameworkCore;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Invoices;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Interfaces;
 
 namespace COSGeniusSystem.Services;
 
@@ -106,8 +105,8 @@ public class InvoiceService : IInvoiceService
             {
                 InvoiceDetailId = d.InvoiceDetailId,
                 ItemType = d.ItemType,
-                // Preserve the response field while reading the V2 foreign keys.
-                ReferenceId = d.PrescriptionId ?? d.PlanDetailId ?? 0,
+                PrescriptionId = d.PrescriptionId,
+                PlanDetailId = d.PlanDetailId,
                 ItemName = d.ItemName,
                 Quantity = d.Quantity,
                 UnitPrice = d.UnitPrice,

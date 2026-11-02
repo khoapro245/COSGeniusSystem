@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Invoices;
+namespace COSGeniusSystem.DTOs;
 
 public class InvoiceQueryParams
 {

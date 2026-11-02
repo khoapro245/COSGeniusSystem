@@ -1,11 +1,10 @@
-﻿using System.Security.Claims;
+using COSGeniusSystem.Services;
+using System.Security.Claims;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Examinations;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services;
-using COSGeniusSystem.Services.Examinations;
 using Microsoft.Data.SqlClient;
 using Microsoft.EntityFrameworkCore;
 

@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Reception;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class DashboardQueueDto
 {
@@ -9,7 +9,7 @@ public sealed class DashboardQueueDto
 public sealed class DashboardWaitingExamDto
 {
     public int Stt { get; init; }
-    public int ExamSheetId { get; init; }
+    public int RegistrationId { get; init; }
     public string KcbCode { get; init; } = null!;
     public string? PatientCode { get; init; }
     public string FullName { get; init; } = null!;
@@ -21,7 +21,7 @@ public sealed class DashboardWaitingExamDto
 public sealed class DashboardWaitingTreatmentDto
 {
     public int Stt { get; init; }
-    public int UsageId { get; init; }
+    public int SessionId { get; init; }
     public string YcdtCode { get; init; } = null!;
     public string? PatientCode { get; init; }
     public string FullName { get; init; } = null!;

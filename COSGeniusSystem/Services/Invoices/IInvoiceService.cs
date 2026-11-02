@@ -1,7 +1,7 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Invoices;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Interfaces;
+namespace COSGeniusSystem.Services;
 
 public interface IInvoiceService
 {

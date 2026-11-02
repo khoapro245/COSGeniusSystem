@@ -1,11 +1,11 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Suppliers;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.Suppliers;
+using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.Suppliers;
+namespace COSGeniusSystem.UnitTests;
 
 public class SupplierServiceTests
 {
