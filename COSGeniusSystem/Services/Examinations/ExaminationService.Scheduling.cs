@@ -25,13 +25,20 @@ public sealed partial class ExaminationService
         return await db.Doctors.AsNoTracking()
             .Where(d => d.IsActive && d.User != null && d.User.IsActive
                 && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor))
-            .Select(d => new DoctorWorkloadResponse(d.DoctorId, d.FullName, d.Specialization,
-                date, query.Session,
-                registrations.Count(r => r.DoctorId == d.DoctorId && r.Status != "CANCELLED"),
-                registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "WAITING"),
-                registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "IN_PROGRESS"),
-                registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "COMPLETED")))
+            // Keep sortable values in a translatable projection before constructing the response record.
+            .Select(d => new
+            {
+                d.DoctorId,
+                DoctorName = d.FullName,
+                d.Specialization,
+                AssignedCount = registrations.Count(r => r.DoctorId == d.DoctorId && r.Status != "CANCELLED"),
+                WaitingCount = registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "WAITING"),
+                InProgressCount = registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "IN_PROGRESS"),
+                CompletedCount = registrations.Count(r => r.DoctorId == d.DoctorId && r.Status == "COMPLETED")
+            })
             .OrderBy(d => d.AssignedCount).ThenBy(d => d.DoctorName).ThenBy(d => d.DoctorId)
+            .Select(d => new DoctorWorkloadResponse(d.DoctorId, d.DoctorName, d.Specialization,
+                date, query.Session, d.AssignedCount, d.WaitingCount, d.InProgressCount, d.CompletedCount))
             .ToListAsync(ct);
     }
 }
