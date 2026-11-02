@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Doctors;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Doctors;
+namespace COSGeniusSystem.Services;
 
 public interface IDoctorService
 {

@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Users;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Users;
+namespace COSGeniusSystem.Services;
 
 public interface IUserService
 {

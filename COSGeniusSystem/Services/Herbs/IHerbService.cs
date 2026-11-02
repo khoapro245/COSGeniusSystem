@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Herbs;
+namespace COSGeniusSystem.Services;
 
 public interface IHerbService
 {

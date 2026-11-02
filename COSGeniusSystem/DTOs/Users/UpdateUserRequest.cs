@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Users;
+namespace COSGeniusSystem.DTOs;
 
 public class UpdateUserRequest
 {

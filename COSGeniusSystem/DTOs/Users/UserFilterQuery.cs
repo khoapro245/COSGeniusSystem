@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Users;
+namespace COSGeniusSystem.DTOs;
 
 public class UserFilterQuery
 {

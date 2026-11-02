@@ -1,9 +1,8 @@
 using System.Security.Claims;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Examinations;
-using COSGeniusSystem.DTOs.Treatments;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Treatments;
+namespace COSGeniusSystem.Services;
 
 public interface ITreatmentWorkflowService
 {

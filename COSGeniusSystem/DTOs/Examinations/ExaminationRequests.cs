@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Examinations;
+namespace COSGeniusSystem.DTOs;
 
 public class PageQuery
 {
@@ -11,14 +11,23 @@ public class PageQuery
 
 public sealed class RegistrationQuery : PageQuery
 {
+    [RegularExpression("^(MORNING|AFTERNOON)$")] public string? Session { get; set; }
     public DateOnly? FromDate { get; set; }
     public DateOnly? ToDate { get; set; }
     [Range(1, int.MaxValue)] public int? DoctorId { get; set; }
     [RegularExpression("^(WAITING|IN_PROGRESS|COMPLETED|CANCELLED)$")] public string? Status { get; set; }
 }
 
+public sealed class DoctorWorkloadQuery
+{
+    [Required] public DateOnly? BusinessDate { get; set; }
+    [Required, RegularExpression("^(MORNING|AFTERNOON)$")] public string Session { get; set; } = "";
+}
+
 public class RegistrationInput
 {
+    public DateOnly? BusinessDate { get; set; }
+    [Required, RegularExpression("^(MORNING|AFTERNOON)$")] public string Session { get; set; } = "";
     [Range(1, int.MaxValue)] public int DoctorId { get; set; }
     [Range(1, int.MaxValue)] public int? ContactId { get; set; }
     public bool IsPriority { get; set; }

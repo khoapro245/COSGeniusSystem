@@ -1,6 +1,6 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Reception;
-using COSGeniusSystem.Services.Reception;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace COSGeniusSystem.Controllers;

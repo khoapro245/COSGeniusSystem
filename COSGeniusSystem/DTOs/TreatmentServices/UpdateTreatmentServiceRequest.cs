@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.TreatmentServices;
+namespace COSGeniusSystem.DTOs;
 
 public class UpdateTreatmentServiceRequest
 {

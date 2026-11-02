@@ -1,155 +1,55 @@
-using COSGeniusSystem.Data;
-using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.Reception;
-using Microsoft.EntityFrameworkCore;
-using Xunit;
+﻿using COSGeniusSystem.Models;
+using COSGeniusSystem.Services;
 
-namespace COSGeniusSystem.UnitTests.Reception;
+namespace COSGeniusSystem.UnitTests;
 
 public class ReceptionDashboardServiceTests
 {
-    private static ApplicationDbContext CreateInMemoryDbContext()
-    {
-        var options = new DbContextOptionsBuilder<ApplicationDbContext>()
-            .UseInMemoryDatabase(databaseName: $"ClinicHerbDb_Dashboard_{Guid.NewGuid()}")
-            .Options;
-
-        return new ApplicationDbContext(options);
-    }
-
     [Fact]
-    public async Task GetTodayStatsAsync_CalculatesCorrectStats()
+    public async Task Stats_UseRegistrationAndSessionStatus_InsteadOfDiagnosisOrNotes()
     {
-        // Arrange
-        using var context = CreateInMemoryDbContext();
-        var doctor = new Doctor { DoctorId = 1, FullName = "Bác sĩ A", IsActive = true };
-        var serviceItem = new Service { ServiceId = 1, ServiceCode = "DV01", ServiceName = "Châm cứu", Unit = "Lần", Price = 100000, IsActive = true };
-        var patient = new Patient { PatientId = 1, FullName = "Bệnh nhân A" };
-        var mr = new MedicalRecord { RecordId = 1, Patient = patient, Status = "Đang theo dõi" };
-
-        var waitingExam = new ExamSheet
-        {
-            ExamSheetId = 1,
-            Record = mr,
-            Doctor = doctor,
-            ExamDate = DateTime.Now,
-            FinalDiagnosis = "Chờ khám"
-        };
-        var completedExam = new ExamSheet
-        {
-            ExamSheetId = 2,
-            Record = mr,
-            Doctor = doctor,
-            ExamDate = DateTime.Now,
-            FinalDiagnosis = "Viêm khớp"
-        };
-
-        var waitingUsage = new UsageHistory
-        {
-            UsageId = 1,
-            ExamSheet = waitingExam,
-            Service = serviceItem,
-            ExecutionTime = DateTime.Now,
-            Quantity = 1,
-            ResultNote = null // Chờ điều trị
-        };
-        var completedUsage = new UsageHistory
-        {
-            UsageId = 2,
-            ExamSheet = completedExam,
-            Service = serviceItem,
-            ExecutionTime = DateTime.Now,
-            Quantity = 1,
-            ResultNote = "Đã thực hiện xong"
-        };
-
-        context.Doctors.Add(doctor);
-        context.Services.Add(serviceItem);
-        context.Patients.Add(patient);
-        context.MedicalRecords.Add(mr);
-        context.ExamSheets.AddRange(waitingExam, completedExam);
-        context.UsageHistories.AddRange(waitingUsage, completedUsage);
-        await context.SaveChangesAsync();
-
-        var service = new ReceptionDashboardService(context);
-
-        // Act
-        var result = await service.GetTodayStatsAsync();
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(4, result.TodayTotalVisits); // 2 exams + 2 treatments
+        using var db = SchemaFixture.Create();
+        var record = SchemaFixture.Record();
+        record.Registration.Status = "WAITING";
+        record.FinalDiagnosis = "Chờ khám";
+        var plan = SchemaFixture.Plan(record);
+        var date = record.Registration.BusinessDate;
+        db.TreatmentPlans.Add(plan);
+        db.TreatmentSessions.AddRange(
+            new TreatmentSession { SessionId = 1, Plan = plan, SessionNumber = 1, ScheduledDate = date, Status = "REQUESTED", ResultNote = "Has a note" },
+            new TreatmentSession { SessionId = 2, Plan = plan, SessionNumber = 2, ScheduledDate = date, Status = "COMPLETED" },
+            new TreatmentSession { SessionId = 3, Plan = plan, SessionNumber = 3, ScheduledDate = date, Status = "CANCELLED" });
+        await db.SaveChangesAsync();
+        var result = await new ReceptionDashboardService(db).GetTodayStatsAsync();
         Assert.Equal(1, result.WaitingExaminationCount);
         Assert.Equal(1, result.WaitingTreatmentCount);
-        Assert.Equal(2, result.CompletedVisitsCount); // 1 completed exam + 1 completed treatment
-        Assert.Equal(2, result.NewExaminationCount);
-        Assert.Equal(2, result.TreatmentCount);
+        Assert.Equal(1, result.CompletedVisitsCount);
+        Assert.Equal(3, result.TodayTotalVisits);
     }
 
     [Fact]
-    public async Task GetQuickQueuesAsync_ReturnsTopWaitingQueues()
+    public async Task Queues_IncludeWaitingRegistrationWithoutMedicalRecord_AndRequestedSessionWithoutUsage()
     {
-        // Arrange
-        using var context = CreateInMemoryDbContext();
-        var doctor = new Doctor { DoctorId = 1, FullName = "Bác sĩ B", IsActive = true };
-        var serviceItem = new Service { ServiceId = 1, ServiceCode = "DV01", ServiceName = "Xoa bóp", Unit = "Lần", Price = 120000, IsActive = true };
-        var patient1 = new Patient { PatientId = 1, PatientCode = "BN00001", FullName = "Bệnh nhân 1" };
-        var patient2 = new Patient { PatientId = 2, PatientCode = "BN00002", FullName = "Bệnh nhân Ưu Tiên" };
-        var mr1 = new MedicalRecord { RecordId = 1, Patient = patient1, Status = "Đang theo dõi" };
-        var mr2 = new MedicalRecord { RecordId = 2, Patient = patient2, Status = "Đang theo dõi" };
-
-        var examNormal = new ExamSheet
+        using var db = SchemaFixture.Create();
+        var record = SchemaFixture.Record();
+        var plan = SchemaFixture.Plan(record);
+        db.TreatmentPlans.Add(plan);
+        var waiting = new ExaminationRegistration
         {
-            ExamSheetId = 1,
-            Record = mr1,
-            Doctor = doctor,
-            ExamDate = DateTime.Now.AddMinutes(-10),
-            FinalDiagnosis = "Chờ khám",
-            Symptoms = "Đau lưng"
+            RegistrationId = 2, Patient = record.Patient, Doctor = record.Doctor,
+            RegisteredByNavigation = record.Doctor.User!, RegistrationCode = "KCB00002",
+            BusinessDate = record.Registration.BusinessDate, QueueNumber = 2,
+            RegisteredAt = DateTime.UtcNow, Status = "WAITING", IsPriority = true
         };
-        var examPriority = new ExamSheet
+        db.ExaminationRegistrations.Add(waiting);
+        db.TreatmentSessions.Add(new TreatmentSession
         {
-            ExamSheetId = 2,
-            Record = mr2,
-            Doctor = doctor,
-            ExamDate = DateTime.Now,
-            FinalDiagnosis = "Chờ khám",
-            Symptoms = "[Ưu tiên] Cấp cứu đau đầu"
-        };
-
-        var usage = new UsageHistory
-        {
-            UsageId = 1,
-            ExamSheet = examNormal,
-            Service = serviceItem,
-            ExecutionTime = DateTime.Now,
-            Quantity = 1,
-            ResultNote = "Chờ điều trị"
-        };
-
-        context.Doctors.Add(doctor);
-        context.Services.Add(serviceItem);
-        context.Patients.AddRange(patient1, patient2);
-        context.MedicalRecords.AddRange(mr1, mr2);
-        context.ExamSheets.AddRange(examNormal, examPriority);
-        context.UsageHistories.Add(usage);
-        await context.SaveChangesAsync();
-
-        var service = new ReceptionDashboardService(context);
-
-        // Act
-        var result = await service.GetQuickQueuesAsync(top: 2);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal(2, result.WaitingExaminations.Count);
-        // Ưu tiên lên đầu
-        Assert.True(result.WaitingExaminations[0].IsPriority);
-        Assert.Equal("Bệnh nhân Ưu Tiên", result.WaitingExaminations[0].FullName);
-
-        Assert.Single(result.WaitingTreatments);
-        Assert.Equal("YCDT00001", result.WaitingTreatments[0].YcdtCode);
-        Assert.Equal("Bệnh nhân 1", result.WaitingTreatments[0].FullName);
+            SessionId = 1, Plan = plan, SessionNumber = 1, ScheduledDate = waiting.BusinessDate,
+            Status = "REQUESTED", AssignedDoctor = record.Doctor, RequestedAt = DateTime.UtcNow
+        });
+        await db.SaveChangesAsync();
+        var result = await new ReceptionDashboardService(db).GetQuickQueuesAsync();
+        Assert.Equal(2, Assert.Single(result.WaitingExaminations).RegistrationId);
+        Assert.Equal(1, Assert.Single(result.WaitingTreatments).SessionId);
     }
 }
-

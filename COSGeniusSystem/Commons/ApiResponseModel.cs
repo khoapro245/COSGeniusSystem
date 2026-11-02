@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 
 namespace COSGeniusSystem.Commons;
 
+/// <summary>Canonical response envelope for new APIs.</summary>
 public sealed class ApiResponseModel<T>
 {
     [JsonPropertyName("code")]

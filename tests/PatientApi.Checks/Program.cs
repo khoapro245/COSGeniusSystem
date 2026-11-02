@@ -1,15 +1,15 @@
-﻿using System.Text.Json;
+using COSGeniusSystem.Services;
+using System.Text.Json;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Controllers;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using System.ComponentModel.DataAnnotations;
-using COSGeniusSystem.DTOs.Patients.Requests;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Data;
 using Microsoft.EntityFrameworkCore;
-using COSGeniusSystem.Services;
 
 using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
     .UseInMemoryDatabase(Guid.NewGuid().ToString()).Options);
@@ -66,10 +66,10 @@ var patientPage = await patientService.GetAllAsync(2, 1, ct);
 Check(patientPage.Items.Single().PatientId == 2 && patientPage.TotalCount == 2 && patientPage.TotalPages == 2, "Patient list includes page data and metadata");
 var controller = new PatientContactsController(service);
 var getResult = (ObjectResult)(await controller.GetAll(1, 1, 1, ct)).Result!;
-var envelope = (ApiResponseModel<PagedResult<COSGeniusSystem.DTOs.Patients.Responses.PatientContactResponse>>)getResult.Value!;
+var envelope = (ApiResponseModel<PagedResult<COSGeniusSystem.DTOs.PatientContactResponse>>)getResult.Value!;
 Check(getResult.StatusCode == 200 && envelope.Code == 200 && envelope.IsSuccess && envelope.Data!.TotalCount == 2, "List uses the unified envelope");
 var createResult = (CreatedAtActionResult)(await controller.Create(1, new() { FullName = "Third" }, ct)).Result!;
-var createdEnvelope = (ApiResponseModel<COSGeniusSystem.DTOs.Patients.Responses.PatientContactResponse>)createResult.Value!;
+var createdEnvelope = (ApiResponseModel<COSGeniusSystem.DTOs.PatientContactResponse>)createResult.Value!;
 Check(createResult.StatusCode == 201 && createdEnvelope.Code == 201 && createResult.ActionName == "GetById" && (int)createResult.RouteValues!["patientId"]! == 1, "Creation uses CreatedAtAction with matching code and route values");
 var deleteResult = (ObjectResult)(await controller.Delete(1, createdEnvelope.Data!.ContactId, ct)).Result!;
 var deleteEnvelope = (ApiResponseModel<object?>)deleteResult.Value!;

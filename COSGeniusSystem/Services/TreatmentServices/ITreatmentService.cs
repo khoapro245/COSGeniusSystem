@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.TreatmentServices;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.TreatmentServices;
+namespace COSGeniusSystem.Services;
 
 public interface ITreatmentService
 {

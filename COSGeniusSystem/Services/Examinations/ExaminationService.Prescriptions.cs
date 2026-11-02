@@ -1,11 +1,11 @@
 using System.Security.Claims;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Examinations;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Examinations;
+namespace COSGeniusSystem.Services;
 
 public sealed partial class ExaminationService
 {

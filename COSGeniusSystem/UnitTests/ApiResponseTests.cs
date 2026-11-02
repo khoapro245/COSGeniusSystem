@@ -1,12 +1,10 @@
+using COSGeniusSystem.Services;
 using System.Text.Json;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Controllers;
-using COSGeniusSystem.DTOs.Auth;
-using COSGeniusSystem.DTOs.Doctors;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Middlewares;
-using COSGeniusSystem.Services;
-using COSGeniusSystem.Services.Doctors;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging.Abstractions;

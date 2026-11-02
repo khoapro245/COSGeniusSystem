@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.TreatmentServices;
+namespace COSGeniusSystem.DTOs;
 
 public class TreatmentServiceResponseDto
 {

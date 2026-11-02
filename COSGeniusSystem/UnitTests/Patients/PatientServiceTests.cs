@@ -1,12 +1,15 @@
+using COSGeniusSystem.Services;
+using CreatePatientRequest = COSGeniusSystem.DTOs.Compatibility.V1.CreatePatientRequest;
+using UpdatePatientRequest = COSGeniusSystem.DTOs.Compatibility.V1.UpdatePatientRequest;
+using ContactUpdateItem = COSGeniusSystem.DTOs.Compatibility.V1.ContactUpdateItem;
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Patients;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.Patients;
+namespace COSGeniusSystem.UnitTests;
 
 public class PatientServiceTests
 {
@@ -85,7 +88,7 @@ public class PatientServiceTests
     }
 
     [Fact]
-    public async Task CreatePatientV1Async_ValidRequest_CreatesPatientAndMedicalRecord()
+    public async Task CreatePatientV1Async_ValidRequest_DoesNotCreateUnregisteredMedicalRecord()
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
@@ -113,8 +116,7 @@ public class PatientServiceTests
         Assert.Single(result.Contacts);
 
         var records = await context.MedicalRecords.Where(r => r.PatientId == result.PatientId).ToListAsync();
-        Assert.Single(records);
-        Assert.Equal("Đang theo dõi", records[0].Status);
+        Assert.Empty(records);
     }
 
     [Fact]
@@ -134,110 +136,50 @@ public class PatientServiceTests
         await Assert.ThrowsAsync<BadRequestException>(() => service.CreatePatientV1Async(request));
     }
 
+
     [Fact]
-    public async Task GetVisitHistoryAsync_WhenExists_ReturnsExamSheets()
+    public async Task History_ReadsMedicalRecordsAndPrescriptionSnapshots()
     {
-        // Arrange
-        using var context = CreateInMemoryDbContext();
-        var doctor = new Doctor { DoctorId = 1, FullName = "BS Nguyen Van A" };
-        var patient = new Patient { PatientId = 1, FullName = "Benh Nhan Test" };
-        var mr = new MedicalRecord { RecordId = 1, Patient = patient, Status = "Đang theo dõi" };
-        var es = new ExamSheet
+        using var db = SchemaFixture.Create();
+        var record = SchemaFixture.Record();
+        db.MedicalRecords.Add(record);
+        var herb = new Herb { HerbId = 1, HerbCode = "H1", CommonName = "Renamed herb", Unit = "g" };
+        db.HerbalPrescriptions.Add(new HerbalPrescription
         {
-            ExamSheetId = 1,
-            Record = mr,
-            Doctor = doctor,
-            ExamDate = DateTime.Now,
-            Symptoms = "Dau lung",
-            FinalDiagnosis = "Thoai hoa cot song"
-        };
-        context.Doctors.Add(doctor);
-        context.Patients.Add(patient);
-        context.MedicalRecords.Add(mr);
-        context.ExamSheets.Add(es);
-        await context.SaveChangesAsync();
-
-        var service = new PatientService(context);
-
-        // Act
-        var result = await service.GetVisitHistoryAsync(1);
-
-        // Assert
-        Assert.Single(result);
-        Assert.Equal("KCB00001", result[0].KcbCode);
-        Assert.Equal("MR00001", result[0].MrCode);
-        Assert.Equal("BS Nguyen Van A", result[0].DoctorName);
+            PrescriptionId = 1, Record = record, PrescriptionName = "Prescription", Status = "SENT",
+            CreatedByNavigation = record.Doctor.User!, TotalDoses = 7, CreatedAt = DateTime.UtcNow,
+            HerbalPrescriptionDetails = [new HerbalPrescriptionDetail
+            {
+                Herb = herb, HerbNameSnapshot = "Original herb", DosagePerDose = 10
+            }]
+        });
+        await db.SaveChangesAsync();
+        var service = new PatientService(db);
+        var history = Assert.Single(await service.GetVisitHistoryAsync(record.PatientId));
+        Assert.Equal(record.RecordId, history.RecordId);
+        Assert.Equal("COMPLETED", history.Status);
+        var detail = await service.GetMedicalRecordDetailAsync(record.RecordId);
+        Assert.Equal("Original herb", Assert.Single(Assert.Single(detail.Prescriptions).Details).HerbName);
     }
 
     [Fact]
-    public async Task GetExamSheetDetailAsync_WhenExists_ReturnsFullDetail()
+    public async Task TreatmentHistory_IncludesPlannedSessionsWithoutUsage()
     {
-        // Arrange
-        using var context = CreateInMemoryDbContext();
-        var doctor = new Doctor { DoctorId = 1, FullName = "BS Nguyen Van A" };
-        var patient = new Patient { PatientId = 1, FullName = "Benh Nhan Test" };
-        var mr = new MedicalRecord { RecordId = 1, Patient = patient, Status = "Đang theo dõi" };
-        var serviceItem = new Service { ServiceId = 1, ServiceCode = "DV01", ServiceName = "Châm cứu", Unit = "Lần", Price = 100000, IsActive = true };
-        var herb = new Herb { HerbId = 1, CommonName = "Cam thảo", HerbCode = "CT01", Unit = "g" };
-
-        var es = new ExamSheet
-        {
-            ExamSheetId = 1,
-            Record = mr,
-            Doctor = doctor,
-            ExamDate = DateTime.Now,
-            Symptoms = "Mệt mỏi",
-            FinalDiagnosis = "Khí hư"
-        };
-        var usage = new UsageHistory
-        {
-            UsageId = 1,
-            ExamSheet = es,
-            Service = serviceItem,
-            ExecutionTime = DateTime.Now,
-            Quantity = 1,
-            PerformedByNavigation = doctor
-        };
-        var formula = new RemedyFormula
-        {
-            FormulaId = 1,
-            ExamSheet = es,
-            FormulaName = "Bài thuốc bổ khí",
-            DosageDays = 7,
-            TotalDoses = 7,
-            CreatedAt = DateTime.Now
-        };
-        var detail = new FormulaDetail
-        {
-            FormulaDetailId = 1,
-            Formula = formula,
-            Herb = herb,
-            DosagePerDose = 10,
-            RoleInFormula = "Quân"
-        };
-
-        context.Doctors.Add(doctor);
-        context.Patients.Add(patient);
-        context.MedicalRecords.Add(mr);
-        context.Services.Add(serviceItem);
-        context.Herbs.Add(herb);
-        context.ExamSheets.Add(es);
-        context.UsageHistories.Add(usage);
-        context.RemedyFormulas.Add(formula);
-        context.FormulaDetails.Add(detail);
-        await context.SaveChangesAsync();
-
-        var service = new PatientService(context);
-
-        // Act
-        var result = await service.GetExamSheetDetailAsync(1);
-
-        // Assert
-        Assert.NotNull(result);
-        Assert.Equal("KCB00001", result.KcbCode);
-        Assert.Single(result.Services);
-        Assert.Equal("Châm cứu", result.Services[0].ServiceName);
-        Assert.Single(result.Prescriptions);
-        Assert.Equal("Cam thảo", result.Prescriptions[0].Details[0].HerbName);
+        using var db = SchemaFixture.Create();
+        var record = SchemaFixture.Record();
+        var plan = SchemaFixture.Plan(record);
+        db.TreatmentPlans.Add(plan);
+        db.TreatmentSessions.AddRange(
+            new TreatmentSession { SessionId = 1, Plan = plan, SessionNumber = 1, Status = "COMPLETED" },
+            new TreatmentSession { SessionId = 2, Plan = plan, SessionNumber = 2, Status = "PLANNED" });
+        await db.SaveChangesAsync();
+        var service = new PatientService(db);
+        var summary = Assert.Single(await service.GetTreatmentProtocolsAsync(record.PatientId));
+        Assert.Equal(1, summary.CompletedSessions);
+        Assert.Equal(3, summary.TotalSessions);
+        var sessions = await service.GetTreatmentSessionsAsync(plan.PlanId);
+        Assert.Equal(2, sessions.Count);
+        Assert.Equal("PLANNED", sessions[1].Status);
+        Assert.Null(sessions[1].ExecutionTime);
     }
 }

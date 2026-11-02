@@ -1,7 +1,6 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Examinations;
-using COSGeniusSystem.DTOs.Treatments;
-using COSGeniusSystem.Services.Treatments;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 

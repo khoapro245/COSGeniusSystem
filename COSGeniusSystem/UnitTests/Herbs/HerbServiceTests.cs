@@ -1,11 +1,11 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.Herbs;
+namespace COSGeniusSystem.UnitTests;
 
 public class HerbServiceTests
 {
@@ -518,7 +518,7 @@ public class HerbServiceTests
     public async Task DeleteHerbAsync_WithoutReferences_RemovesHerb()
     {
         using var context = CreateInMemoryDbContext();
-        var herb = new Herb { HerbId = 2, HerbCode = "VT002", CommonName = "Hoàng k?", Unit = "g", StandardPrice = 8000m, IsActive = true };
+        var herb = new Herb { HerbId = 2, HerbCode = "VT002", CommonName = "Hoï¿½ng k?", Unit = "g", StandardPrice = 8000m, IsActive = true };
         context.Herbs.Add(herb);
         await context.SaveChangesAsync();
 
