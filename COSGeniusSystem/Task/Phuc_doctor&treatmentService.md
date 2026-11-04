@@ -211,14 +211,3 @@ COSGeniusSystem/
 * **Response:** `200 OK` kèm `PrescriptionDetailDto`.
 
 ---
-
-## IV. BẢNG TỔNG KẾT TIẾN ĐỘ VÀ KIỂM THỬ
-
-| Module / Phân hệ | Số lượng API | Tầng Controller | Tầng Service | Unit Test (xUnit) | Trạng thái |
-| :--- | :---: | :--- | :--- | :---: | :---: |
-| **Cụm 1: Danh mục Bác sĩ** | 2 | `DoctorsController` | `DoctorService` | 2/2 PASS | Hoàn thành |
-| **Cụm 2: Dịch vụ Trị liệu** | 3 | `TreatmentServicesController` | `TreatmentService` | 9/9 PASS | Hoàn thành |
-| **Cụm 3: Khám lâm sàng Bác sĩ** | 8 | `DoctorClinicalController` | `DoctorClinicalService` | 9/9 PASS | Hoàn thành |
-| **TỔNG CỘNG** | **13 APIs** | **3 Controllers** | **3 Services** | **20/20 PASS** | **100% Hoàn thành** |
-
-* Toàn bộ solution: Biên dịch thành công **0 lỗi**, **80/80 Unit Tests PASS 100%**.
