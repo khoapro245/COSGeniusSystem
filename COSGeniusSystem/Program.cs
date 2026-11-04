@@ -3,21 +3,8 @@ using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
-using COSGeniusSystem.Services.Auth;
-using COSGeniusSystem.Services.Doctors;
-using COSGeniusSystem.Services.Examinations;
+using COSGeniusSystem.Services;
 using COSGeniusSystem.Services.Formulas;
-using COSGeniusSystem.Services.Herbs;
-using COSGeniusSystem.Services.Impl;
-using COSGeniusSystem.Services.Interfaces;
-using COSGeniusSystem.Services.Invoices;
-using COSGeniusSystem.Services.Notifications;
-using COSGeniusSystem.Services.Patients;
-using COSGeniusSystem.Services.Reception;
-using COSGeniusSystem.Services.Suppliers;
-using COSGeniusSystem.Services.TreatmentServices;
-using COSGeniusSystem.Services.Treatments;
-using COSGeniusSystem.Services.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -54,7 +41,7 @@ builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>(
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
-builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Interfaces.IDoctorClinicalService, COSGeniusSystem.Services.Impl.DoctorClinicalService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {

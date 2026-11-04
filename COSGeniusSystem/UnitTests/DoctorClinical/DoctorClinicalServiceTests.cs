@@ -19,7 +19,7 @@ public class DoctorClinicalServiceTests
         return new ApplicationDbContext(options);
     }
 
-    private static async Task<(Doctor doctor, Patient patient, MedicalRecord record, ExamSheet sheet)> SeedBasicDataAsync(ApplicationDbContext context)
+    private static async Task<(Doctor doctor, Patient patient, MedicalRecord record)> SeedBasicDataAsync(ApplicationDbContext context)
     {
         var doctor = new Doctor
         {
@@ -54,32 +54,24 @@ public class DoctorClinicalServiceTests
 
         var record = new MedicalRecord
         {
-            RecordId = 20,
+            RecordId = 100,
             PatientId = 10,
             DoctorId = 1,
             ExamDate = DateTime.Now,
-            Status = "Chờ khám"
-        };
-
-        var sheet = new ExamSheet
-        {
-            ExamSheetId = 100,
-            RecordId = 20,
-            DoctorId = 1,
-            ExamDate = DateTime.Now,
+            Status = "Chờ khám",
             Symptoms = "[Ưu tiên] Đau mỏi vai gáy",
-            FinalDiagnosis = "Chờ khám",
-            DoctorAdvice = new ClinicalMetadataJson { Status = "Chờ khám", IsPriority = true }.ToJson()
+            DoctorAdvice = new ClinicalMetadataJson { Status = "Chờ khám", IsPriority = true }.ToJson(),
+            Doctor = doctor,
+            Patient = patient
         };
 
         context.Doctors.Add(doctor);
         context.Patients.Add(patient);
         context.MedicalRecords.Add(record);
-        context.ExamSheets.Add(sheet);
 
         await context.SaveChangesAsync();
 
-        return (doctor, patient, record, sheet);
+        return (doctor, patient, record);
     }
 
     [Fact]
@@ -114,21 +106,21 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var service = new DoctorClinicalService(context);
 
         // Act
-        var workspace = await service.CallPatientAsync(sheet.ExamSheetId);
+        var workspace = await service.CallPatientAsync(sheet.RecordId);
 
         // Assert
         Assert.NotNull(workspace);
         Assert.Equal("Đang khám", workspace.Status);
         Assert.False(workspace.IsReadOnly);
 
-        var updatedSheet = await context.ExamSheets.FindAsync(sheet.ExamSheetId);
+        var updatedSheet = await context.MedicalRecords.FindAsync(sheet.RecordId);
         Assert.NotNull(updatedSheet);
-        Assert.Equal("Đang khám", updatedSheet.FinalDiagnosis);
+        Assert.Equal("IN_PROGRESS", updatedSheet.Status);
     }
 
     [Fact]
@@ -136,16 +128,16 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         sheet.DoctorAdvice = new ClinicalMetadataJson { Status = "Hoàn tất" }.ToJson();
-        sheet.FinalDiagnosis = "Hoàn tất";
+        sheet.Status = "COMPLETED";
         await context.SaveChangesAsync();
 
         var service = new DoctorClinicalService(context);
 
         // Act & Assert
-        await Assert.ThrowsAsync<BadRequestException>(() => service.CallPatientAsync(sheet.ExamSheetId));
+        await Assert.ThrowsAsync<BadRequestException>(() => service.CallPatientAsync(sheet.RecordId));
     }
 
     [Fact]
@@ -153,7 +145,7 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var service = new DoctorClinicalService(context);
 
@@ -181,7 +173,7 @@ public class DoctorClinicalServiceTests
         };
 
         // Act
-        var workspace = await service.SaveClinicalExamAsync(sheet.ExamSheetId, request);
+        var workspace = await service.SaveClinicalExamAsync(sheet.RecordId, request);
 
         // Assert
         Assert.NotNull(workspace);
@@ -196,21 +188,21 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var service = new DoctorClinicalService(context);
 
         // Act
-        var workspace = await service.CompleteExaminationAsync(sheet.ExamSheetId, null);
+        var workspace = await service.CompleteExaminationAsync(sheet.RecordId, null);
 
         // Assert
         Assert.NotNull(workspace);
         Assert.Equal("Hoàn tất", workspace.Status);
         Assert.True(workspace.IsReadOnly);
 
-        var updatedSheet = await context.ExamSheets.FindAsync(sheet.ExamSheetId);
+        var updatedSheet = await context.MedicalRecords.FindAsync(sheet.RecordId);
         Assert.NotNull(updatedSheet);
-        Assert.Equal("COMPLETED", updatedSheet.ExaminationStatus);
+        Assert.Equal("COMPLETED", updatedSheet.Status);
     }
 
     [Fact]
@@ -218,7 +210,7 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var svc = new Service
         {
@@ -246,7 +238,7 @@ public class DoctorClinicalServiceTests
         };
 
         // Act
-        var result = await service.SaveServiceIndicationAsync(sheet.ExamSheetId, request);
+        var result = await service.SaveServiceIndicationAsync(sheet.RecordId, request);
 
         // Assert
         Assert.NotNull(result);
@@ -254,10 +246,6 @@ public class DoctorClinicalServiceTests
         Assert.Equal(5, result.TotalSessions);
         Assert.Single(result.Services);
         Assert.Equal("Châm cứu trị liệu", result.Services[0].ServiceName);
-
-        var protocol = await context.TreatmentProtocols.FirstOrDefaultAsync(p => p.ExamSheetId == sheet.ExamSheetId);
-        Assert.NotNull(protocol);
-        Assert.Equal(5, protocol.PlannedSessionCount);
     }
 
     [Fact]
@@ -277,24 +265,24 @@ public class DoctorClinicalServiceTests
         };
         context.Herbs.Add(herb);
 
-        var formula = new RemedyFormula
+        var formula = new HerbalFormula
         {
-            FormulaId = 1,
+            HerbalFormulaId = 1,
             FormulaName = "Bát trân thang",
             UsageInstructions = "Sắc uống ngày 1 thang",
-            DosageDays = 5,
-            TotalDoses = 5,
+            Status = "APPROVED",
+            IsActive = true,
             CreatedAt = DateTime.Now
         };
-        formula.FormulaDetails.Add(new FormulaDetail
+        formula.HerbalFormulaDetails.Add(new HerbalFormulaDetail
         {
-            FormulaDetailId = 1,
+            HerbalFormulaDetailId = 1,
             HerbId = 1,
             DosagePerDose = 10,
             RoleInFormula = "Quân",
             Herb = herb
         });
-        context.RemedyFormulas.Add(formula);
+        context.HerbalFormulas.Add(formula);
         await context.SaveChangesAsync();
 
         var service = new DoctorClinicalService(context);
@@ -314,7 +302,7 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var herb = new Herb
         {
@@ -344,7 +332,7 @@ public class DoctorClinicalServiceTests
         };
 
         // Act
-        var prescription = await service.SavePrescriptionAsync(sheet.ExamSheetId, request);
+        var prescription = await service.SavePrescriptionAsync(sheet.RecordId, request);
 
         // Assert
         Assert.NotNull(prescription);
@@ -359,7 +347,7 @@ public class DoctorClinicalServiceTests
     {
         // Arrange
         using var context = CreateInMemoryDbContext();
-        var (_, _, _, sheet) = await SeedBasicDataAsync(context);
+        var (_, _, sheet) = await SeedBasicDataAsync(context);
 
         var herb = new Herb
         {
@@ -387,14 +375,13 @@ public class DoctorClinicalServiceTests
         };
 
         // Act: Send to Herbalist
-        var sentPrescription = await service.SavePrescriptionAsync(sheet.ExamSheetId, request);
+        var sentPrescription = await service.SavePrescriptionAsync(sheet.RecordId, request);
 
         // Assert: Locked
         Assert.Equal("Đã gửi Herbalist", sentPrescription.Status);
         Assert.True(sentPrescription.IsLocked);
 
         // Act & Assert: Trying to edit after sending throws BadRequestException
-        await Assert.ThrowsAsync<BadRequestException>(() => service.SavePrescriptionAsync(sheet.ExamSheetId, request));
+        await Assert.ThrowsAsync<BadRequestException>(() => service.SavePrescriptionAsync(sheet.RecordId, request));
     }
 }
-

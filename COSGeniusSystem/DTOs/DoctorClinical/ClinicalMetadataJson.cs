@@ -12,13 +12,12 @@ public class ClinicalMetadataJson
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull
     };
 
+    public string? QueueNumber { get; set; }
+    public bool IsPriority { get; set; }
     public string Status { get; set; } = "Chờ khám"; // "Chờ khám", "Đang khám", "Hoàn tất"
     public DateTime? ExamStartTime { get; set; }
-    public DateTime? CompletedAt { get; set; }
-    public bool IsPriority { get; set; }
-    public string? QueueNumber { get; set; }
 
-    // Sinh hiệu (Vital Signs)
+    // Sinh hiệu
     public int? PulseRate { get; set; }
     public decimal? Temperature { get; set; }
     public int? RespiratoryRate { get; set; }
@@ -26,13 +25,7 @@ public class ClinicalMetadataJson
     public decimal? Weight { get; set; }
     public decimal? SpO2 { get; set; }
 
-    // Triệu chứng & Chẩn đoán
-    public string? Symptoms { get; set; }
-    public string? PreliminaryDiagnosis { get; set; }
-    public string? IcdCode { get; set; }
-    public string? IcdName { get; set; }
-
-    // Y học cổ truyền (Tứ chẩn)
+    // Tứ chẩn YHCT
     public string? VongChan { get; set; }
     public string? VanChan_NgheNgui { get; set; }
     public string? VanChan_Hoi { get; set; }
@@ -40,6 +33,12 @@ public class ClinicalMetadataJson
     public string? FourExamsSummary { get; set; }
     public string? BienChung { get; set; }
     public string? TraditionalDiagnosis { get; set; }
+
+    // Chẩn đoán YHHD
+    public string? Symptoms { get; set; }
+    public string? PreliminaryDiagnosis { get; set; }
+    public string? IcdCode { get; set; }
+    public string? IcdName { get; set; }
 
     // Kê dịch vụ
     public string? TreatmentType { get; set; }
@@ -55,14 +54,14 @@ public class ClinicalMetadataJson
     public int? TotalDoses { get; set; }
     public string? PrescriptionCode { get; set; }
 
-    public static ClinicalMetadataJson FromExamSheet(ExamSheet es)
+    public static ClinicalMetadataJson FromMedicalRecord(MedicalRecord mr)
     {
         ClinicalMetadataJson? meta = null;
-        if (!string.IsNullOrWhiteSpace(es.DoctorAdvice) && es.DoctorAdvice.TrimStart().StartsWith("{"))
+        if (!string.IsNullOrWhiteSpace(mr.DoctorAdvice) && mr.DoctorAdvice.TrimStart().StartsWith("{"))
         {
             try
             {
-                meta = JsonSerializer.Deserialize<ClinicalMetadataJson>(es.DoctorAdvice, JsonOptions);
+                meta = JsonSerializer.Deserialize<ClinicalMetadataJson>(mr.DoctorAdvice, JsonOptions);
             }
             catch
             {
@@ -73,31 +72,33 @@ public class ClinicalMetadataJson
         meta ??= new ClinicalMetadataJson();
 
         // Đồng bộ dữ liệu từ các cột bảng nếu metadata chưa có
-        if (string.IsNullOrWhiteSpace(meta.Symptoms) && !string.IsNullOrWhiteSpace(es.Symptoms))
-            meta.Symptoms = es.Symptoms;
-        if (string.IsNullOrWhiteSpace(meta.VongChan) && !string.IsNullOrWhiteSpace(es.TongueDiagnosis))
-            meta.VongChan = es.TongueDiagnosis;
-        if (string.IsNullOrWhiteSpace(meta.ThietChan) && !string.IsNullOrWhiteSpace(es.PulseDiagnosis))
-            meta.ThietChan = es.PulseDiagnosis;
-        if (string.IsNullOrWhiteSpace(meta.TraditionalDiagnosis) && !string.IsNullOrWhiteSpace(es.FinalDiagnosis))
-            meta.TraditionalDiagnosis = es.FinalDiagnosis;
+        if (string.IsNullOrWhiteSpace(meta.Symptoms) && !string.IsNullOrWhiteSpace(mr.Symptoms))
+            meta.Symptoms = mr.Symptoms;
+        if (string.IsNullOrWhiteSpace(meta.VongChan) && !string.IsNullOrWhiteSpace(mr.Inspection))
+            meta.VongChan = mr.Inspection;
+        if (string.IsNullOrWhiteSpace(meta.ThietChan) && !string.IsNullOrWhiteSpace(mr.Palpation))
+            meta.ThietChan = mr.Palpation;
+        if (string.IsNullOrWhiteSpace(meta.TraditionalDiagnosis) && !string.IsNullOrWhiteSpace(mr.TraditionalDiagnosis))
+            meta.TraditionalDiagnosis = mr.TraditionalDiagnosis;
 
-        if (!meta.IsPriority && es.Symptoms != null && es.Symptoms.Contains("[Ưu tiên]"))
+        if (!meta.IsPriority && mr.Symptoms != null && mr.Symptoms.Contains("[Ưu tiên]"))
             meta.IsPriority = true;
 
         if (string.IsNullOrWhiteSpace(meta.Status) || meta.Status == "Chờ khám")
         {
-            if (es.FinalDiagnosis == "Hoàn tất" || es.FinalDiagnosis == "Đã hoàn tất" || es.ExaminationStatus == "COMPLETED")
+            if (mr.Status == "Hoàn tất" || mr.Status == "Đã hoàn tất" || mr.Status == "COMPLETED")
                 meta.Status = "Hoàn tất";
-            else if (es.FinalDiagnosis == "Đang khám" || es.ExaminationStatus == "IN_PROGRESS")
+            else if (mr.Status == "Đang khám" || mr.Status == "IN_PROGRESS")
                 meta.Status = "Đang khám";
-            else if (!string.IsNullOrWhiteSpace(es.FinalDiagnosis) && es.FinalDiagnosis != "Chờ khám")
+            else if (!string.IsNullOrWhiteSpace(mr.Status) && mr.Status != "Chờ khám" && mr.Status != "WAITING")
                 meta.Status = "Hoàn tất";
         }
 
         return meta;
     }
 
-    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
+    public string ToJson()
+    {
+        return JsonSerializer.Serialize(this, JsonOptions);
+    }
 }
-

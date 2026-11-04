@@ -15,9 +15,9 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         var fromDate = filter.FromDate?.Date ?? DateTime.Today;
         var toDate = (filter.ToDate?.Date ?? DateTime.Today).AddDays(1).AddTicks(-1);
 
-        var dbQuery = db.ExamSheets.AsNoTracking()
+        var dbQuery = db.MedicalRecords.AsNoTracking()
             .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient)
+            .Include(e => e.Patient)
             .Where(e => e.ExamDate >= fromDate && e.ExamDate <= toDate);
 
         if (filter.DoctorId.HasValue && filter.DoctorId.Value > 0)
@@ -28,25 +28,25 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         if (!string.IsNullOrWhiteSpace(filter.PatientName))
         {
             var kw = filter.PatientName.Trim();
-            dbQuery = dbQuery.Where(e => e.Record.Patient.FullName.Contains(kw));
+            dbQuery = dbQuery.Where(e => e.Patient.FullName.Contains(kw));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.PatientCode))
         {
             var kw = filter.PatientCode.Trim();
-            dbQuery = dbQuery.Where(e => e.Record.Patient.PatientCode != null && e.Record.Patient.PatientCode.Contains(kw));
+            dbQuery = dbQuery.Where(e => e.Patient.PatientCode != null && e.Patient.PatientCode.Contains(kw));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Phone))
         {
             var kw = filter.Phone.Trim();
-            dbQuery = dbQuery.Where(e => e.Record.Patient.Phone != null && e.Record.Patient.Phone.Contains(kw));
+            dbQuery = dbQuery.Where(e => e.Patient.Phone != null && e.Patient.Phone.Contains(kw));
         }
 
         if (!string.IsNullOrWhiteSpace(filter.Gender))
         {
             var g = filter.Gender.Trim();
-            dbQuery = dbQuery.Where(e => e.Record.Patient.Gender == g);
+            dbQuery = dbQuery.Where(e => e.Patient.Gender == g);
         }
 
         if (!string.IsNullOrWhiteSpace(filter.VisitCode))
@@ -54,18 +54,18 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             var vc = filter.VisitCode.Trim();
             if (vc.StartsWith("KCB", StringComparison.OrdinalIgnoreCase) && int.TryParse(vc[3..], out var parsedId))
             {
-                dbQuery = dbQuery.Where(e => e.ExamSheetId == parsedId);
+                dbQuery = dbQuery.Where(e => e.RecordId == parsedId);
             }
         }
 
-        var examSheets = await dbQuery.ToListAsync(ct);
+        var records = await dbQuery.ToListAsync(ct);
 
         // Parse metadata và map
-        var itemsWithMeta = examSheets.Select((es, idx) =>
+        var itemsWithMeta = records.Select((es, idx) =>
         {
-            var meta = ClinicalMetadataJson.FromExamSheet(es);
-            var age = es.Record.Patient.DateOfBirth.HasValue
-                ? DateTime.Today.Year - es.Record.Patient.DateOfBirth.Value.Year
+            var meta = ClinicalMetadataJson.FromMedicalRecord(es);
+            var age = es.Patient.DateOfBirth.HasValue
+                ? DateTime.Today.Year - es.Patient.DateOfBirth.Value.Year
                 : 0;
 
             var action = meta.Status switch
@@ -77,21 +77,21 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
             return new
             {
-                ExamSheet = es,
+                Record = es,
                 Meta = meta,
                 Item = new DoctorExamQueueItemDto
                 {
-                    ExamSheetId = es.ExamSheetId,
+                    ExamSheetId = es.RecordId,
                     QueueNumber = meta.QueueNumber ?? $"{idx + 1:D3}",
                     IsPriority = meta.IsPriority,
-                    PatientId = es.Record.PatientId,
-                    PatientCode = es.Record.Patient.PatientCode ?? $"BN{es.Record.PatientId:D5}",
-                    PatientName = es.Record.Patient.FullName,
+                    PatientId = es.PatientId,
+                    PatientCode = es.Patient.PatientCode ?? $"BN{es.PatientId:D5}",
+                    PatientName = es.Patient.FullName,
                     RegisteredAt = es.ExamDate,
-                    VisitCode = $"KCB{es.ExamSheetId:D5}",
+                    VisitCode = $"KCB{es.RecordId:D5}",
                     Age = age,
-                    Gender = es.Record.Patient.Gender ?? "Khác",
-                    Phone = es.Record.Patient.Phone ?? "",
+                    Gender = es.Patient.Gender ?? "Khác",
+                    Phone = es.Patient.Phone ?? "",
                     Status = meta.Status,
                     AllowedAction = action
                 }
@@ -115,7 +115,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         // Sắp xếp: Ưu tiên lên đầu, sau đó theo thời gian đăng ký
         var sortedItems = filteredItems
             .OrderByDescending(x => x.Meta.IsPriority)
-            .ThenBy(x => x.ExamSheet.ExamDate)
+            .ThenBy(x => x.Record.ExamDate)
             .Select(x => x.Item)
             .ToList();
 
@@ -146,65 +146,60 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
     public async Task<MedicalRecordWorkspaceDto> CallPatientAsync(int examSheetId, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
+        var es = await db.MedicalRecords
             .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient).ThenInclude(p => p.PatientContacts)
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+            .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám đã hoàn tất, không thể gọi vào khám.");
+            throw new BadRequestException("Lượt khám này đã hoàn tất, không thể gọi vào khám lại.");
         }
 
-        // Cập nhật trạng thái sang Đang khám và ghi nhận thời gian bắt đầu khám thực tế
-        meta.Status = "Đang khám";
-        meta.ExamStartTime ??= DateTime.Now;
-
-        es.DoctorAdvice = meta.ToJson();
-        es.FinalDiagnosis = "Đang khám";
-        es.ExaminationStatus = "IN_PROGRESS";
-        es.StartedAt ??= DateTime.Now;
-        es.Record.Status = "Đang khám";
-
-        await db.SaveChangesAsync(ct);
+        if (meta.Status != "Đang khám")
+        {
+            meta.Status = "Đang khám";
+            meta.ExamStartTime ??= DateTime.Now;
+            es.Status = "IN_PROGRESS";
+            es.DoctorAdvice = meta.ToJson();
+            await db.SaveChangesAsync(ct);
+        }
 
         return await BuildWorkspaceDtoAsync(es, meta, ct);
     }
 
     public async Task<MedicalRecordWorkspaceDto> GetMedicalRecordWorkspaceAsync(int examSheetId, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
+        var es = await db.MedicalRecords
             .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient).ThenInclude(p => p.PatientContacts)
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+            .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
+
         return await BuildWorkspaceDtoAsync(es, meta, ct);
     }
 
     public async Task<MedicalRecordWorkspaceDto> SaveClinicalExamAsync(int examSheetId, SaveClinicalExamRequestDto request, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
+        var es = await db.MedicalRecords
             .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient).ThenInclude(p => p.PatientContacts)
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+            .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Hồ sơ đã hoàn tất chỉ được xem, không thể chỉnh sửa.");
+            throw new BadRequestException("Lượt khám đã hoàn tất và bị khóa, không thể chỉnh sửa thông tin lâm sàng.");
         }
 
-        // Cập nhật sang Đang khám nếu đang là Chờ khám
-        meta.Status = "Đang khám";
-        meta.ExamStartTime = request.ExamStartTime ?? meta.ExamStartTime ?? DateTime.Now;
-
+        // Cập nhật sinh hiệu vào metadata và bảng
         if (request.VitalSigns != null)
         {
             meta.PulseRate = request.VitalSigns.PulseRate;
@@ -214,29 +209,28 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             meta.Weight = request.VitalSigns.Weight;
             meta.SpO2 = request.VitalSigns.SpO2;
 
-            es.PulseRate = (short?)meta.PulseRate;
-            es.Temperature = meta.Temperature;
-            es.RespiratoryRate = (short?)meta.RespiratoryRate;
-            es.HeightCm = meta.Height;
-            es.WeightKg = meta.Weight;
-            es.SpO2 = meta.SpO2;
+            es.PulseRate = (short?)request.VitalSigns.PulseRate;
+            es.Temperature = request.VitalSigns.Temperature;
+            es.RespiratoryRate = (short?)request.VitalSigns.RespiratoryRate;
+            es.HeightCm = request.VitalSigns.Height;
+            es.WeightKg = request.VitalSigns.Weight;
+            es.SpO2 = request.VitalSigns.SpO2;
         }
 
+        // Cập nhật triệu chứng & chẩn đoán
         if (request.Symptoms != null)
         {
             meta.Symptoms = request.Symptoms;
-            var sym = meta.Symptoms;
-            if (meta.IsPriority && !sym.Contains("[Ưu tiên]"))
-                sym = "[Ưu tiên] " + sym;
-            es.Symptoms = sym;
+            es.Symptoms = request.Symptoms;
         }
 
         if (request.PreliminaryDiagnosis != null)
         {
             meta.PreliminaryDiagnosis = request.PreliminaryDiagnosis;
-            es.PreliminaryDiagnosis = meta.PreliminaryDiagnosis;
+            es.PreliminaryDiagnosis = request.PreliminaryDiagnosis;
         }
 
+        // Cập nhật Tứ chẩn YHCT
         if (request.TraditionalMedicine != null)
         {
             meta.VongChan = request.TraditionalMedicine.VongChan;
@@ -247,17 +241,16 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             meta.BienChung = request.TraditionalMedicine.BienChung;
             meta.TraditionalDiagnosis = request.TraditionalMedicine.TraditionalDiagnosis;
 
-            es.TongueDiagnosis = meta.VongChan;
-            es.PulseDiagnosis = meta.ThietChan;
-            es.Inspection = meta.VongChan;
-            es.ListeningSmelling = meta.VanChan_NgheNgui;
-            es.Inquiry = meta.VanChan_Hoi;
-            es.Palpation = meta.ThietChan;
-            es.FourExaminationSummary = meta.FourExamsSummary;
-            es.SyndromeDifferentiation = meta.BienChung;
-            es.TraditionalDiagnosis = meta.TraditionalDiagnosis;
+            es.Inspection = request.TraditionalMedicine.VongChan;
+            es.ListeningSmelling = request.TraditionalMedicine.VanChan_NgheNgui;
+            es.Inquiry = request.TraditionalMedicine.VanChan_Hoi;
+            es.Palpation = request.TraditionalMedicine.ThietChan;
+            es.FourExaminationSummary = request.TraditionalMedicine.FourExamsSummary;
+            es.SyndromeDifferentiation = request.TraditionalMedicine.BienChung;
+            es.TraditionalDiagnosis = request.TraditionalMedicine.TraditionalDiagnosis;
         }
 
+        // Cập nhật mã ICD
         if (request.IcdCode != null)
         {
             meta.IcdCode = request.IcdCode;
@@ -270,11 +263,19 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             es.Icddescription = request.IcdName;
         }
 
-        es.DoctorAdvice = meta.ToJson();
-        es.FinalDiagnosis = meta.TraditionalDiagnosis ?? "Đang khám";
-        es.ExaminationStatus = "IN_PROGRESS";
-        es.StartedAt ??= meta.ExamStartTime;
+        if (request.ExamStartTime.HasValue)
+        {
+            meta.ExamStartTime = request.ExamStartTime.Value;
+        }
 
+        if (meta.Status == "Chờ khám")
+        {
+            meta.Status = "Đang khám";
+            es.Status = "IN_PROGRESS";
+        }
+
+        es.DoctorAdvice = meta.ToJson();
+        es.UpdatedAt = DateTime.Now;
         await db.SaveChangesAsync(ct);
 
         return await BuildWorkspaceDtoAsync(es, meta, ct);
@@ -282,20 +283,20 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
     public async Task<MedicalRecordWorkspaceDto> CompleteExaminationAsync(int examSheetId, SaveClinicalExamRequestDto? request, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
+        var es = await db.MedicalRecords
             .Include(e => e.Doctor)
-            .Include(e => e.Record).ThenInclude(r => r.Patient).ThenInclude(p => p.PatientContacts)
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+            .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám đã hoàn tất trước đó.");
+            return await BuildWorkspaceDtoAsync(es, meta, ct);
         }
 
-        // Nếu có truyền request cập nhật kèm theo lúc bấm hoàn tất
+        // Lưu thông tin lâm sàng cuối cùng nếu có gửi kèm
         if (request != null)
         {
             if (request.VitalSigns != null)
@@ -327,13 +328,10 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         }
 
         meta.Status = "Hoàn tất";
-        meta.CompletedAt = DateTime.Now;
-
-        es.DoctorAdvice = meta.ToJson();
-        es.FinalDiagnosis = !string.IsNullOrWhiteSpace(meta.TraditionalDiagnosis) ? meta.TraditionalDiagnosis : "Hoàn tất";
-        es.ExaminationStatus = "COMPLETED";
+        es.Status = "COMPLETED";
         es.CompletedAt = DateTime.Now;
-        es.Record.Status = "Hoàn tất";
+        es.UpdatedAt = DateTime.Now;
+        es.DoctorAdvice = meta.ToJson();
 
         await db.SaveChangesAsync(ct);
 
@@ -342,12 +340,11 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
     public async Task<ServiceIndicationDto> SaveServiceIndicationAsync(int examSheetId, SaveServiceIndicationRequestDto request, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
-            .Include(e => e.Record)
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+        var es = await db.MedicalRecords
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
@@ -358,58 +355,6 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         meta.TotalSessions = request.TotalSessions > 0 ? request.TotalSessions : 1;
         meta.IndicationNote = request.IndicationNote;
         meta.AdditionalContent = request.AdditionalContent;
-
-        // Xử lý tạo/cập nhật phác đồ nếu theo liệu trình
-        if (request.TreatmentType == "Theo liệu trình")
-        {
-            var protocol = await db.TreatmentProtocols
-                .FirstOrDefaultAsync(p => p.ExamSheetId == examSheetId, ct);
-
-            if (protocol == null)
-            {
-                protocol = new TreatmentProtocol
-                {
-                    RecordId = es.RecordId,
-                    DoctorId = es.DoctorId,
-                    ExamSheetId = examSheetId,
-                    ProtocolName = $"Liệu trình điều trị KCB{examSheetId:D5}",
-                    TreatmentType = "Theo liệu trình",
-                    PlannedSessionCount = request.TotalSessions,
-                    Description = request.IndicationNote,
-                    StartDate = DateOnly.FromDateTime(DateTime.Today),
-                    PlanStatus = "ACTIVE",
-                    CreatedAt = DateTime.Now
-                };
-                db.TreatmentProtocols.Add(protocol);
-            }
-            else
-            {
-                protocol.PlannedSessionCount = request.TotalSessions;
-                protocol.Description = request.IndicationNote;
-                protocol.UpdatedAt = DateTime.Now;
-            }
-        }
-
-        // Cập nhật các chỉ định dịch vụ trong UsageHistory
-        var existingUsage = await db.UsageHistories
-            .Where(u => u.ExamSheetId == examSheetId)
-            .ToListAsync(ct);
-
-        db.UsageHistories.RemoveRange(existingUsage);
-
-        foreach (var item in request.Services)
-        {
-            var uh = new UsageHistory
-            {
-                ExamSheetId = examSheetId,
-                ServiceId = item.ServiceId,
-                PerformedBy = es.DoctorId,
-                Quantity = 1,
-                ExecutionTime = DateTime.Now,
-                ResultNote = item.Note ?? request.IndicationNote ?? "Chỉ định dịch vụ"
-            };
-            db.UsageHistories.Add(uh);
-        }
 
         es.DoctorAdvice = meta.ToJson();
         await db.SaveChangesAsync(ct);
@@ -428,7 +373,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
                 ServiceId = s.ServiceId,
                 ServiceCode = svc?.ServiceCode ?? "",
                 ServiceName = svc?.ServiceName ?? "",
-                TreatmentType = request.TreatmentType,
+                TreatmentType = request.TreatmentType ?? "Theo liệu trình",
                 Note = s.Note ?? request.IndicationNote ?? "",
                 Price = svc?.Price ?? 0,
                 Unit = svc?.Unit ?? "Lần"
@@ -437,7 +382,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         return new ServiceIndicationDto
         {
-            TreatmentType = request.TreatmentType,
+            TreatmentType = request.TreatmentType ?? "Theo liệu trình",
             TotalSessions = request.TotalSessions,
             IndicationNote = request.IndicationNote ?? "",
             AdditionalContent = request.AdditionalContent ?? "",
@@ -447,22 +392,22 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
     public async Task<PrescriptionCatalogDto> GetPrescriptionCatalogAsync(CancellationToken ct = default)
     {
-        // 1. Lấy danh sách bài thuốc mẫu (RemedyFormula có sẵn trong hệ thống)
-        var templateFormulas = await db.RemedyFormulas.AsNoTracking()
-            .Include(f => f.FormulaDetails).ThenInclude(fd => fd.Herb)
-            .Where(f => f.ExamSheetId == null || f.FormulaDetails.Any())
-            .OrderBy(f => f.FormulaId)
+        // 1. Lấy danh sách bài thuốc mẫu (HerbalFormula)
+        var templateFormulas = await db.HerbalFormulas.AsNoTracking()
+            .Include(f => f.HerbalFormulaDetails).ThenInclude(fd => fd.Herb)
+            .Where(f => f.IsActive)
+            .OrderBy(f => f.HerbalFormulaId)
             .Take(50)
             .ToListAsync(ct);
 
         var formulaTemplates = templateFormulas.Select(f => new FormulaTemplateDto
         {
-            FormulaId = f.FormulaId,
+            FormulaId = f.HerbalFormulaId,
             FormulaName = f.FormulaName,
             UsageInstructions = f.UsageInstructions,
-            DosageDays = f.DosageDays,
-            TotalDoses = f.TotalDoses,
-            Ingredients = f.FormulaDetails.Select(fd => new FormulaTemplateIngredientDto
+            DosageDays = 5,
+            TotalDoses = 5,
+            Ingredients = f.HerbalFormulaDetails.Select(fd => new FormulaTemplateIngredientDto
             {
                 HerbId = fd.HerbId,
                 HerbCode = fd.Herb?.HerbCode ?? "",
@@ -497,11 +442,11 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
     public async Task<PrescriptionDetailDto> SavePrescriptionAsync(int examSheetId, SavePrescriptionRequestDto request, CancellationToken ct = default)
     {
-        var es = await db.ExamSheets
-            .FirstOrDefaultAsync(e => e.ExamSheetId == examSheetId, ct)
-            ?? throw new NotFoundException($"Exam sheet with id {examSheetId} was not found.");
+        var es = await db.MedicalRecords
+            .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
+            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
-        var meta = ClinicalMetadataJson.FromExamSheet(es);
+        var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
@@ -515,54 +460,13 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         var isSend = request.ActionType.Equals("SEND_HERBALIST", StringComparison.OrdinalIgnoreCase);
 
-        // Tìm hoặc tạo RemedyFormula gắn với ExamSheetId
-        var formula = await db.RemedyFormulas
-            .Include(f => f.FormulaDetails)
-            .FirstOrDefaultAsync(f => f.ExamSheetId == examSheetId, ct);
-
-        if (formula == null)
-        {
-            formula = new RemedyFormula
-            {
-                ExamSheetId = examSheetId,
-                FormulaName = $"Đơn thuốc KCB{examSheetId:D5}",
-                UsageInstructions = request.PrescriptionNote,
-                DosageDays = 5,
-                TotalDoses = request.TotalDoses > 0 ? request.TotalDoses : 1,
-                CreatedAt = DateTime.Now
-            };
-            db.RemedyFormulas.Add(formula);
-            await db.SaveChangesAsync(ct);
-        }
-        else
-        {
-            formula.UsageInstructions = request.PrescriptionNote;
-            formula.TotalDoses = request.TotalDoses > 0 ? request.TotalDoses : 1;
-            db.FormulaDetails.RemoveRange(formula.FormulaDetails);
-            await db.SaveChangesAsync(ct);
-        }
-
-        // Thêm các vị thuốc mới
-        foreach (var ing in request.Ingredients)
-        {
-            var detail = new FormulaDetail
-            {
-                FormulaId = formula.FormulaId,
-                HerbId = ing.HerbId,
-                DosagePerDose = ing.GramsPerDose,
-                Note = ing.Note,
-                RoleInFormula = "Vị thuốc"
-            };
-            db.FormulaDetails.Add(detail);
-        }
-
         // Cập nhật metadata đơn thuốc
         meta.PrescriptionStatus = isSend ? "Đã gửi Herbalist" : "Nháp";
         meta.PrescriptionMethod = request.PrescriptionMethod ?? "Tự kê đơn";
         meta.TemplateFormulaId = request.TemplateFormulaId;
-        meta.TotalDoses = formula.TotalDoses;
+        meta.TotalDoses = request.TotalDoses > 0 ? request.TotalDoses : 1;
         meta.PrescriptionNote = request.PrescriptionNote;
-        meta.PrescriptionCode = $"DT{formula.FormulaId:D5}";
+        meta.PrescriptionCode = $"DT{examSheetId:D5}";
 
         es.DoctorAdvice = meta.ToJson();
         await db.SaveChangesAsync(ct);
@@ -576,8 +480,8 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         string? templateName = null;
         if (request.TemplateFormulaId.HasValue)
         {
-            templateName = await db.RemedyFormulas.AsNoTracking()
-                .Where(f => f.FormulaId == request.TemplateFormulaId.Value)
+            templateName = await db.HerbalFormulas.AsNoTracking()
+                .Where(f => f.HerbalFormulaId == request.TemplateFormulaId.Value)
                 .Select(f => f.FormulaName)
                 .FirstOrDefaultAsync(ct);
         }
@@ -586,14 +490,15 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         {
             herbsDict.TryGetValue(ing.HerbId, out var h);
             var grams = ing.GramsPerDose;
-            var totalGrams = grams * formula.TotalDoses;
+            var totalDoses = meta.TotalDoses ?? 1;
+            var totalGrams = grams * totalDoses;
             return new PrescriptionIngredientDto
             {
                 HerbId = ing.HerbId,
                 HerbCode = h?.HerbCode ?? "",
                 HerbName = h?.CommonName ?? "",
                 GramsPerDose = grams,
-                TotalDoses = formula.TotalDoses,
+                TotalDoses = totalDoses,
                 TotalGrams = totalGrams,
                 Note = ing.Note
             };
@@ -601,12 +506,12 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         return new PrescriptionDetailDto
         {
-            FormulaId = formula.FormulaId,
+            FormulaId = request.TemplateFormulaId,
             PrescriptionCode = meta.PrescriptionCode,
             PrescriptionMethod = meta.PrescriptionMethod,
             TemplateFormulaId = meta.TemplateFormulaId,
             TemplateFormulaName = templateName,
-            TotalDoses = formula.TotalDoses,
+            TotalDoses = meta.TotalDoses ?? 1,
             PrescriptionNote = meta.PrescriptionNote ?? "",
             Status = meta.PrescriptionStatus,
             IsLocked = isSend,
@@ -614,9 +519,9 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         };
     }
 
-    private async Task<MedicalRecordWorkspaceDto> BuildWorkspaceDtoAsync(ExamSheet es, ClinicalMetadataJson meta, CancellationToken ct)
+    private async Task<MedicalRecordWorkspaceDto> BuildWorkspaceDtoAsync(MedicalRecord es, ClinicalMetadataJson meta, CancellationToken ct)
     {
-        var patient = es.Record.Patient;
+        var patient = es.Patient;
         var age = patient.DateOfBirth.HasValue
             ? DateTime.Today.Year - patient.DateOfBirth.Value.Year
             : 0;
@@ -640,7 +545,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         var clinicalExam = new ClinicalExamDataDto
         {
-            ExamStartTime = meta.ExamStartTime ?? es.StartedAt ?? es.ExamDate,
+            ExamStartTime = meta.ExamStartTime ?? es.ExamDate,
             DoctorId = es.DoctorId,
             DoctorName = es.Doctor?.FullName ?? "",
             VitalSigns = new VitalSignsDto
@@ -656,10 +561,10 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             PreliminaryDiagnosis = meta.PreliminaryDiagnosis ?? es.PreliminaryDiagnosis ?? "",
             TraditionalMedicine = new TraditionalFourExamsDto
             {
-                VongChan = meta.VongChan ?? es.TongueDiagnosis ?? es.Inspection ?? "",
+                VongChan = meta.VongChan ?? es.Inspection ?? "",
                 VanChan_NgheNgui = meta.VanChan_NgheNgui ?? es.ListeningSmelling ?? "",
                 VanChan_Hoi = meta.VanChan_Hoi ?? es.Inquiry ?? "",
-                ThietChan = meta.ThietChan ?? es.PulseDiagnosis ?? es.Palpation ?? "",
+                ThietChan = meta.ThietChan ?? es.Palpation ?? "",
                 FourExamsSummary = meta.FourExamsSummary ?? es.FourExaminationSummary ?? "",
                 BienChung = meta.BienChung ?? es.SyndromeDifferentiation ?? "",
                 TraditionalDiagnosis = meta.TraditionalDiagnosis ?? es.TraditionalDiagnosis ?? ""
@@ -668,106 +573,73 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             IcdName = meta.IcdName ?? es.Icddescription ?? ""
         };
 
-        // Kê dịch vụ
-        var usageList = await db.UsageHistories.AsNoTracking()
-            .Include(u => u.Service)
-            .Where(u => u.ExamSheetId == es.ExamSheetId)
-            .ToListAsync(ct);
-
         var serviceIndication = new ServiceIndicationDto
         {
             TreatmentType = meta.TreatmentType ?? "Theo liệu trình",
             TotalSessions = meta.TotalSessions > 0 ? meta.TotalSessions : 1,
             IndicationNote = meta.IndicationNote ?? "",
             AdditionalContent = meta.AdditionalContent ?? "",
-            Services = usageList.Select(u => new IndicatedServiceItemDto
-            {
-                ServiceId = u.ServiceId ?? 0,
-                ServiceCode = u.Service?.ServiceCode ?? "",
-                ServiceName = u.Service?.ServiceName ?? "",
-                TreatmentType = meta.TreatmentType ?? "Theo liệu trình",
-                Note = u.ResultNote ?? "",
-                Price = u.Service?.Price ?? 0,
-                Unit = u.Service?.Unit ?? "Lần"
-            }).ToList()
+            Services = new List<IndicatedServiceItemDto>()
         };
-
-        // Kê đơn thuốc
-        var formula = await db.RemedyFormulas.AsNoTracking()
-            .Include(f => f.FormulaDetails).ThenInclude(fd => fd.Herb)
-            .FirstOrDefaultAsync(f => f.ExamSheetId == es.ExamSheetId, ct);
 
         string? templateFormulaName = null;
         if (meta.TemplateFormulaId.HasValue)
         {
-            templateFormulaName = await db.RemedyFormulas.AsNoTracking()
-                .Where(f => f.FormulaId == meta.TemplateFormulaId.Value)
+            templateFormulaName = await db.HerbalFormulas.AsNoTracking()
+                .Where(f => f.HerbalFormulaId == meta.TemplateFormulaId.Value)
                 .Select(f => f.FormulaName)
                 .FirstOrDefaultAsync(ct);
         }
 
         var prescription = new PrescriptionDetailDto
         {
-            FormulaId = formula?.FormulaId,
-            PrescriptionCode = formula != null ? $"DT{formula.FormulaId:D5}" : (meta.PrescriptionCode ?? ""),
+            FormulaId = meta.TemplateFormulaId,
+            PrescriptionCode = meta.PrescriptionCode ?? $"DT{es.RecordId:D5}",
             PrescriptionMethod = meta.PrescriptionMethod ?? "Tự kê đơn",
             TemplateFormulaId = meta.TemplateFormulaId,
             TemplateFormulaName = templateFormulaName,
-            TotalDoses = formula?.TotalDoses ?? (meta.TotalDoses ?? 5),
-            PrescriptionNote = formula?.UsageInstructions ?? meta.PrescriptionNote ?? "",
+            TotalDoses = meta.TotalDoses ?? 5,
+            PrescriptionNote = meta.PrescriptionNote ?? "",
             Status = meta.PrescriptionStatus ?? "Nháp",
             IsLocked = meta.PrescriptionStatus == "Đã gửi Herbalist",
-            Ingredients = formula?.FormulaDetails.Select(fd => new PrescriptionIngredientDto
-            {
-                HerbId = fd.HerbId,
-                HerbCode = fd.Herb?.HerbCode ?? "",
-                HerbName = fd.Herb?.CommonName ?? "",
-                GramsPerDose = fd.DosagePerDose,
-                TotalDoses = formula.TotalDoses,
-                TotalGrams = fd.DosagePerDose * formula.TotalDoses,
-                Note = fd.Note
-            }).ToList() ?? new()
+            Ingredients = new List<PrescriptionIngredientDto>()
         };
 
         // Lịch sử khám bệnh trước đây
-        var previousExamSheets = await db.ExamSheets.AsNoTracking()
+        var previousRecords = await db.MedicalRecords.AsNoTracking()
             .Include(e => e.Doctor)
-            .Include(e => e.Record)
-            .Where(e => e.Record.PatientId == patient.PatientId && e.ExamSheetId != es.ExamSheetId)
+            .Where(e => e.PatientId == patient.PatientId && e.RecordId != es.RecordId)
             .OrderByDescending(e => e.ExamDate)
             .Take(5)
             .ToListAsync(ct);
 
-        var previousVisits = previousExamSheets.Select(p => new PreviousVisitBriefDto
+        var previousVisits = previousRecords.Select(p => new PreviousVisitBriefDto
         {
-            ExamSheetId = p.ExamSheetId,
+            ExamSheetId = p.RecordId,
             MedicalRecordCode = $"MR{p.RecordId:D5}",
-            VisitCode = $"KCB{p.ExamSheetId:D5}",
+            VisitCode = $"KCB{p.RecordId:D5}",
             ExamDate = p.ExamDate,
             DoctorName = p.Doctor?.FullName ?? "",
             SummarySymptom = p.Symptoms ?? ""
         }).ToList();
 
         // Liệu trình đang chạy
-        var activeProtocol = await db.TreatmentProtocols.AsNoTracking()
-            .Where(p => p.Record.PatientId == patient.PatientId && p.PlanStatus != "COMPLETED")
-            .OrderByDescending(p => p.ProtocolId)
+        var activePlan = await db.TreatmentPlans.AsNoTracking()
+            .Where(p => p.Record.PatientId == patient.PatientId && p.Status != "COMPLETED")
+            .OrderByDescending(p => p.PlanId)
             .FirstOrDefaultAsync(ct);
 
         ActiveProtocolBriefDto? activeProtocolDto = null;
-        if (activeProtocol != null)
+        if (activePlan != null)
         {
-            var completedCount = await db.UsageHistories.AsNoTracking()
-                .CountAsync(u => u.ExamSheet != null && u.ExamSheet.Record != null && u.ExamSheet.Record.PatientId == patient.PatientId && u.ResultNote != "Chờ điều trị", ct);
-
             activeProtocolDto = new ActiveProtocolBriefDto
             {
-                ProtocolId = activeProtocol.ProtocolId,
-                ProtocolCode = $"LT{activeProtocol.ProtocolId:D5}",
-                ProtocolName = activeProtocol.ProtocolName,
-                CompletedSessions = completedCount,
-                TotalSessions = activeProtocol.PlannedSessionCount ?? 5,
-                PaymentStatus = "Đã thanh toán toàn bộ"
+                ProtocolId = activePlan.PlanId,
+                ProtocolCode = activePlan.PlanCode ?? $"LT{activePlan.PlanId:D5}",
+                ProtocolName = activePlan.PlanName ?? "Kế hoạch điều trị",
+                CompletedSessions = 0,
+                TotalSessions = 5,
+                PaymentStatus = "Đã thanh toán"
             };
         }
 
@@ -775,8 +647,8 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         return new MedicalRecordWorkspaceDto
         {
-            ExamSheetId = es.ExamSheetId,
-            VisitCode = $"KCB{es.ExamSheetId:D5}",
+            ExamSheetId = es.RecordId,
+            VisitCode = $"KCB{es.RecordId:D5}",
             MedicalRecordId = es.RecordId,
             MedicalRecordCode = $"MR{es.RecordId:D5}",
             Status = meta.Status,
