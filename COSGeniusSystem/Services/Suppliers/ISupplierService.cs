@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Suppliers;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Suppliers;
+namespace COSGeniusSystem.Services;
 
 public interface ISupplierService
 {

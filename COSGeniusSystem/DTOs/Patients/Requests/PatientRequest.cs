@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Patients.Requests;
+namespace COSGeniusSystem.DTOs;
 
 public abstract class PatientRequest
 {

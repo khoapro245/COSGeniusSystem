@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COSGeniusSystem.DTOs.Auth;
+namespace COSGeniusSystem.DTOs;
 
 public class RegisterRequestDto
 {

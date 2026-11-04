@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Reception;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class DashboardStatsDto
 {

@@ -1,6 +1,6 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Examinations;
-using COSGeniusSystem.Services.Examinations;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
@@ -15,6 +15,12 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
     public async Task<ActionResult<ApiResponseModel<PagedResult<RegistrationResponse>>>> List(
         [FromQuery] RegistrationQuery query, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, false, ct));
+
+    [HttpGet("doctor-workload")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
+    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<DoctorWorkloadResponse>>>> DoctorWorkload(
+        [FromQuery] DoctorWorkloadQuery query, CancellationToken ct) =>
+        SuccessResponse(ExaminationMessages.Retrieved, await service.DoctorWorkloadAsync(User, query, ct));
 
     [HttpGet("mine")]
     [Authorize(Roles = RoleConstants.Doctor)]

@@ -1,0 +1,60 @@
+using System.Text.Json.Serialization;
+
+namespace COSGeniusSystem.Commons;
+
+/// <summary>Compatibility envelope for existing Invoices and Notifications APIs. Use ApiResponseModel for new APIs.</summary>
+public class ApiResponse<T>
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public T? Data { get; set; }
+
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public List<string>? Errors { get; set; }
+
+    public static ApiResponse<T> Ok(T data, string message = "Thành công")
+    {
+        return new ApiResponse<T>
+        {
+            Success = true,
+            Message = message,
+            Data = data
+        };
+    }
+
+    public static ApiResponse<T> Fail(string message, List<string>? errors = null)
+    {
+        return new ApiResponse<T>
+        {
+            Success = false,
+            Message = message,
+            Errors = errors
+        };
+    }
+}
+
+/// <summary>Compatibility envelope for existing Invoices and Notifications APIs. Use ApiResponseModel for new APIs.</summary>
+public class ApiResponse : ApiResponse<object>
+{
+    public static ApiResponse Ok(string message = "Thành công")
+    {
+        return new ApiResponse
+        {
+            Success = true,
+            Message = message,
+            Data = null
+        };
+    }
+
+    public static new ApiResponse Fail(string message, List<string>? errors = null)
+    {
+        return new ApiResponse
+        {
+            Success = false,
+            Message = message,
+            Errors = errors
+        };
+    }
+}

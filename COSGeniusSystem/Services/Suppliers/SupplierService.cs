@@ -1,9 +1,9 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Suppliers;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Suppliers;
+namespace COSGeniusSystem.Services;
 
 public class SupplierService : ISupplierService
 {

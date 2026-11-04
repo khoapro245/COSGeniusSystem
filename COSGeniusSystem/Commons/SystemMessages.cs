@@ -61,6 +61,13 @@ public static class SystemMessages
     public static readonly SystemMessage ServiceIndicationSaved = new(200, "Service indication saved successfully.", true);
     public static readonly SystemMessage PrescriptionCatalogRetrieved = new(200, "Prescription catalog retrieved successfully.", true);
     public static readonly SystemMessage PrescriptionSaved = new(200, "Prescription saved successfully.", true);
+    public static readonly SystemMessage FormulasRetrieved = new(200, "Herbal formulas retrieved successfully.", true);
+    public static readonly SystemMessage FormulaRetrieved = new(200, "Herbal formula retrieved successfully.", true);
+    public static readonly SystemMessage FormulaCreated = new(201, "Herbal formula created successfully.", true);
+    public static readonly SystemMessage FormulaUpdated = new(200, "Herbal formula updated successfully.", true);
+    public static readonly SystemMessage FormulaStatusUpdated = new(200, "Herbal formula status updated successfully.", true);
+    public static readonly SystemMessage FormulaApproved = new(200, "Herbal formula proposal approved successfully.", true);
+    public static readonly SystemMessage FormulaRejected = new(200, "Herbal formula proposal rejected successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }

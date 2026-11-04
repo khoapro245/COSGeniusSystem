@@ -1,7 +1,7 @@
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Exceptions;
-using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 
@@ -27,6 +27,18 @@ public class HerbsController : BaseApiController
     public async Task<ActionResult<ApiResponseModel<List<HerbResponseDto>>>> GetHerbs([FromQuery] HerbFilterQuery query, CancellationToken ct = default)
     {
         var result = await _herbService.GetHerbsAsync(query, ct);
+        return SuccessResponse(SystemMessages.HerbsRetrieved, result);
+    }
+
+    /// <summary>
+    /// API-TU-06: Lấy tổng hợp tồn kho dược liệu và các lô theo nguyên tắc FEFO.
+    /// GET /api/v1/herbs/inventory
+    /// </summary>
+    [HttpGet("inventory")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponseModel<List<HerbInventoryItemDto>>>> GetHerbInventory(CancellationToken ct = default)
+    {
+        var result = await _herbService.GetHerbInventorySummaryAsync(ct);
         return SuccessResponse(SystemMessages.HerbsRetrieved, result);
     }
 

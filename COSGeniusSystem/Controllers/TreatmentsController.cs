@@ -1,11 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Treatments;
-using COSGeniusSystem.Services.Treatments;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
 
 namespace COSGeniusSystem.Controllers;
 
 [ApiController]
+[Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
 [Route("api/v1/treatments")]
 public sealed class TreatmentsController : BaseApiController
 {
@@ -24,7 +26,7 @@ public sealed class TreatmentsController : BaseApiController
     public async Task<ActionResult<ApiResponseModel<List<TreatmentQueueDto>>>> GetQueue(
         [FromQuery] TreatmentQueueQuery query, CancellationToken ct = default)
     {
-        var result = await _treatmentProtocolService.GetQueueAsync(query, ct);
+        var result = await _treatmentProtocolService.GetQueueAsync(User, query, ct);
         return SuccessResponse(SystemMessages.TreatmentQueueRetrieved, result);
     }
 
@@ -33,10 +35,11 @@ public sealed class TreatmentsController : BaseApiController
     /// POST /api/v1/treatments/queue
     /// </summary>
     [HttpPost("queue")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
     public async Task<ActionResult<ApiResponseModel<TreatmentQueueDto>>> CreateTreatmentRequest(
         [FromBody] CreateTreatmentRequest request, CancellationToken ct = default)
     {
-        var result = await _treatmentProtocolService.CreateTreatmentRequestAsync(request, ct);
+        var result = await _treatmentProtocolService.CreateTreatmentRequestAsync(User, request, ct);
         return CreatedResponse(nameof(GetQueue), new { }, SystemMessages.TreatmentRequestCreated, result);
     }
 }

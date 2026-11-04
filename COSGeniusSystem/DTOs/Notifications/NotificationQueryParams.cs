@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Notifications;
+namespace COSGeniusSystem.DTOs;
 
 public class NotificationQueryParams
 {

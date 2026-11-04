@@ -1,9 +1,9 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.TreatmentServices;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.TreatmentServices;
+namespace COSGeniusSystem.Services;
 
 public class TreatmentService : ITreatmentService
 {

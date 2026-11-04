@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Treatments;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class TreatmentQueueQuery
 {

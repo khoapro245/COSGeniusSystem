@@ -1,22 +1,28 @@
 using System.Text;
-using COSGeniusSystem.Data;
 using COSGeniusSystem.Commons;
+using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
-using COSGeniusSystem.Services;
-using Microsoft.AspNetCore.Mvc;
+using COSGeniusSystem.Services.Auth;
+using COSGeniusSystem.Services.Doctors;
+using COSGeniusSystem.Services.Examinations;
+using COSGeniusSystem.Services.Formulas;
+using COSGeniusSystem.Services.Herbs;
+using COSGeniusSystem.Services.Impl;
 using COSGeniusSystem.Services.Interfaces;
+using COSGeniusSystem.Services.Invoices;
+using COSGeniusSystem.Services.Notifications;
+using COSGeniusSystem.Services.Patients;
+using COSGeniusSystem.Services.Reception;
+using COSGeniusSystem.Services.Suppliers;
+using COSGeniusSystem.Services.TreatmentServices;
+using COSGeniusSystem.Services.Treatments;
+using COSGeniusSystem.Services.Users;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
-using COSGeniusSystem.Services.Doctors;
-using COSGeniusSystem.Services.Herbs;
-using COSGeniusSystem.Services.TreatmentServices;
-using COSGeniusSystem.Services.Examinations;
-using COSGeniusSystem.Services.Treatments;
-using COSGeniusSystem.Services.Reception;
-using COSGeniusSystem.Services.Impl;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,18 +33,28 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 // Register MemoryCache
 builder.Services.AddMemoryCache();
 
-// Register Repositories and Services
+// Register repositories and services by business domain.
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.Doctors.IDoctorService, COSGeniusSystem.Services.Doctors.DoctorService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.TreatmentServices.ITreatmentService, COSGeniusSystem.Services.TreatmentServices.TreatmentService>();
 builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IPatientContactService, PatientContactService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.Examinations.IExaminationService, COSGeniusSystem.Services.Examinations.ExaminationService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.Treatments.ITreatmentWorkflowService, COSGeniusSystem.Services.Treatments.TreatmentWorkflowService>();
+builder.Services.AddScoped<ITreatmentWorkflowService, TreatmentWorkflowService>();
+builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<ITreatmentService, TreatmentService>();
+builder.Services.AddScoped<IHerbService, HerbService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
+builder.Services.AddScoped<IUserService, UserService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<IInvoiceService, InvoiceService>();
+builder.Services.AddScoped<IExaminationService, ExaminationService>();
+builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
+builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
+builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
+builder.Services.AddScoped<IFormulaService, FormulaService>();
+builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
@@ -124,20 +140,6 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-
-// Đăng ký các Service vào DI container
-builder.Services.AddScoped<IDoctorService, DoctorService>();
-builder.Services.AddScoped<ITreatmentService, TreatmentService>();
-builder.Services.AddScoped<IHerbService, HerbService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.Suppliers.ISupplierService, COSGeniusSystem.Services.Suppliers.SupplierService>();
-builder.Services.AddScoped<COSGeniusSystem.Services.Users.IUserService, COSGeniusSystem.Services.Users.UserService>();
-builder.Services.AddScoped<INotificationService, NotificationService>();
-builder.Services.AddScoped<IInvoiceService, InvoiceService>();
-builder.Services.AddScoped<IExaminationService, ExaminationService>();
-builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
-builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
-builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
-builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
 
 builder.Services.AddAuthorization();
 

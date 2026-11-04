@@ -1,9 +1,9 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Herbs;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
-namespace COSGeniusSystem.Services.Herbs;
+namespace COSGeniusSystem.Services;
 
 public class HerbService : IHerbService
 {
@@ -218,6 +218,65 @@ public class HerbService : IHerbService
 
         await _context.SaveChangesAsync(ct);
         return (true, null);
+    }
+
+    // ─── API-TU-06: Inventory Summary ──────────────────────────────────────────
+    public async Task<List<HerbInventoryItemDto>> GetHerbInventorySummaryAsync(CancellationToken ct = default)
+    {
+        var herbs = await _context.Herbs
+            .AsNoTracking()
+            .Include(h => h.Batches)
+                .ThenInclude(b => b.Warehouse)
+            .OrderBy(h => h.CommonName)
+            .ToListAsync(ct);
+
+        return herbs.Select(h =>
+        {
+            var activeBatches = h.Batches
+                .OrderBy(b => b.ExpiryDate)
+                .ThenBy(b => b.ImportDate)
+                .Select(b => new BatchResponseDto
+                {
+                    BatchId = b.BatchId,
+                    BatchNumber = b.BatchNumber,
+                    WarehouseId = b.WarehouseId,
+                    WarehouseName = b.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm",
+                    ImportDate = b.ImportDate,
+                    ExpiryDate = b.ExpiryDate,
+                    OriginalQuantity = b.OriginalQuantity,
+                    CurrentQuantity = b.CurrentQuantity,
+                    UnitCost = b.UnitCost,
+                    Status = b.Status
+                })
+                .ToList();
+
+            var totalStock = activeBatches.Sum(b => b.CurrentQuantity);
+            var earliestBatch = activeBatches.FirstOrDefault(b => b.CurrentQuantity > 0);
+            var nearestExpiryStr = earliestBatch != null
+                ? earliestBatch.ExpiryDate.ToString("dd/MM/yyyy")
+                : "—";
+
+            var defaultLocation = activeBatches.FirstOrDefault()?.WarehouseName 
+                ?? "Kho Dược liệu trung tâm";
+
+            return new HerbInventoryItemDto
+            {
+                HerbId = h.HerbId,
+                HerbCode = h.HerbCode,
+                CommonName = h.CommonName,
+                ScientificName = h.ScientificName,
+                Unit = h.Unit,
+                TasteProperties = h.TasteProperties,
+                StandardPrice = h.StandardPrice,
+                MinThreshold = h.MinThreshold,
+                IsActive = h.IsActive,
+                TotalStock = totalStock,
+                ActualStock = totalStock,
+                NearestExpiry = nearestExpiryStr,
+                Location = defaultLocation,
+                Batches = activeBatches
+            };
+        }).ToList();
     }
 
     // ─── Helper ───────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
-using COSGeniusSystem.DTOs.Reception;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Reception;
+namespace COSGeniusSystem.Services;
 
 public interface IReceptionDashboardService
 {

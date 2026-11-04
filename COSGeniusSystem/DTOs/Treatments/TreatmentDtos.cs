@@ -1,8 +1,7 @@
 using System.ComponentModel.DataAnnotations;
-using COSGeniusSystem.DTOs.Examinations;
-using COSGeniusSystem.DTOs.Patients.Responses;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.DTOs.Treatments;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class PlanQuery : PageQuery
 {

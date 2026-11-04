@@ -1,16 +1,18 @@
-namespace COSGeniusSystem.DTOs.Patients;
+namespace COSGeniusSystem.DTOs;
 
 public sealed class MedicalRecordDetailDto
 {
     // Thông tin khám
-    public int ExamSheetId { get; init; }
+    public int RecordId { get; init; }
+    public int RegistrationId { get; init; }
     public string KcbCode { get; init; } = null!;
     public DateTime ExamDate { get; init; }
     public string DoctorName { get; init; } = null!;
     public string? Symptoms { get; init; }
-    public string FinalDiagnosis { get; init; } = null!;
-    public string? PulseDiagnosis { get; init; }
-    public string? TongueDiagnosis { get; init; }
+    public string? FinalDiagnosis { get; init; } = null!;
+    public string? Palpation { get; init; }
+    public string? Inspection { get; init; }
+    public string Status { get; init; } = null!;
     public string? DoctorAdvice { get; init; }
 
     // Danh sách dịch vụ chỉ định
@@ -23,6 +25,8 @@ public sealed class MedicalRecordDetailDto
 public sealed class UsageHistoryItemDto
 {
     public int UsageId { get; init; }
+    public int SessionId { get; init; }
+    public int PlanDetailId { get; init; }
     public string YcdtCode { get; init; } = null!;
     public string ServiceName { get; init; } = null!;
     public int Quantity { get; init; }
@@ -33,10 +37,11 @@ public sealed class UsageHistoryItemDto
 
 public sealed class PrescriptionDto
 {
-    public int FormulaId { get; init; }
-    public string FormulaName { get; init; } = null!;
+    public int PrescriptionId { get; init; }
+    public string? PrescriptionName { get; init; } = null!;
     public string? UsageInstructions { get; init; }
-    public int DosageDays { get; init; }
+    public int? DosageDays { get; init; }
+    public string Status { get; init; } = null!;
     public int TotalDoses { get; init; }
     public List<FormulaDetailItemDto> Details { get; init; } = new();
 }

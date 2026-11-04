@@ -1,11 +1,11 @@
 using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.TreatmentServices;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Services.TreatmentServices;
+using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.TreatmentServices;
+namespace COSGeniusSystem.UnitTests;
 
 public class TreatmentServiceTests
 {

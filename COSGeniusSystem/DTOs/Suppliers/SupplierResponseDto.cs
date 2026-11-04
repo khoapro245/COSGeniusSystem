@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.DTOs.Suppliers;
+namespace COSGeniusSystem.DTOs;
 
 public class SupplierResponseDto
 {

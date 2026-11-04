@@ -1,12 +1,11 @@
-using COSGeniusSystem.Data;
-using COSGeniusSystem.DTOs.Users;
-using COSGeniusSystem.Models;
 using COSGeniusSystem.Services;
-using COSGeniusSystem.Services.Users;
+using COSGeniusSystem.Data;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 
-namespace COSGeniusSystem.UnitTests.Users;
+namespace COSGeniusSystem.UnitTests;
 
 public class UserServiceTests
 {

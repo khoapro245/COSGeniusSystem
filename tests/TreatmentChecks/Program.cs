@@ -2,7 +2,7 @@
 using System.Reflection;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Controllers;
-using COSGeniusSystem.DTOs.Treatments;
+using COSGeniusSystem.DTOs;
 using Microsoft.AspNetCore.Authorization;
 
 var checks = 0;

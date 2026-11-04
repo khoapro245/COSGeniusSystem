@@ -1,11 +1,12 @@
 ﻿using System.Security.Claims;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.DTOs.Examinations;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.Services.Examinations;
+namespace COSGeniusSystem.Services;
 
 public interface IExaminationService
 {
+    Task<IReadOnlyList<DoctorWorkloadResponse>> DoctorWorkloadAsync(ClaimsPrincipal actor, DoctorWorkloadQuery query, CancellationToken ct);
     Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct);
     Task<RegistrationResponse> CreateAsync(ClaimsPrincipal actor, CreateRegistrationRequest request, CancellationToken ct);
     Task<RegistrationResponse> UpdateAsync(ClaimsPrincipal actor, int registrationId, UpdateRegistrationRequest request, CancellationToken ct);
@@ -25,13 +26,4 @@ public interface IExaminationService
     Task<TreatmentPlanResponse> SavePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, SaveTreatmentPlanRequest request, CancellationToken ct);
     Task<TreatmentPlanResponse> ConfirmPlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct);
     Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct);
-}
-
-
-public interface IExamSheetService
-{
-    Task<List<ExaminationVisitDto>> GetVisitsAsync(ExaminationFilterQuery query, CancellationToken ct = default);
-    Task<ExaminationVisitDto> CreateVisitAsync(CreateExaminationVisitRequest request, CancellationToken ct = default);
-    Task<ExaminationVisitDto> GetVisitByIdAsync(int examSheetId, CancellationToken ct = default);
-    Task CancelVisitAsync(int examSheetId, CancellationToken ct = default);
 }

@@ -1,20 +1,11 @@
 using System.ComponentModel.DataAnnotations;
+using COSGeniusSystem.DTOs;
 
-namespace COSGeniusSystem.DTOs.Treatments;
+namespace COSGeniusSystem.DTOs;
 
-public sealed class CreateTreatmentRequest
+public sealed class CreateTreatmentRequest : VersionRequest
 {
-    [Required]
-    public int PatientId { get; set; }
-
-    [Required]
-    public int ServiceId { get; set; }
-
-    [Required]
-    public int DoctorId { get; set; }
-
-    public int? ExamSheetId { get; set; }
-
-    public string? Note { get; set; }
+    [Range(1, int.MaxValue)] public int PlanId { get; set; }
+    [Range(1, int.MaxValue)] public int AssignedDoctorId { get; set; }
+    [Required] public DateOnly? ScheduledDate { get; set; }
 }
-

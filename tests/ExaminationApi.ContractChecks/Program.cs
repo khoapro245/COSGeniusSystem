@@ -2,9 +2,8 @@
 using System.Reflection;
 using System.Text.Json;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.Commons;
+using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Controllers;
-using COSGeniusSystem.DTOs.Examinations;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -41,6 +40,19 @@ Check(!Valid(new CreateRegistrationRequest()), "Reject missing patient/doctor ID
 Check(!Valid(new UpdateRegistrationRequest { DoctorId = 1 }), "Update requires RowVersion");
 Check(!Valid(new VersionRequest { RowVersion = new byte[7] }), "Reject malformed RowVersion length");
 Check(Valid(new VersionRequest { RowVersion = new byte[8] }), "Accept SQL Server RowVersion length");
+Check(!Valid(new CreateTreatmentRequest()), "Treatment queue rejects legacy body without plan/version");
+Check(Valid(new CreateTreatmentRequest { PlanId = 1, AssignedDoctorId = 2,
+    ScheduledDate = new DateOnly(2026, 11, 2), RowVersion = new byte[8] }), "Treatment queue accepts plan/session request");
+Check(typeof(CreateTreatmentRequest).GetProperty("ExamSheetId") == null, "Treatment queue no longer accepts ExamSheetId");
+Check(typeof(COSGeniusSystem.DTOs.InvoiceItemDto).GetProperty("ReferenceId") == null,
+    "Invoice uses explicit prescription and plan detail references");
+Check(typeof(COSGeniusSystem.DTOs.DashboardWaitingExamDto).GetProperty("RegistrationId") != null,
+    "Dashboard identifies waiting registrations");
+Check(typeof(COSGeniusSystem.DTOs.DashboardWaitingTreatmentDto).GetProperty("SessionId") != null,
+    "Dashboard identifies requested sessions");
+Check(typeof(TreatmentsController).GetCustomAttribute<AuthorizeAttribute>() != null, "Treatment compatibility routes require JWT");
+Check(typeof(TreatmentsController).GetMethod("CreateTreatmentRequest")!.GetCustomAttribute<AuthorizeAttribute>()?.Roles
+    == RoleConstants.ReceptionStaff, "Only reception can request a treatment session");
 Check(!Valid(new RegistrationQuery { PageSize = 101 }), "Limit database pagination");
 Check(!Valid(new RegistrationQuery { Status = "PAID" }), "Reject unsupported registration status");
 Check(!Valid(new SaveMedicalRecordRequest { RowVersion = new byte[8], FinalDiagnosis = new string('x', 501) }), "Diagnosis length matches scaffold");
