@@ -31,6 +31,18 @@ public class HerbsController : BaseApiController
     }
 
     /// <summary>
+    /// API-TU-06: Lấy tổng hợp tồn kho dược liệu và các lô theo nguyên tắc FEFO.
+    /// GET /api/v1/herbs/inventory
+    /// </summary>
+    [HttpGet("inventory")]
+    [Authorize]
+    public async Task<ActionResult<ApiResponseModel<List<HerbInventoryItemDto>>>> GetHerbInventory(CancellationToken ct = default)
+    {
+        var result = await _herbService.GetHerbInventorySummaryAsync(ct);
+        return SuccessResponse(SystemMessages.HerbsRetrieved, result);
+    }
+
+    /// <summary>
     /// API-TU-02: Xem thông tin chi tiết vị thuốc.
     /// GET /api/v1/herbs/{id}
     /// </summary>

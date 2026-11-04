@@ -1,4 +1,4 @@
-namespace COSGeniusSystem.Commons;
+﻿namespace COSGeniusSystem.Commons;
 
 public static class SystemMessages
 {
@@ -53,6 +53,13 @@ public static class SystemMessages
     public static readonly SystemMessage UserUpdated = new(200, "User account updated successfully.", true);
     public static readonly SystemMessage UserStatusUpdated = new(200, "User account status updated successfully.", true);
     public static readonly SystemMessage RolesRetrieved = new(200, "Roles retrieved successfully.", true);
+    public static readonly SystemMessage FormulasRetrieved = new(200, "Herbal formulas retrieved successfully.", true);
+    public static readonly SystemMessage FormulaRetrieved = new(200, "Herbal formula retrieved successfully.", true);
+    public static readonly SystemMessage FormulaCreated = new(201, "Herbal formula created successfully.", true);
+    public static readonly SystemMessage FormulaUpdated = new(200, "Herbal formula updated successfully.", true);
+    public static readonly SystemMessage FormulaStatusUpdated = new(200, "Herbal formula status updated successfully.", true);
+    public static readonly SystemMessage FormulaApproved = new(200, "Herbal formula proposal approved successfully.", true);
+    public static readonly SystemMessage FormulaRejected = new(200, "Herbal formula proposal rejected successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }

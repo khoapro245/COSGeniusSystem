@@ -38,4 +38,9 @@ public interface IHerbService
     /// Xóa hoặc ngưng hoạt động vị thuốc khỏi danh mục theo id.
     /// </summary>
     Task<(bool Success, string? ErrorMessage)> DeleteHerbAsync(int id, CancellationToken ct = default);
+
+    /// <summary>
+    /// API-TU-06: Lấy tổng hợp danh mục tồn kho dược liệu và các lô FEFO.
+    /// </summary>
+    Task<List<HerbInventoryItemDto>> GetHerbInventorySummaryAsync(CancellationToken ct = default);
 }

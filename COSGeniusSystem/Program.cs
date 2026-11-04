@@ -1,8 +1,9 @@
-using COSGeniusSystem.Commons;
+﻿using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
 using COSGeniusSystem.Services;
+using COSGeniusSystem.Services.Formulas;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -39,6 +40,7 @@ builder.Services.AddScoped<IExaminationService, ExaminationService>();
 builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>();
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
+builder.Services.AddScoped<IFormulaService, FormulaService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
