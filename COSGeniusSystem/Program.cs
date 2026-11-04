@@ -1,4 +1,4 @@
-﻿using COSGeniusSystem.Commons;
+using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
@@ -41,6 +41,7 @@ builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>(
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
