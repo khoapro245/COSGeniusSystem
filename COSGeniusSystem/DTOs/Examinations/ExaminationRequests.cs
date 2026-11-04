@@ -11,11 +11,17 @@ public class PageQuery
 
 public sealed class RegistrationQuery : PageQuery
 {
-    [RegularExpression("^(MORNING|AFTERNOON)$")] public string? Session { get; set; }
+    public string? Session { get; set; }
     public DateOnly? FromDate { get; set; }
     public DateOnly? ToDate { get; set; }
     [Range(1, int.MaxValue)] public int? DoctorId { get; set; }
-    [RegularExpression("^(WAITING|IN_PROGRESS|COMPLETED|CANCELLED)$")] public string? Status { get; set; }
+    public string? Status { get; set; }
+    public string? Keyword { get; set; }
+    public string? Phone { get; set; }
+    public string? Code { get; set; }
+    public string? PatientName { get; set; }
+    public string? PatientCode { get; set; }
+    public string? RegistrationCode { get; set; }
 }
 
 public sealed class DoctorWorkloadQuery
@@ -33,6 +39,7 @@ public class RegistrationInput
     public bool IsPriority { get; set; }
     [StringLength(10000)] public string? Symptoms { get; set; }
     [StringLength(10000)] public string? Note { get; set; }
+    public string? DoctorAdvice { get; set; }
 }
 
 public sealed class CreateRegistrationRequest : RegistrationInput
@@ -116,4 +123,3 @@ public sealed class SaveTreatmentPlanRequest : VersionRequest
     [StringLength(10000)] public string? Description { get; set; }
     [Required, MaxLength(500)] public List<PlanItemRequest> Items { get; set; } = [];
 }
-

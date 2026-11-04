@@ -43,6 +43,15 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             dbQuery = dbQuery.Where(e => e.Patient.Phone != null && e.Patient.Phone.Contains(kw));
         }
 
+        var searchKw = filter.Keyword ?? filter.Search;
+        if (!string.IsNullOrWhiteSpace(searchKw))
+        {
+            var sk = searchKw.Trim();
+            dbQuery = dbQuery.Where(e => e.Patient.FullName.Contains(sk)
+                || (e.Patient.Phone != null && e.Patient.Phone.Contains(sk))
+                || (e.Patient.PatientCode != null && e.Patient.PatientCode.Contains(sk)));
+        }
+
         if (!string.IsNullOrWhiteSpace(filter.Gender))
         {
             var g = filter.Gender.Trim();
@@ -108,8 +117,18 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         var filteredItems = itemsWithMeta.AsEnumerable();
         if (!string.IsNullOrWhiteSpace(filter.Status) && filter.Status != "Tất cả")
         {
-            var st = filter.Status.Trim();
-            filteredItems = filteredItems.Where(x => x.Meta.Status.Equals(st, StringComparison.OrdinalIgnoreCase));
+            var st = filter.Status.Trim().ToUpperInvariant();
+            if (st is not ("ALL" or "TẤT CẢ" or "TAT CA"))
+            {
+                string targetStatus = st switch
+                {
+                    "WAITING" or "CHỜ KHÁM" or "CHO KHAM" or "CHO_KHAM" => "Chờ khám",
+                    "IN_PROGRESS" or "INPROGRESS" or "ĐANG KHÁM" or "DANG KHAM" or "DANG_KHAM" => "Đang khám",
+                    "COMPLETED" or "HOÀN THÀNH" or "HOAN THANH" or "HOÀN TẤT" or "HOAN TAT" or "ĐÃ HOÀN TẤT" => "Hoàn tất",
+                    _ => filter.Status.Trim()
+                };
+                filteredItems = filteredItems.Where(x => x.Meta.Status.Equals(targetStatus, StringComparison.OrdinalIgnoreCase));
+            }
         }
 
         // Sắp xếp: Ưu tiên lên đầu, sau đó theo thời gian đăng ký

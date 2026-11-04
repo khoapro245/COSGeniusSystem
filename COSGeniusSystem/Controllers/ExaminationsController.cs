@@ -12,6 +12,7 @@ namespace COSGeniusSystem.Controllers;
 public sealed class ExaminationsController(IExaminationService service) : BaseApiController
 {
     [HttpGet]
+    [HttpGet("visits")]
     public async Task<ActionResult<ApiResponseModel<PagedResult<RegistrationResponse>>>> List(
         [FromQuery] RegistrationQuery query, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, false, ct));
@@ -29,6 +30,7 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, true, ct));
 
     [HttpPost]
+    [HttpPost("visits")]
     [Authorize(Roles = RoleConstants.ReceptionStaff)]
     public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> Create(CreateRegistrationRequest request, CancellationToken ct)
     {
@@ -137,4 +139,3 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         return SuccessResponse(ExaminationMessages.Deleted);
     }
 }
-
