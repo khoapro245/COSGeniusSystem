@@ -53,6 +53,14 @@ public static class SystemMessages
     public static readonly SystemMessage UserUpdated = new(200, "User account updated successfully.", true);
     public static readonly SystemMessage UserStatusUpdated = new(200, "User account status updated successfully.", true);
     public static readonly SystemMessage RolesRetrieved = new(200, "Roles retrieved successfully.", true);
+    public static readonly SystemMessage DoctorQueueRetrieved = new(200, "Doctor examination queue retrieved successfully.", true);
+    public static readonly SystemMessage PatientCalledForExam = new(200, "Patient called for examination successfully.", true);
+    public static readonly SystemMessage MedicalRecordWorkspaceRetrieved = new(200, "Medical record workspace retrieved successfully.", true);
+    public static readonly SystemMessage ClinicalExamSaved = new(200, "Clinical exam data saved successfully.", true);
+    public static readonly SystemMessage ExaminationCompleted = new(200, "Examination completed successfully.", true);
+    public static readonly SystemMessage ServiceIndicationSaved = new(200, "Service indication saved successfully.", true);
+    public static readonly SystemMessage PrescriptionCatalogRetrieved = new(200, "Prescription catalog retrieved successfully.", true);
+    public static readonly SystemMessage PrescriptionSaved = new(200, "Prescription saved successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
     public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
 }
