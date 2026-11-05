@@ -8,6 +8,7 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/examinations")]
+[Route("api/examinations")]
 [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
 public sealed class ExaminationsController(IExaminationService service) : BaseApiController
 {
@@ -39,6 +40,7 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
     }
 
     [HttpGet("{registrationId:int:min(1)}")]
+    [HttpGet("visits/{registrationId:int:min(1)}")]
     public async Task<ActionResult<ApiResponseModel<ExaminationResponse>>> Get(int registrationId, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.GetAsync(User, registrationId, ct));
 
@@ -47,6 +49,22 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
     public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> Update(int registrationId,
         UpdateRegistrationRequest request, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Saved, await service.UpdateAsync(User, registrationId, request, ct));
+
+    [HttpPatch("{registrationId:int:min(1)}/cancel")]
+    [HttpPatch("visits/{registrationId:int:min(1)}/cancel")]
+    [HttpPost("{registrationId:int:min(1)}/cancel")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> Cancel(int registrationId,
+        [FromBody] CancelTicketRequest request, CancellationToken ct) =>
+        SuccessResponse(SystemMessages.ExaminationVisitCancelled, await service.CancelAsync(User, registrationId, request, ct));
+
+    [HttpDelete("{registrationId:int:min(1)}")]
+    [HttpDelete("visits/{registrationId:int:min(1)}")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> DeleteOrCancel(int registrationId,
+        CancellationToken ct) =>
+        SuccessResponse(SystemMessages.ExaminationVisitCancelled, await service.CancelAsync(User, registrationId,
+            new CancelTicketRequest { CancelReason = "Bệnh nhân hủy lượt khám / bỏ về." }, ct));
 
     [HttpGet("{registrationId:int:min(1)}/history")]
     [Authorize(Roles = RoleConstants.Doctor)]

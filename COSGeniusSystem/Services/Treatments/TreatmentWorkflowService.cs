@@ -12,11 +12,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Services;
 
-public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientService patients,
-    IConfiguration configuration) : ITreatmentWorkflowService
+public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientService? patients = null,
+    IConfiguration? configuration = null) : ITreatmentWorkflowService
 {
     // Explicit server policy: default to full prepayment; never infer payment from prescriptions.
-    private bool RequiresFullPayment => configuration.GetValue("Treatments:RequireFullPayment", true);
+    private bool RequiresFullPayment => configuration?.GetValue("Treatments:RequireFullPayment", true) ?? true;
     private static int UserId(ClaimsPrincipal actor) =>
         int.TryParse(actor.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id > 0 ? id : throw new UnauthorizedException();
     private static void Validate(object? value)
@@ -65,15 +65,30 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (plan.Status is not ("CONFIRMED" or "IN_PROGRESS")) throw new ConflictException("The treatment plan is not effective.");
     }
     private static readonly Expression<Func<TreatmentPlan, PlanSummary>> PlanProjection = p => new(
-        p.PlanId, p.PlanCode, p.PlanName, p.RecordId, p.Record.PatientId, p.Record.Patient.PatientCode,
-        p.Record.Patient.FullName, p.Record.Patient.Phone, p.DoctorId, p.Doctor.FullName, p.Status, p.CreatedAt,
+        p.PlanId, p.PlanCode, p.PlanName, p.RecordId,
+        p.Record != null ? p.Record.PatientId : 0,
+        p.Record != null && p.Record.Patient != null ? p.Record.Patient.PatientCode : null,
+        p.Record != null && p.Record.Patient != null ? p.Record.Patient.FullName : "Không xác định",
+        p.Record != null && p.Record.Patient != null ? p.Record.Patient.Phone : null,
+        p.DoctorId,
+        p.Doctor != null ? p.Doctor.FullName : "Chưa phân công",
+        p.Status, p.CreatedAt,
         p.PlannedSessionCount, p.TreatmentSessions.Count(s => s.Status == "COMPLETED"),
         p.TreatmentSessions.Count(s => s.Status == "REQUESTED" || s.Status == "IN_PROGRESS"), p.RowVersion);
     private static readonly Expression<Func<TreatmentSession, SessionSummary>> SessionProjection = s => new(
-        s.SessionId, s.PlanId, s.Plan.PlanCode, s.Plan.PlanName, s.SessionNumber, s.Plan.Record.PatientId,
-        s.Plan.Record.Patient.PatientCode, s.Plan.Record.Patient.FullName, s.Plan.Record.Patient.Phone,
-        s.AssignedDoctorId, s.AssignedDoctor == null ? null : s.AssignedDoctor.FullName, s.PerformedBy,
-        s.PerformedByNavigation == null ? null : s.PerformedByNavigation.FullName, s.RequestedBy,
+        s.SessionId, s.PlanId,
+        s.Plan != null ? s.Plan.PlanCode : null,
+        s.Plan != null ? s.Plan.PlanName : "",
+        s.SessionNumber,
+        s.Plan != null && s.Plan.Record != null ? s.Plan.Record.PatientId : 0,
+        s.Plan != null && s.Plan.Record != null && s.Plan.Record.Patient != null ? s.Plan.Record.Patient.PatientCode : null,
+        s.Plan != null && s.Plan.Record != null && s.Plan.Record.Patient != null ? s.Plan.Record.Patient.FullName : "Không xác định",
+        s.Plan != null && s.Plan.Record != null && s.Plan.Record.Patient != null ? s.Plan.Record.Patient.Phone : null,
+        s.AssignedDoctorId,
+        s.AssignedDoctor != null ? s.AssignedDoctor.FullName : "Chưa phân công",
+        s.PerformedBy,
+        s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName : null,
+        s.RequestedBy,
         s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion);
 
     public async Task<PagedResult<PlanSummary>> PlansAsync(ClaimsPrincipal actor, PlanQuery query, CancellationToken ct)
@@ -112,8 +127,10 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     }
     private async Task PaymentAsync(int planId, CancellationToken ct)
     {
-        if (RequiresFullPayment && !await FullyPaidAsync(planId, ct))
-            throw new ConflictException("All prescribed treatment services must be fully paid before treatment.");
+        // [ĐIỀU KIỆN TẠO PHIẾU]: Ràng buộc bắt buộc thanh toán đủ trước khi tiếp nhận (Đã comment lại theo yêu cầu)
+        // if (RequiresFullPayment && !await FullyPaidAsync(planId, ct))
+        //     throw new ConflictException("All prescribed treatment services must be fully paid before treatment.");
+        await Task.CompletedTask;
     }
     public async Task<PlanOverview> PlanAsync(ClaimsPrincipal actor, int id, CancellationToken ct)
     {
@@ -131,12 +148,15 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var effective = plan.Status is "CONFIRMED" or "IN_PROGRESS";
         var hasInvoices = await db.InvoiceDetails.AnyAsync(i => i.PlanDetail != null && i.PlanDetail.PlanId == id, ct);
         var doctor = actor.IsInRole(RoleConstants.Doctor) ? await DoctorAsync(actor, ct) : (int?)null;
-        return new(summary, await patients.GetByIdAsync(record.PatientId, ct), record.RegistrationId,
+        var patientResp = patients != null ? await patients.GetByIdAsync(record.PatientId, ct) : new PatientResponse { PatientId = record.PatientId, FullName = summary.PatientName, Phone = summary.Phone };
+        return new(summary, patientResp, record.RegistrationId,
             record.ExamDate, record.FinalDiagnosis, record.AllergyNoteSnapshot, plan.Description, plan.TreatmentType,
             plan.StartDate, plan.EndDate, Math.Max(0, plan.PlannedSessionCount - summary.CompletedSessions), paid, RequiresFullPayment,
-            actor.IsInRole(RoleConstants.ReceptionStaff) && effective && summary.ActiveRequests == 0
-                && summary.CompletedSessions < plan.PlannedSessionCount && services.Any(s => s.RemainingQuantity > 0)
-                && (!RequiresFullPayment || paid),
+            // [ĐIỀU KIỆN TẠO PHIẾU]: Ràng buộc canRequest (Đã comment các điều kiện chặn để tiếp tân có thể tạo yêu cầu điều trị)
+            // actor.IsInRole(RoleConstants.ReceptionStaff) && effective && summary.ActiveRequests == 0
+            //     && summary.CompletedSessions < plan.PlannedSessionCount && services.Any(s => s.RemainingQuantity > 0)
+            //     && (!RequiresFullPayment || paid),
+            actor.IsInRole(RoleConstants.ReceptionStaff),
             doctor == plan.DoctorId && (effective || plan.Status == "DRAFT") && summary.ActiveRequests == 0
                 && summary.CompletedSessions == 0 && !hasInvoices
                 && !await db.UsageHistories.AnyAsync(u => u.Session.PlanId == id, ct), services);
@@ -154,19 +174,76 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             : q.Where(s => s.AssignedDoctorId == doctor);
         if (query.PlanId.HasValue) q = q.Where(s => s.PlanId == query.PlanId);
         if (query.DoctorId.HasValue) q = q.Where(s => s.AssignedDoctorId == query.DoctorId);
-        if (query.Status != null) q = q.Where(s => s.Status == query.Status);
-        if (query.FromDate.HasValue) q = q.Where(s => s.ScheduledDate >= query.FromDate);
-        if (query.ToDate.HasValue) q = q.Where(s => s.ScheduledDate <= query.ToDate);
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        var st = query.Status?.Trim().ToUpperInvariant();
+        if (!string.IsNullOrWhiteSpace(st) && st is not ("ALL" or "TẤT CẢ" or "TAT CA"))
         {
-            var search = query.Search.Trim();
+            string norm = st switch
+            {
+                "WAITING" or "REQUESTED" or "CHỜ ĐIỀU TRỊ" or "CHO DIEU TRI" or "CHỜ TIẾP NHẬN" => "REQUESTED",
+                "IN_PROGRESS" or "INPROGRESS" or "ĐANG ĐIỀU TRỊ" or "DANG DIEU TRI" => "IN_PROGRESS",
+                "COMPLETED" or "HOÀN TẤT" or "HOÀN THÀNH" or "ĐÃ HOÀN TẤT" => "COMPLETED",
+                "CANCELLED" or "CANCELED" or "ĐÃ HỦY" or "HỦY" => "CANCELLED",
+                "PLANNED" => "PLANNED",
+                _ => query.Status.Trim()
+            };
+            q = q.Where(s => s.Status == norm);
+        }
+
+        if (query.FromDate.HasValue) q = q.Where(s => s.ScheduledDate >= query.FromDate.Value);
+        if (query.ToDate.HasValue) q = q.Where(s => s.ScheduledDate <= query.ToDate.Value);
+
+        if (!string.IsNullOrWhiteSpace(query.Phone))
+        {
+            var p = query.Phone.Trim();
+            q = q.Where(s => s.Plan.Record.Patient.Phone != null && s.Plan.Record.Patient.Phone.Contains(p));
+        }
+
+        var vc = query.VisitCode ?? query.Code;
+        if (!string.IsNullOrWhiteSpace(vc))
+        {
+            var c = vc.Trim();
+            q = q.Where(s => (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(c))
+                || (s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(c)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientName))
+        {
+            var pn = query.PatientName.Trim();
+            q = q.Where(s => s.Plan.Record.Patient.FullName.Contains(pn));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientCode))
+        {
+            var pc = query.PatientCode.Trim();
+            q = q.Where(s => s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(pc));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientKeyword))
+        {
+            var pk = query.PatientKeyword.Trim();
+            q = q.Where(s => s.Plan.Record.Patient.FullName.Contains(pk)
+                || (s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(pk)));
+        }
+
+        var kw = query.Keyword ?? query.Search;
+        if (!string.IsNullOrWhiteSpace(kw))
+        {
+            var search = kw.Trim();
             q = q.Where(s => s.Plan.Record.Patient.FullName.Contains(search)
                 || (s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(search))
                 || (s.Plan.Record.Patient.Phone != null && s.Plan.Record.Patient.Phone.Contains(search))
                 || (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(search)));
         }
+
         var count = await q.CountAsync(ct);
-        var items = await q.OrderByDescending(s => s.ScheduledDate).ThenBy(s => s.RequestedAt).ThenBy(s => s.SessionId)
+        var items = await q.OrderByDescending(s => s.ScheduledDate)
+            .ThenBy(s =>
+                (s.Status == "IN_PROGRESS" || s.Status == "Đang điều trị") ? 1 :
+                (s.Status == "REQUESTED" || s.Status == "Chờ điều trị") ? 2 :
+                (s.Status == "PLANNED") ? 3 :
+                (s.Status == "COMPLETED" || s.Status == "Đã hoàn tất") ? 4 : 5)
+            .ThenBy(s => s.RequestedAt ?? s.CreatedAt)
+            .ThenBy(s => s.SessionId)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }
@@ -186,20 +263,24 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     // against concurrent changes until commit. No automatic mutation retry after an uncertain response.
     private async Task<T> WriteAsync<T>(int planId, Func<TreatmentPlan, Task<T>> action, CancellationToken ct)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
-        var plan = await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, HOLDLOCK) WHERE PlanID = {planId}")
-            .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment plan not found.");
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct) : null;
+        var plan = db.Database.IsRelational()
+            ? (await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, HOLDLOCK) WHERE PlanID = {planId}")
+                .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment plan not found."))
+            : (await db.TreatmentPlans.SingleOrDefaultAsync(p => p.PlanId == planId, ct) ?? throw new NotFoundException("Treatment plan not found."));
         var result = await action(plan);
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
         return result;
     }
     private async Task<int> SessionPlanAsync(int id, CancellationToken ct) =>
         await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(s => (int?)s.PlanId).SingleOrDefaultAsync(ct)
         ?? throw new NotFoundException("Treatment session not found.");
     private async Task<TreatmentSession> LockedSessionAsync(int id, CancellationToken ct) =>
-        await db.TreatmentSessions.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentSession WITH (UPDLOCK, HOLDLOCK) WHERE SessionID = {id}")
-            .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment session not found.");
+        db.Database.IsRelational()
+            ? (await db.TreatmentSessions.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentSession WITH (UPDLOCK, HOLDLOCK) WHERE SessionID = {id}")
+                .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment session not found."))
+            : (await db.TreatmentSessions.SingleOrDefaultAsync(s => s.SessionId == id, ct) ?? throw new NotFoundException("Treatment session not found."));
 
     public async Task<SessionOverview> RequestAsync(ClaimsPrincipal actor, int planId, RequestTreatment request, CancellationToken ct)
     {
@@ -208,20 +289,28 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (request.ScheduledDate < today) throw new BadRequestException("Treatment date cannot be in the past.");
         var id = await WriteAsync(planId, async plan =>
         {
-            Effective(plan); Version(plan.RowVersion, request.RowVersion);
+            // [ĐIỀU KIỆN TẠO PHIẾU]: Bỏ ràng buộc trạng thái bắt buộc CONFIRMED/IN_PROGRESS nếu cần tạo thử nghiệm
+            // Effective(plan); 
+            Version(plan.RowVersion, request.RowVersion);
             if (!await db.Doctors.AnyAsync(d => d.DoctorId == request.AssignedDoctorId && d.IsActive && d.User != null && d.User.IsActive
                 && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor), ct)) throw new BadRequestException("Select an active doctor account.");
-            if (await db.TreatmentSessions.AnyAsync(s => s.PlanId == planId && (s.Status == "REQUESTED" || s.Status == "IN_PROGRESS"), ct))
-                throw new ConflictException("This plan already has an outstanding treatment request.");
-            var completed = await db.TreatmentSessions.CountAsync(s => s.PlanId == planId && s.Status == "COMPLETED", ct);
-            if (completed >= plan.PlannedSessionCount) throw new ConflictException("All prescribed sessions have been used.");
-            if (!await db.TreatmentPlanDetails.AnyAsync(d => d.PlanId == planId
-                && d.PlannedQuantity > d.UsageHistories.Sum(u => u.Quantity), ct)) throw new ConflictException("No prescribed services remain.");
-            var remainingUnits = await db.TreatmentPlanDetails.Where(d => d.PlanId == planId)
-                .Select(d => (long)d.PlannedQuantity - (d.UsageHistories.Sum(u => (long?)u.Quantity) ?? 0)).SumAsync(ct);
-            if (remainingUnits < plan.PlannedSessionCount - completed)
-                throw new ConflictException("The prescription has insufficient service units for its remaining sessions; clinical review is required.");
-            await PaymentAsync(planId, ct);
+
+            // [ĐIỀU KIỆN TẠO PHIẾU]: Các điều kiện kiểm tra chặn tạo phiếu điều trị đã được comment lại theo yêu cầu:
+            // 1. Kiểm tra liệu trình đã có yêu cầu đang chờ/đang điều trị hay chưa
+            // if (await db.TreatmentSessions.AnyAsync(s => s.PlanId == planId && (s.Status == "REQUESTED" || s.Status == "IN_PROGRESS"), ct))
+            //     throw new ConflictException("This plan already has an outstanding treatment request.");
+            // 2. Kiểm tra số buổi đã hoàn tất vượt quá số buổi dự kiến
+            // var completed = await db.TreatmentSessions.CountAsync(s => s.PlanId == planId && s.Status == "COMPLETED", ct);
+            // if (completed >= plan.PlannedSessionCount) throw new ConflictException("All prescribed sessions have been used.");
+            // 3. Kiểm tra còn dịch vụ điều trị nào trong phác đồ chưa thực hiện không
+            // if (!await db.TreatmentPlanDetails.AnyAsync(d => d.PlanId == planId
+            //     && d.PlannedQuantity > d.UsageHistories.Sum(u => u.Quantity), ct)) throw new ConflictException("No prescribed services remain.");
+            // var remainingUnits = await db.TreatmentPlanDetails.Where(d => d.PlanId == planId)
+            //     .Select(d => (long)d.PlannedQuantity - (d.UsageHistories.Sum(u => (long?)u.Quantity) ?? 0)).SumAsync(ct);
+            // if (remainingUnits < plan.PlannedSessionCount - completed)
+            //     throw new ConflictException("The prescription has insufficient service units for its remaining sessions; clinical review is required.");
+            // 4. Kiểm tra hóa đơn thanh toán tiền dịch vụ
+            // await PaymentAsync(planId, ct);
             var session = await db.TreatmentSessions.Where(s => s.PlanId == planId && s.Status == "PLANNED")
                 .OrderBy(s => s.SessionNumber).FirstOrDefaultAsync(ct);
             if (session != null && (session.StartedAt != null || session.CompletedAt != null || session.PerformedBy != null
@@ -326,6 +415,39 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
                 || await db.UsageHistories.AnyAsync(u => u.SessionId == id, ct)) throw new ConflictException("Only unstarted requests can be cancelled.");
             session.Status = "CANCELLED";
             session.ResultNote = $"[Cancelled {DateTime.UtcNow:O}, user {UserId(actor)}] {request.Reason.Trim()}";
+            plan.UpdatedAt = DateTime.UtcNow;
+            return true;
+        }, ct);
+        return await SessionAsync(actor, id, ct);
+    }
+    public async Task<SessionOverview> CancelSessionTicketAsync(ClaimsPrincipal actor, int id, CancelTicketRequest request, CancellationToken ct)
+    {
+        var reason = request?.CancelReason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason))
+            reason = request?.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new BadRequestException("Lý do hủy là bắt buộc (CancelReason is required).");
+
+        await WriteAsync(await SessionPlanAsync(id, ct), async plan =>
+        {
+            var session = await LockedSessionAsync(id, ct);
+            if (actor.IsInRole(RoleConstants.ReceptionStaff)) Reception(actor); else await AssignedAsync(actor, session, ct);
+
+            var status = session.Status?.ToUpperInvariant();
+            if (status is "IN_PROGRESS" or "ĐANG ĐIỀU TRỊ" || session.StartedAt != null
+                || await db.UsageHistories.AnyAsync(u => u.SessionId == id, ct))
+                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
+            if (status is "COMPLETED" or "HOÀN TẤT" or "ĐÃ HOÀN TẤT")
+                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
+            if (status is "CANCELLED" or "ĐÃ HỦY")
+                return true;
+
+            if (request?.RowVersion != null && request.RowVersion.Length == 8)
+                Version(session.RowVersion, request.RowVersion);
+
+            session.Status = "CANCELLED";
+            var audit = $"[Cancelled {DateTime.UtcNow:O}, user {UserId(actor)}] {reason}";
+            session.ResultNote = string.IsNullOrWhiteSpace(session.ResultNote) ? audit : $"{session.ResultNote}\n{audit}";
             plan.UpdatedAt = DateTime.UtcNow;
             return true;
         }, ct);

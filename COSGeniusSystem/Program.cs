@@ -46,7 +46,13 @@ builder.Services.AddScoped<IFormulaService, FormulaService>();
 builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.Interfaces.IDoctorClinicalService, COSGeniusSystem.Services.Impl.DoctorClinicalService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
-builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+        options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeJsonConverter());
+    })
+    .ConfigureApiBehaviorOptions(options =>
 {
     // Avoid MVC's default ProblemDetails wrapper alongside ApiResponseModel.
     options.SuppressMapClientErrors = true;

@@ -58,14 +58,17 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     private async Task<T> WriteAsync<T>(ClaimsPrincipal actor, int registrationId, bool clinical,
         Func<ExaminationRegistration, Task<T>> action, CancellationToken ct)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var registration = await db.ExaminationRegistrations
-            .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
-            .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Registration not found.");
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        var registration = db.Database.IsRelational()
+            ? await db.ExaminationRegistrations
+                .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
+                .SingleOrDefaultAsync(ct)
+            : await db.ExaminationRegistrations.SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct);
+        if (registration == null) throw new NotFoundException("Registration not found.");
         await AccessAsync(actor, registration, clinical, ct);
         var result = await action(registration);
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
         return result;
     }
 
@@ -105,11 +108,13 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             session = now.AddHours(7).Hour < 12 ? "MORNING" : "AFTERNOON";
         var symptoms = request.Symptoms ?? request.DoctorAdvice;
 
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         // HOLDLOCK protects the missing-key range on the first registration of the day.
-        var counter = await db.ExaminationQueueCounters
-            .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationQueueCounter WITH (UPDLOCK, HOLDLOCK) WHERE BusinessDate = {businessDate}")
-            .SingleOrDefaultAsync(ct);
+        var counter = db.Database.IsRelational()
+            ? await db.ExaminationQueueCounters
+                .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationQueueCounter WITH (UPDLOCK, HOLDLOCK) WHERE BusinessDate = {businessDate}")
+                .SingleOrDefaultAsync(ct)
+            : await db.ExaminationQueueCounters.SingleOrDefaultAsync(c => c.BusinessDate == businessDate, ct);
         if (counter is null)
         {
             counter = new ExaminationQueueCounter { BusinessDate = businessDate };
@@ -125,7 +130,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         };
         db.ExaminationRegistrations.Add(registration);
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
         return await RegistrationResponseAsync(registration.RegistrationId, ct);
     }
 
@@ -167,6 +172,36 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             registration.UpdatedAt = DateTime.UtcNow;
             return true;
         }, ct);
+        return await RegistrationResponseAsync(registrationId, ct);
+    }
+
+    public async Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTicketRequest request, CancellationToken ct)
+    {
+        var reason = request?.CancelReason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason))
+            reason = request?.Reason?.Trim();
+        if (string.IsNullOrWhiteSpace(reason))
+            throw new BadRequestException("Lý do hủy là bắt buộc (CancelReason is required).");
+
+        await WriteAsync(actor, registrationId, false, async registration =>
+        {
+            var status = registration.Status?.ToUpperInvariant();
+            if (status is "IN_PROGRESS" or "ĐANG KHÁM")
+                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
+            if (status is "COMPLETED" or "HOÀN TẤT" or "ĐÃ HOÀN TẤT" or "HOÀN THÀNH")
+                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
+            if (status is "CANCELLED" or "ĐÃ HỦY")
+                return true;
+
+            var now = DateTime.UtcNow;
+            registration.Status = "CANCELLED";
+            registration.CancelledAt = now;
+            registration.UpdatedAt = now;
+            var audit = $"[Đã hủy lúc {now.AddHours(7):dd/MM/yyyy HH:mm}]: {reason}";
+            registration.Note = string.IsNullOrWhiteSpace(registration.Note) ? audit : $"{registration.Note}\n{audit}";
+            return true;
+        }, ct);
+
         return await RegistrationResponseAsync(registrationId, ct);
     }
 
@@ -240,10 +275,39 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             q = q.Where(r => r.RegistrationCode != null && r.RegistrationCode.Contains(rc));
         }
 
+        var visitCode = query.VisitCode;
+        if (!string.IsNullOrWhiteSpace(visitCode))
+        {
+            var vc = visitCode.Trim();
+            q = q.Where(r => (r.RegistrationCode != null && r.RegistrationCode.Contains(vc))
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(vc)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientKeyword))
+        {
+            var pk = query.PatientKeyword.Trim();
+            q = q.Where(r => r.Patient.FullName.Contains(pk)
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(pk)));
+        }
+
         var total = await q.CountAsync(ct);
-        var items = await q.OrderByDescending(r => r.BusinessDate).ThenByDescending(r => r.IsPriority)
-            .ThenBy(r => r.QueueNumber).Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(RegistrationProjection).ToListAsync(ct);
+        var dbItems = await q.OrderByDescending(r => r.BusinessDate)
+            .ThenBy(r =>
+                (r.Status == "IN_PROGRESS" || r.Status == "Đang khám") ? 1 :
+                (r.Status == "WAITING" || r.Status == "Chờ khám") ? 2 :
+                (r.Status == "COMPLETED" || r.Status == "Đã hoàn tất" || r.Status == "Hoàn tất") ? 3 : 4)
+            .ThenByDescending(r => r.IsPriority)
+            .ThenBy(r => r.RegisteredAt)
+            .ThenBy(r => r.QueueNumber)
+            .Skip((query.PageNumber - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(RegistrationProjection)
+            .ToListAsync(ct);
+
+        var items = dbItems.Select((r, index) =>
+            r with { QueueNumber = ((query.PageNumber - 1) * query.PageSize) + index + 1 })
+            .ToList();
+
         return new(items, query.PageNumber, query.PageSize, total);
     }
 
@@ -381,8 +445,13 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleAsync(ct);
 
     private static readonly Expression<Func<ExaminationRegistration, RegistrationResponse>> RegistrationProjection = r =>
-        new(r.RegistrationId, r.RegistrationCode, r.PatientId, r.Patient.PatientCode, r.Patient.FullName, r.Patient.Phone,
-            r.DoctorId, r.Doctor.FullName, r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
+        new(r.RegistrationId, r.RegistrationCode, r.PatientId,
+            r.Patient != null ? r.Patient.PatientCode : null,
+            r.Patient != null ? r.Patient.FullName : "Không xác định",
+            r.Patient != null ? r.Patient.Phone : null,
+            r.DoctorId,
+            r.Doctor != null ? r.Doctor.FullName : "Chưa phân công",
+            r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
             r.ContactId, r.Contact == null ? null : r.Contact.FullName, r.Symptoms, r.Note, r.Status,
             r.StartedAt, r.CompletedAt, r.MedicalRecord == null ? null : r.MedicalRecord.RecordId, r.RowVersion, r.Session);
 

@@ -9,7 +9,7 @@ public class PageQuery
     [StringLength(150)] public string? Search { get; set; }
 }
 
-public sealed class RegistrationQuery : PageQuery
+public class RegistrationQuery : PageQuery
 {
     public string? Session { get; set; }
     public DateOnly? FromDate { get; set; }
@@ -17,12 +17,16 @@ public sealed class RegistrationQuery : PageQuery
     [Range(1, int.MaxValue)] public int? DoctorId { get; set; }
     public string? Status { get; set; }
     public string? Keyword { get; set; }
+    public string? PatientKeyword { get; set; }
     public string? Phone { get; set; }
     public string? Code { get; set; }
+    public string? VisitCode { get; set; }
     public string? PatientName { get; set; }
     public string? PatientCode { get; set; }
     public string? RegistrationCode { get; set; }
 }
+
+public class ExaminationFilterDto : RegistrationQuery { }
 
 public sealed class DoctorWorkloadQuery
 {
@@ -42,14 +46,24 @@ public class RegistrationInput
     public string? DoctorAdvice { get; set; }
 }
 
-public sealed class CreateRegistrationRequest : RegistrationInput
+public class CreateRegistrationRequest : RegistrationInput
 {
     [Range(1, int.MaxValue)] public int PatientId { get; set; }
 }
 
+public class CreateExaminationRegistrationDto : CreateRegistrationRequest { }
+
 public sealed class UpdateRegistrationRequest : RegistrationInput
 {
     [Required, MinLength(8), MaxLength(8)] public byte[] RowVersion { get; set; } = [];
+}
+
+public class CancelTicketRequest
+{
+    [Required(ErrorMessage = "Lý do hủy là bắt buộc (CancelReason is required).")]
+    public string CancelReason { get; set; } = string.Empty;
+    public string? Reason { get; set; }
+    public byte[]? RowVersion { get; set; }
 }
 
 public class VersionRequest

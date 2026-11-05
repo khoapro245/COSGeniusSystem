@@ -12,8 +12,9 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 {
     public async Task<DoctorExamQueueResponseDto> GetExamQueueAsync(DoctorExamFilterDto filter, CancellationToken ct = default)
     {
-        var fromDate = filter.FromDate?.Date ?? DateTime.Today;
-        var toDate = (filter.ToDate?.Date ?? DateTime.Today).AddDays(1).AddTicks(-1);
+        var vnToday = DateTime.UtcNow.AddHours(7).Date;
+        var fromDate = filter.FromDate?.Date ?? vnToday;
+        var toDate = (filter.ToDate?.Date ?? vnToday).AddDays(1).AddTicks(-1);
 
         var dbQuery = db.MedicalRecords.AsNoTracking()
             .Include(e => e.Doctor)
@@ -131,9 +132,11 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             }
         }
 
-        // Sắp xếp: Ưu tiên lên đầu, sau đó theo thời gian đăng ký
+        // Sắp xếp: Ngày mới nhất lên đầu, sau đó đến Đang khám -> Chờ khám -> Hoàn tất, ưu tiên và thời gian
         var sortedItems = filteredItems
-            .OrderByDescending(x => x.Meta.IsPriority)
+            .OrderByDescending(x => x.Record.ExamDate.Date)
+            .ThenBy(x => (x.Meta.Status == "Đang khám") ? 1 : (x.Meta.Status == "Chờ khám") ? 2 : 3)
+            .ThenByDescending(x => x.Meta.IsPriority)
             .ThenBy(x => x.Record.ExamDate)
             .Select(x => x.Item)
             .ToList();
@@ -181,7 +184,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         if (meta.Status != "Đang khám")
         {
             meta.Status = "Đang khám";
-            meta.ExamStartTime ??= DateTime.Now;
+            meta.ExamStartTime ??= DateTime.UtcNow;
             es.Status = "IN_PROGRESS";
             es.DoctorAdvice = meta.ToJson();
             await db.SaveChangesAsync(ct);
@@ -294,7 +297,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         }
 
         es.DoctorAdvice = meta.ToJson();
-        es.UpdatedAt = DateTime.Now;
+        es.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
         return await BuildWorkspaceDtoAsync(es, meta, ct);
@@ -348,8 +351,8 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         meta.Status = "Hoàn tất";
         es.Status = "COMPLETED";
-        es.CompletedAt = DateTime.Now;
-        es.UpdatedAt = DateTime.Now;
+        es.CompletedAt = DateTime.UtcNow;
+        es.UpdatedAt = DateTime.UtcNow;
         es.DoctorAdvice = meta.ToJson();
 
         await db.SaveChangesAsync(ct);

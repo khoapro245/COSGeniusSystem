@@ -35,6 +35,7 @@ public static class SystemMessages
     public static readonly SystemMessage ExamSheetDetailRetrieved = new(200, "Exam sheet detail retrieved successfully.", true);
     public static readonly SystemMessage TreatmentProtocolsRetrieved = new(200, "Treatment protocols retrieved successfully.", true);
     public static readonly SystemMessage TreatmentSessionsRetrieved = new(200, "Treatment sessions retrieved successfully.", true);
+    public static readonly SystemMessage TreatmentCancelled = new(200, "Treatment session cancelled successfully.", true);
     public static readonly SystemMessage DashboardStatsRetrieved = new(200, "Dashboard stats retrieved successfully.", true);
     public static readonly SystemMessage DashboardQuickQueuesRetrieved = new(200, "Dashboard quick queues retrieved successfully.", true);
     public static readonly SystemMessage HerbsRetrieved = new(200, "Herbs retrieved successfully.", true);

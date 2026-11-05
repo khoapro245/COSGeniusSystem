@@ -7,6 +7,7 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/invoices")]
+[Route("api/invoices")]
 public class InvoicesController : ControllerBase
 {
     private readonly IInvoiceService _invoiceService;

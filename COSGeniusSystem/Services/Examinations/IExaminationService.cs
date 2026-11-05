@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs;
 
@@ -10,6 +10,7 @@ public interface IExaminationService
     Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct);
     Task<RegistrationResponse> CreateAsync(ClaimsPrincipal actor, CreateRegistrationRequest request, CancellationToken ct);
     Task<RegistrationResponse> UpdateAsync(ClaimsPrincipal actor, int registrationId, UpdateRegistrationRequest request, CancellationToken ct);
+    Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTicketRequest request, CancellationToken ct);
     Task<ExaminationResponse> GetAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct);
     Task<PagedResult<MedicalRecordResponse>> HistoryAsync(ClaimsPrincipal actor, int registrationId, PageQuery query, CancellationToken ct);
     Task<ExaminationResponse> HistoryDetailAsync(ClaimsPrincipal actor, int registrationId, int recordId, CancellationToken ct);

@@ -7,18 +7,26 @@ public sealed class PlanQuery : PageQuery
 {
     [Range(1, int.MaxValue)] public int? PatientId { get; set; }
     [Range(1, int.MaxValue)] public int? DoctorId { get; set; }
-    [RegularExpression("^(DRAFT|CONFIRMED|IN_PROGRESS|COMPLETED|CANCELLED)$")] public string? Status { get; set; }
+    public string? Status { get; set; }
     public DateOnly? FromDate { get; set; }
     public DateOnly? ToDate { get; set; }
 }
-public sealed class SessionQuery : PageQuery
+public class SessionQuery : PageQuery
 {
     [Range(1, int.MaxValue)] public int? PlanId { get; set; }
     [Range(1, int.MaxValue)] public int? DoctorId { get; set; }
-    [RegularExpression("^(PLANNED|REQUESTED|IN_PROGRESS|COMPLETED|CANCELLED)$")] public string? Status { get; set; }
+    public string? Status { get; set; }
     public DateOnly? FromDate { get; set; }
     public DateOnly? ToDate { get; set; }
+    public string? Keyword { get; set; }
+    public string? PatientKeyword { get; set; }
+    public string? Phone { get; set; }
+    public string? Code { get; set; }
+    public string? VisitCode { get; set; }
+    public string? PatientName { get; set; }
+    public string? PatientCode { get; set; }
 }
+public class TreatmentSessionFilterDto : SessionQuery { }
 public sealed class RequestTreatment : VersionRequest
 {
     [Range(1, int.MaxValue)] public int AssignedDoctorId { get; set; }
