@@ -31,6 +31,8 @@ public sealed class RequestTreatment : VersionRequest
 {
     [Range(1, int.MaxValue)] public int AssignedDoctorId { get; set; }
     [Required] public DateOnly? ScheduledDate { get; set; }
+    [StringLength(1000, ErrorMessage = "Ghi chú không được vượt quá 1000 ký tự.")]
+    public string? Note { get; set; }
 }
 public sealed class CancelTreatment : VersionRequest
 {

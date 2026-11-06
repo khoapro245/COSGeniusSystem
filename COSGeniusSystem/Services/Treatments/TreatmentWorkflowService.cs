@@ -15,8 +15,8 @@ namespace COSGeniusSystem.Services;
 public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientService? patients = null,
     IConfiguration? configuration = null) : ITreatmentWorkflowService
 {
-    // Explicit server policy: default to full prepayment; never infer payment from prescriptions.
-    private bool RequiresFullPayment => configuration?.GetValue("Treatments:RequireFullPayment", true) ?? true;
+    // Đã xóa bỏ toàn bộ logic yêu cầu thanh toán trước khi điều trị
+    private bool RequiresFullPayment => false;
     private static int UserId(ClaimsPrincipal actor) =>
         int.TryParse(actor.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id > 0 ? id : throw new UnauthorizedException();
     private static void Validate(object? value)
@@ -255,7 +255,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
             .Select(u => new UsageResponse(u.PlanDetailId, u.PlanDetail.ServiceNameSnapshot, u.Quantity, u.PerformedBy, u.ExecutionTime, u.ResultNote)).ToListAsync(ct);
         var assigned = actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId == await DoctorAsync(actor, ct);
-        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && (!RequiresFullPayment || plan.FullyPaid),
+        return new(session, plan, usage, assigned && session.Status == "REQUESTED",
             assigned && session.Status == "IN_PROGRESS", session.Status == "REQUESTED" && (assigned || actor.IsInRole(RoleConstants.ReceptionStaff)));
     }
 
@@ -325,6 +325,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             }
             session.Status = "REQUESTED"; session.AssignedDoctorId = request.AssignedDoctorId;
             session.RequestedBy = UserId(actor); session.RequestedAt = DateTime.UtcNow; session.ScheduledDate = request.ScheduledDate;
+            if (!string.IsNullOrWhiteSpace(request.Note)) session.ResultNote = request.Note.Trim();
             plan.UpdatedAt = DateTime.UtcNow; // invalidates stale plan versions, including cancel/recreate races
             await db.SaveChangesAsync(ct);
             return session.SessionId;
