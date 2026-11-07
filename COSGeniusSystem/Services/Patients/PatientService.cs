@@ -22,11 +22,34 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
     public async Task<PagedResult<PatientResponse>> SearchAsync(
         string? search, int pageNumber, int pageSize, CancellationToken ct,
-        string? code = null, string? phone = null, string? fullName = null)
+        string? code = null, string? phone = null, string? fullName = null,
+        int? doctorUserId = null)
     {
         if (pageNumber < 1 || pageNumber > 1000000 || pageSize < 1 || pageSize > 100)
             throw new BadRequestException("Page number must be 1 to 1000000 and page size must be 1 to 100.");
         var query = db.Patients.AsNoTracking();
+
+        if (doctorUserId.HasValue)
+        {
+            var docId = await db.Doctors.AsNoTracking()
+                .Where(d => d.UserId == doctorUserId.Value)
+                .Select(d => (int?)d.DoctorId)
+                .SingleOrDefaultAsync(ct);
+
+            if (docId.HasValue)
+            {
+                var dId = docId.Value;
+                query = query.Where(p =>
+                    db.ExaminationRegistrations.Any(r => r.PatientId == p.PatientId && r.DoctorId == dId)
+                    || db.MedicalRecords.Any(m => m.PatientId == p.PatientId && m.DoctorId == dId)
+                    || db.TreatmentPlans.Any(tp => tp.Record.PatientId == p.PatientId && tp.DoctorId == dId)
+                    || db.TreatmentSessions.Any(ts => ts.Plan.Record.PatientId == p.PatientId && (ts.AssignedDoctorId == dId || ts.PerformedBy == dId)));
+            }
+            else
+            {
+                return new([], pageNumber, pageSize, 0);
+            }
+        }
 
         if (!string.IsNullOrWhiteSpace(code))
         {

@@ -60,8 +60,16 @@ public sealed record PlanOverview(PlanSummary Plan, PatientResponse Patient, int
     bool CanRequest, bool CanCancel, IReadOnlyList<ServiceProgress> Services,
     [property: System.Text.Json.Serialization.JsonIgnore] string? SessionDetailsJson = null)
 {
-    public IReadOnlyList<PlannedSessionRequest> Sessions => string.IsNullOrEmpty(SessionDetailsJson)
-        ? [] : System.Text.Json.JsonSerializer.Deserialize<List<PlannedSessionRequest>>(SessionDetailsJson) ?? [];
+    private static readonly System.Text.Json.JsonSerializerOptions _jsonOpts = new() { PropertyNameCaseInsensitive = true };
+    public IReadOnlyList<PlannedSessionRequest> Sessions
+    {
+        get
+        {
+            if (string.IsNullOrWhiteSpace(SessionDetailsJson)) return [];
+            try { return System.Text.Json.JsonSerializer.Deserialize<List<PlannedSessionRequest>>(SessionDetailsJson, _jsonOpts) ?? []; }
+            catch { return []; }
+        }
+    }
 }
 public sealed record SessionSummary(int SessionId, int PlanId, string? PlanCode, string PlanName,
     int SessionNumber, int PatientId, string? PatientCode, string PatientName, string? Phone,

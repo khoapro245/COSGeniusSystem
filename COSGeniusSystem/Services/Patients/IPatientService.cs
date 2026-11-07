@@ -7,7 +7,7 @@ public interface IPatientService
 {
     // Legacy methods
     Task<PagedResult<PatientResponse>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct);
-    Task<PagedResult<PatientResponse>> SearchAsync(string? search, int pageNumber, int pageSize, CancellationToken ct, string? code = null, string? phone = null, string? fullName = null);
+    Task<PagedResult<PatientResponse>> SearchAsync(string? search, int pageNumber, int pageSize, CancellationToken ct, string? code = null, string? phone = null, string? fullName = null, int? doctorUserId = null);
     Task<PatientResponse> GetByIdAsync(int patientId, CancellationToken ct);
     Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.CreatePatientRequest request, CancellationToken ct);
     Task UpdateAsync(int patientId, COSGeniusSystem.DTOs.UpdatePatientRequest request, CancellationToken ct);

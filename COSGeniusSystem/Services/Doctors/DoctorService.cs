@@ -87,7 +87,8 @@ public class DoctorService : IDoctorService
             .CountAsync(s => s.ScheduledDate == today && (s.Status == "REQUESTED" || s.Status == "Chờ điều trị"), ct);
 
         var specializations = allDoctors
-            .Select(d => GetDoctorSpecialization(d.DoctorId, d.Specialization))
+            .Where(d => !string.IsNullOrWhiteSpace(d.Specialization))
+            .Select(d => d.Specialization!.Trim())
             .Distinct()
             .OrderBy(s => s)
             .ToList();
@@ -98,20 +99,19 @@ public class DoctorService : IDoctorService
         if (!string.IsNullOrWhiteSpace(query.Specialization) && query.Specialization.Trim() != "all" && query.Specialization.Trim() != "Tất cả chuyên khoa")
         {
             var specTarget = query.Specialization.Trim().ToLowerInvariant();
-            filtered = filtered.Where(d => GetDoctorSpecialization(d.DoctorId, d.Specialization).ToLowerInvariant().Contains(specTarget));
+            filtered = filtered.Where(d => d.Specialization != null && d.Specialization.ToLowerInvariant().Contains(specTarget));
         }
 
         if (!string.IsNullOrWhiteSpace(query.Keyword))
         {
             var kw = query.Keyword.Trim().ToLowerInvariant();
             filtered = filtered.Where(d =>
-                GetDoctorDisplayName(d.DoctorId, d.FullName).ToLowerInvariant().Contains(kw) ||
+                d.FullName.ToLowerInvariant().Contains(kw) ||
                 (d.Phone != null && d.Phone.ToLowerInvariant().Contains(kw)) ||
                 (d.LicenseNumber != null && d.LicenseNumber.ToLowerInvariant().Contains(kw)));
         }
 
-        // Ưu tiên bác sĩ đang trực lên trước, sau đó theo ID
-        var doctorList = filtered.OrderByDescending(d => d.IsActive).ThenBy(d => d.DoctorId).ToList();
+        var doctorList = filtered.OrderBy(d => d.DoctorId).ToList();
 
         // Lấy danh sách lượt khám trong ngày để tính hàng đợi & ca đang khám
         var todayRegistrations = await _context.ExaminationRegistrations.AsNoTracking()
@@ -136,7 +136,7 @@ public class DoctorService : IDoctorService
                 var pCode = currentExam.Patient.PatientCode ?? $"BN{currentExam.Patient.PatientId:D5}";
                 currentPatientText = $"{currentExam.Patient.FullName} ({pCode})";
             }
-            else if (d.IsActive)
+            else
             {
                 currentPatientText = "0";
             }
@@ -144,16 +144,16 @@ public class DoctorService : IDoctorService
             var item = new DoctorClinicItemDto
             {
                 DoctorId = d.DoctorId,
-                FullName = GetDoctorDisplayName(d.DoctorId, d.FullName),
-                Specialization = GetDoctorSpecialization(d.DoctorId, d.Specialization),
-                LicenseNumber = !string.IsNullOrWhiteSpace(d.LicenseNumber) ? d.LicenseNumber : $"CCHN-{d.DoctorId:D5}",
-                Phone = !string.IsNullOrWhiteSpace(d.Phone) ? d.Phone : GetDefaultDoctorPhone(d.DoctorId),
-                Room = GetDoctorRoom(d.DoctorId),
+                FullName = d.FullName,
+                Specialization = d.Specialization,
+                LicenseNumber = d.LicenseNumber,
+                Phone = d.Phone,
+                Room = string.Empty,
                 IsActive = d.IsActive,
-                StatusText = d.IsActive ? "ĐANG TRỰC" : "Vắng",
-                AbsenceReason = !d.IsActive ? "Đang hội chẩn ca bệnh nặng" : null,
-                WaitingCount = d.IsActive ? doctorWaitingCount : 0,
-                CurrentExaminingPatient = d.IsActive ? currentPatientText : "Tạm dừng nhận khách"
+                StatusText = d.IsActive ? "Hoạt động" : "Ngừng hoạt động",
+                AbsenceReason = null,
+                WaitingCount = doctorWaitingCount,
+                CurrentExaminingPatient = currentPatientText
             };
 
             resultItems.Add(item);
@@ -169,51 +169,4 @@ public class DoctorService : IDoctorService
             Doctors = resultItems
         };
     }
-
-    private static string GetDoctorRoom(int doctorId) => doctorId switch
-    {
-        1 => "Phòng 101 (Tầng 1)",
-        2 => "Phòng 102 (Tầng 1)",
-        3 => "Phòng 201 (Tầng 2)",
-        4 => "Phòng 203 (Tầng 2)",
-        5 => "Phòng 204 (Tầng 2)",
-        _ => $"Phòng {100 + (doctorId % 10)} (Tầng {(doctorId > 2 ? 2 : 1)})"
-    };
-
-    private static string GetDoctorSpecialization(int doctorId, string? dbSpec)
-    {
-        if (!string.IsNullOrWhiteSpace(dbSpec) && !dbSpec.Contains("fixture", StringComparison.OrdinalIgnoreCase))
-            return dbSpec.Trim();
-        return doctorId switch
-        {
-            1 => "Bắt mạch & Châm cứu YHCT",
-            2 => "Xoa bóp bấm huyệt & Phục hồi",
-            3 => "Phương tễ & Bốc thuốc cổ phương",
-            4 => "Cấy chỉ & Thủy châm",
-            _ => "Y học cổ truyền"
-        };
-    }
-
-    private static string GetDoctorDisplayName(int doctorId, string dbName)
-    {
-        if (!string.IsNullOrWhiteSpace(dbName) && !dbName.StartsWith("[TEST]", StringComparison.OrdinalIgnoreCase))
-            return dbName.Trim();
-        return doctorId switch
-        {
-            1 => "BS. Nguyễn Minh An",
-            2 => "BS. Trần Thanh Mai",
-            3 => "Lương y Lê Hoàng Nam",
-            4 => "BS. Phạm Đức Trọng",
-            _ => dbName.Replace("[TEST]", "").Trim()
-        };
-    }
-
-    private static string GetDefaultDoctorPhone(int doctorId) => doctorId switch
-    {
-        1 => "0912 345 678",
-        2 => "0987 654 321",
-        3 => "0933 222 111",
-        4 => "0918 888 999",
-        _ => $"0900 000 {doctorId:D3}"
-    };
 }

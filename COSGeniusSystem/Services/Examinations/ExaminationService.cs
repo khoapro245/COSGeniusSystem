@@ -207,6 +207,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             q = q.Where(r => r.DoctorId == doctorId);
         }
         if (query.DoctorId.HasValue) q = q.Where(r => r.DoctorId == query.DoctorId);
+        if (query.PatientId.HasValue) q = q.Where(r => r.PatientId == query.PatientId.Value);
         if (query.FromDate.HasValue) q = q.Where(r => r.BusinessDate >= query.FromDate);
         if (query.ToDate.HasValue) q = q.Where(r => r.BusinessDate <= query.ToDate);
 

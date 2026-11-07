@@ -133,15 +133,15 @@ public sealed partial class ExaminationService
         return await PlanResponseAsync(planId, ct);
     }
 
-    public async Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct)
+    public async Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest? request, CancellationToken ct)
     {
-        Validate(request);
         await WriteAsync(actor, registrationId, true, async registration =>
         {
             var record = await RecordAsync(registration, true, ct);
             var plan = await PlanAsync(record.RecordId, planId, ct);
             Draft(plan.Status);
-            Version(plan.RowVersion, request.RowVersion);
+            if (request?.RowVersion != null && request.RowVersion.Length == 8)
+                Version(plan.RowVersion, request.RowVersion);
             if (await db.TreatmentSessions.AnyAsync(s => s.PlanId == planId, ct))
                 throw new ConflictException("A treatment plan with sessions cannot be deleted through the prescribing API.");
             db.TreatmentPlanDetails.RemoveRange(plan.TreatmentPlanDetails);

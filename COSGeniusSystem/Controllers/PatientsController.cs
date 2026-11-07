@@ -28,10 +28,37 @@ namespace COSGeniusSystem.Controllers
             [FromQuery] string? keyword = null,
             [FromQuery] string? code = null,
             [FromQuery] string? phone = null,
+            [FromQuery] string? fullName = null,
+            [FromQuery] bool mine = false)
+        {
+            var term = !string.IsNullOrWhiteSpace(keyword) ? keyword : search;
+            int? doctorUserId = null;
+            if (mine && User.IsInRole(RoleConstants.Doctor))
+            {
+                var val = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(val, out var uId)) doctorUserId = uId;
+            }
+            var patients = await _patientService.SearchAsync(term, pageNumber, pageSize, ct, code, phone, fullName, doctorUserId);
+            return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
+        }
+
+        // GET: api/patients/mine | api/v1/patients/mine
+        [HttpGet("mine")]
+        [Authorize(Roles = RoleConstants.Doctor)]
+        public async Task<ActionResult<ApiResponseModel<PagedResult<PatientResponse>>>> GetMine(
+            [FromQuery, Range(1, 1000000)] int pageNumber = 1,
+            [FromQuery, Range(1, 100)] int pageSize = 10, CancellationToken ct = default,
+            [FromQuery, StringLength(150)] string? search = null,
+            [FromQuery] string? keyword = null,
+            [FromQuery] string? code = null,
+            [FromQuery] string? phone = null,
             [FromQuery] string? fullName = null)
         {
             var term = !string.IsNullOrWhiteSpace(keyword) ? keyword : search;
-            var patients = await _patientService.SearchAsync(term, pageNumber, pageSize, ct, code, phone, fullName);
+            int? doctorUserId = null;
+            var val = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(val, out var uId)) doctorUserId = uId;
+            var patients = await _patientService.SearchAsync(term, pageNumber, pageSize, ct, code, phone, fullName, doctorUserId);
             return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
         }
 

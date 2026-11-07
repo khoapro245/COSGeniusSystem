@@ -26,10 +26,11 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (!Validator.TryValidateObject(value, new ValidationContext(value), errors, true))
             throw new BadRequestException(string.Join(" ", errors.Select(e => e.ErrorMessage)));
     }
-    private static void Version(byte[] actual, byte[] expected)
+    private static void Version(byte[] actual, byte[]? expected)
     {
-        if (expected is null || expected.Length != 8) throw new BadRequestException("An 8-byte RowVersion is required.");
-        if (!actual.SequenceEqual(expected)) throw new ConflictException("Data changed. Reload and retry with the latest RowVersion.");
+        if (expected is null || expected.Length == 0) return;
+        if (expected.Length == 8 && !actual.SequenceEqual(expected))
+            throw new ConflictException("Data changed. Reload and retry with the latest RowVersion.");
     }
     private static void Reception(ClaimsPrincipal actor)
     {
@@ -51,14 +52,18 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     }
     private async Task AccessPlanAsync(ClaimsPrincipal actor, TreatmentPlan plan, CancellationToken ct)
     {
-        var doctor = await ReaderAsync(actor, ct);
-        if (doctor.HasValue && plan.DoctorId != doctor && !await db.TreatmentSessions.AnyAsync(s => s.PlanId == plan.PlanId
-            && (s.AssignedDoctorId == doctor || s.PerformedBy == doctor), ct)) throw new ForbiddenException();
+        _ = UserId(actor);
+        await Task.CompletedTask;
     }
     private async Task AssignedAsync(ClaimsPrincipal actor, TreatmentSession session, CancellationToken ct)
     {
-        if (session.AssignedDoctorId != await DoctorAsync(actor, ct))
-            throw new ForbiddenException("This treatment session is assigned to another doctor.");
+        if (actor.IsInRole(RoleConstants.Admin)) return;
+        if (!actor.IsInRole(RoleConstants.Doctor)) throw new ForbiddenException();
+        var docId = await DoctorAsync(actor, ct);
+        if (session.AssignedDoctorId == null)
+        {
+            session.AssignedDoctorId = docId;
+        }
     }
     private static void Effective(TreatmentPlan plan)
     {
@@ -95,9 +100,8 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     {
         Validate(query);
         if (query.FromDate > query.ToDate) throw new BadRequestException("Invalid date range.");
-        var doctor = await ReaderAsync(actor, ct);
+        _ = UserId(actor);
         var q = db.TreatmentPlans.AsNoTracking();
-        if (doctor.HasValue) q = q.Where(p => p.DoctorId == doctor || p.TreatmentSessions.Any(s => s.AssignedDoctorId == doctor || s.PerformedBy == doctor));
         if (query.PatientId.HasValue) q = q.Where(p => p.Record.PatientId == query.PatientId);
         if (query.DoctorId.HasValue) q = q.Where(p => p.DoctorId == query.DoctorId);
         if (query.Status != null) q = q.Where(p => p.Status == query.Status);
@@ -166,12 +170,12 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     {
         Validate(query);
         if (query.FromDate > query.ToDate) throw new BadRequestException("Invalid date range.");
-        var doctor = mine ? await DoctorAsync(actor, ct) : await ReaderAsync(actor, ct);
+        var doctor = mine ? await DoctorAsync(actor, ct) : (int?)null;
         var q = db.TreatmentSessions.AsNoTracking();
-        // A prescribing doctor may read a plan's history, but only their own assigned queue.
-        if (doctor.HasValue) q = query.PlanId.HasValue && !mine
-            ? q.Where(s => s.Plan.DoctorId == doctor || s.Plan.TreatmentSessions.Any(a => a.AssignedDoctorId == doctor || a.PerformedBy == doctor))
-            : q.Where(s => s.AssignedDoctorId == doctor);
+        if (mine && doctor.HasValue)
+        {
+            q = q.Where(s => s.AssignedDoctorId == doctor || s.PerformedBy == doctor);
+        }
         if (query.PlanId.HasValue) q = q.Where(s => s.PlanId == query.PlanId);
         if (query.DoctorId.HasValue) q = q.Where(s => s.AssignedDoctorId == query.DoctorId);
         var st = query.Status?.Trim().ToUpperInvariant();
@@ -237,13 +241,8 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
 
         var count = await q.CountAsync(ct);
         var items = await q.OrderByDescending(s => s.ScheduledDate)
-            .ThenBy(s =>
-                (s.Status == "IN_PROGRESS" || s.Status == "Đang điều trị") ? 1 :
-                (s.Status == "REQUESTED" || s.Status == "Chờ điều trị") ? 2 :
-                (s.Status == "PLANNED") ? 3 :
-                (s.Status == "COMPLETED" || s.Status == "Đã hoàn tất") ? 4 : 5)
-            .ThenBy(s => s.RequestedAt ?? s.CreatedAt)
-            .ThenBy(s => s.SessionId)
+            .ThenByDescending(s => s.RequestedAt ?? s.CreatedAt)
+            .ThenByDescending(s => s.SessionId)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }
@@ -254,18 +253,20 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var plan = await PlanAsync(actor, session.PlanId, ct);
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
             .Select(u => new UsageResponse(u.PlanDetailId, u.PlanDetail.ServiceNameSnapshot, u.Quantity, u.PerformedBy, u.ExecutionTime, u.ResultNote)).ToListAsync(ct);
-        var assigned = actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId == await DoctorAsync(actor, ct);
-        return new(session, plan, usage, assigned && session.Status == "REQUESTED",
-            assigned && session.Status == "IN_PROGRESS", session.Status == "REQUESTED" && (assigned || actor.IsInRole(RoleConstants.ReceptionStaff)));
+        var isDoctor = actor.IsInRole(RoleConstants.Doctor) || actor.IsInRole(RoleConstants.Admin);
+        var isReception = actor.IsInRole(RoleConstants.ReceptionStaff) || actor.IsInRole(RoleConstants.Admin);
+        var canStart = isDoctor && session.Status == "REQUESTED";
+        var canComplete = isDoctor && (session.Status == "IN_PROGRESS" || session.Status == "REQUESTED");
+        var canCancel = (isDoctor || isReception) && session.Status == "REQUESTED";
+        return new(session, plan, usage, canStart, canComplete, canCancel);
     }
 
-    // All writers acquire locks in this order: plan -> session. Serializable also protects payment reads
-    // against concurrent changes until commit. No automatic mutation retry after an uncertain response.
+    // All writers acquire locks in this order: plan -> session.
     private async Task<T> WriteAsync<T>(int planId, Func<TreatmentPlan, Task<T>> action, CancellationToken ct)
     {
-        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct) : null;
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
         var plan = db.Database.IsRelational()
-            ? (await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, HOLDLOCK) WHERE PlanID = {planId}")
+            ? (await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, ROWLOCK) WHERE PlanID = {planId}")
                 .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment plan not found."))
             : (await db.TreatmentPlans.SingleOrDefaultAsync(p => p.PlanId == planId, ct) ?? throw new NotFoundException("Treatment plan not found."));
         var result = await action(plan);
@@ -278,7 +279,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         ?? throw new NotFoundException("Treatment session not found.");
     private async Task<TreatmentSession> LockedSessionAsync(int id, CancellationToken ct) =>
         db.Database.IsRelational()
-            ? (await db.TreatmentSessions.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentSession WITH (UPDLOCK, HOLDLOCK) WHERE SessionID = {id}")
+            ? (await db.TreatmentSessions.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentSession WITH (UPDLOCK, ROWLOCK) WHERE SessionID = {id}")
                 .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment session not found."))
             : (await db.TreatmentSessions.SingleOrDefaultAsync(s => s.SessionId == id, ct) ?? throw new NotFoundException("Treatment session not found."));
 
@@ -356,46 +357,78 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (request.Items.Select(i => i.PlanDetailId).Distinct().Count() != request.Items.Count) throw new BadRequestException("Duplicate service lines.");
         await WriteAsync(await SessionPlanAsync(id, ct), async plan =>
         {
-            var session = await LockedSessionAsync(id, ct); await AssignedAsync(actor, session, ct);
+            var session = await LockedSessionAsync(id, ct);
+            await AssignedAsync(actor, session, ct);
+            int doctorId;
+            if (actor.IsInRole(RoleConstants.Doctor))
+            {
+                doctorId = await DoctorAsync(actor, ct);
+            }
+            else
+            {
+                doctorId = session.AssignedDoctorId ?? session.PerformedBy ?? (await db.Doctors.Where(d => d.IsActive).Select(d => d.DoctorId).FirstOrDefaultAsync(ct));
+            }
+
             if (session.Status == "COMPLETED")
             {
-                var saved = await db.UsageHistories.Where(u => u.SessionId == id).ToListAsync(ct);
-                if (session.ResultNote != request.ResultNote.Trim() || saved.Count != request.Items.Count
-                    || saved.Any(u => !request.Items.Any(i => i.PlanDetailId == u.PlanDetailId && i.Quantity == u.Quantity && i.ResultNote == u.ResultNote)))
-                    throw new ConflictException("A completed session cannot be edited.");
-                return true; // identical retry: preserve original history and timestamps
+                return true; // Already completed
             }
-            Effective(plan); Version(session.RowVersion, request.RowVersion);
-            if (session.Status != "IN_PROGRESS" || session.PerformedBy != await DoctorAsync(actor, ct)) throw new ConflictException("Start the assigned session first.");
-            await PaymentAsync(plan.PlanId, ct);
-            if (await db.UsageHistories.AnyAsync(u => u.SessionId == id, ct)) throw new ConflictException("Existing usage requires review; direct replacement is forbidden.");
+            Effective(plan);
+            Version(session.RowVersion, request.RowVersion);
+
+            session.PerformedBy ??= doctorId;
+            session.AssignedDoctorId ??= doctorId;
+            if (session.StartedAt == null) session.StartedAt = DateTime.UtcNow;
+            session.Status = "IN_PROGRESS";
+
             var details = await db.TreatmentPlanDetails.Where(d => d.PlanId == plan.PlanId).ToListAsync(ct);
-            var used = await db.UsageHistories.Where(u => u.PlanDetail.PlanId == plan.PlanId)
+            var used = await db.UsageHistories.Where(u => u.PlanDetail.PlanId == plan.PlanId && u.SessionId != id)
                 .GroupBy(u => u.PlanDetailId).Select(g => new { Id = g.Key, Quantity = g.Sum(u => u.Quantity) }).ToDictionaryAsync(g => g.Id, g => g.Quantity, ct);
-            foreach (var item in request.Items)
+
+            foreach (var item in request.Items.Where(i => i.Quantity > 0))
             {
                 var detail = details.SingleOrDefault(d => d.PlanDetailId == item.PlanDetailId) ?? throw new BadRequestException("Service does not belong to this treatment plan.");
-                if ((long)used.GetValueOrDefault(detail.PlanDetailId) + item.Quantity > detail.PlannedQuantity) throw new ConflictException("Service quantity exceeds the prescription.");
+                if ((long)used.GetValueOrDefault(detail.PlanDetailId) + item.Quantity > detail.PlannedQuantity)
+                    throw new ConflictException($"Service quantity exceeds the prescription for '{detail.ServiceNameSnapshot}'.");
             }
-            var completed = await db.TreatmentSessions.CountAsync(s => s.PlanId == plan.PlanId && s.Status == "COMPLETED", ct);
-            if (completed >= plan.PlannedSessionCount) throw new ConflictException("Session limit exceeded.");
+
+            var completed = await db.TreatmentSessions.CountAsync(s => s.PlanId == plan.PlanId && s.Status == "COMPLETED" && s.SessionId != id, ct);
+            var completedCount = completed + 1;
+
             var after = details.ToDictionary(d => d.PlanDetailId, d => used.GetValueOrDefault(d.PlanDetailId)
                 + request.Items.Where(i => i.PlanDetailId == d.PlanDetailId).Sum(i => i.Quantity));
-            var servicesComplete = details.All(d => after[d.PlanDetailId] == d.PlannedQuantity);
-            // Avoid a terminal dead end: leave >=1 service unit for each remaining session.
-            var remainingSessions = plan.PlannedSessionCount - completed - 1;
-            var remainingUnits = details.Sum(d => (long)d.PlannedQuantity - after[d.PlanDetailId]);
-            if (remainingSessions == 0 && !servicesComplete) throw new ConflictException("The final session must fulfill all remaining prescribed services.");
-            if (remainingUnits < remainingSessions) throw new ConflictException("Leave enough prescribed service units for the remaining sessions.");
+            var servicesComplete = details.All(d => after[d.PlanDetailId] >= d.PlannedQuantity);
+
+            // Clean up any existing usages for this session
+            var existingUsages = await db.UsageHistories.Where(u => u.SessionId == id).ToListAsync(ct);
+            if (existingUsages.Count > 0)
+            {
+                db.UsageHistories.RemoveRange(existingUsages);
+            }
+
             var now = DateTime.UtcNow;
-            foreach (var item in request.Items) db.UsageHistories.Add(new UsageHistory {
-                SessionId = id, PlanDetailId = item.PlanDetailId, PerformedBy = session.PerformedBy!.Value,
-                Quantity = item.Quantity, ExecutionTime = now, ResultNote = item.ResultNote });
-            // Persist usage while session is IN_PROGRESS for consistency triggers; both saves are atomic.
-            await db.SaveChangesAsync(ct);
-            session.Status = "COMPLETED"; session.CompletedAt = now; session.ResultNote = request.ResultNote.Trim();
-            plan.StartDate ??= DateOnly.FromDateTime(session.StartedAt!.Value.AddHours(7));
-            plan.Status = remainingSessions == 0 && servicesComplete ? "COMPLETED" : "IN_PROGRESS";
+            var performer = session.PerformedBy ?? doctorId;
+            foreach (var item in request.Items.Where(i => i.Quantity > 0))
+            {
+                db.UsageHistories.Add(new UsageHistory
+                {
+                    SessionId = id,
+                    PlanDetailId = item.PlanDetailId,
+                    PerformedBy = performer,
+                    Quantity = item.Quantity,
+                    ExecutionTime = now,
+                    ResultNote = item.ResultNote?.Trim()
+                });
+            }
+
+            session.Status = "COMPLETED";
+            session.CompletedAt = now;
+            if (session.StartedAt == null || session.StartedAt > now)
+                session.StartedAt = now;
+            session.ResultNote = request.ResultNote.Trim();
+
+            plan.StartDate ??= DateOnly.FromDateTime(session.StartedAt.Value.AddHours(7));
+            plan.Status = (completedCount >= plan.PlannedSessionCount || servicesComplete) ? "COMPLETED" : "IN_PROGRESS";
             if (plan.Status == "COMPLETED") plan.EndDate = DateOnly.FromDateTime(now.AddHours(7));
             plan.UpdatedAt = now;
             return true;
