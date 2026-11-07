@@ -18,7 +18,7 @@ public class InvoiceService : IInvoiceService
     public async Task<PaginatedResult<InvoiceListDto>> GetInvoicesAsync(InvoiceQueryParams queryParams)
     {
         var page = queryParams.Page <= 0 ? 1 : queryParams.Page;
-        var pageSize = queryParams.PageSize <= 0 ? 20 : queryParams.PageSize;
+        var pageSize = queryParams.PageSize <= 0 ? 10 : queryParams.PageSize;
 
         var query = _context.Invoices
             .AsNoTracking()

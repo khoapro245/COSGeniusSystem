@@ -158,6 +158,27 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         return await RegistrationResponseAsync(registrationId, ct);
     }
 
+    public async Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTreatment request, CancellationToken ct)
+    {
+        Reception(actor);
+        Validate(request);
+        if (string.IsNullOrWhiteSpace(request.Reason)) throw new BadRequestException("Cancellation reason is required.");
+        await WriteAsync(actor, registrationId, false, async registration =>
+        {
+            Version(registration.RowVersion, request.RowVersion);
+            if (registration.Status != "WAITING" || registration.StartedAt != null || registration.CompletedAt != null
+                || await db.MedicalRecords.AnyAsync(r => r.RegistrationId == registrationId, ct))
+                throw new ConflictException("Only unstarted WAITING registrations can be cancelled.");
+            var now = DateTime.UtcNow;
+            registration.Status = "CANCELLED";
+            registration.CancelledAt = now;
+            registration.UpdatedAt = now;
+            registration.Note = $"{registration.Note}\n[Cancelled {now:O}, user {UserId(actor)}] {request.Reason.Trim()}".Trim();
+            return true;
+        }, ct);
+        return await RegistrationResponseAsync(registrationId, ct);
+    }
+
     public async Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct)
     {
         Validate(query);

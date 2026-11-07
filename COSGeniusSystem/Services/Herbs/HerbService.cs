@@ -39,7 +39,7 @@ public class HerbService : IHerbService
 
         // Phân trang
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize < 1 ? 20 : query.PageSize;
+        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
 
         return await q
             .OrderBy(h => h.CommonName)

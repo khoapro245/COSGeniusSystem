@@ -21,6 +21,8 @@ public partial class TreatmentPlan
 
     public string? Description { get; set; }
 
+    public string? SessionDetailsJson { get; set; }
+
     public string Status { get; set; } = null!;
 
     public DateOnly? StartDate { get; set; }

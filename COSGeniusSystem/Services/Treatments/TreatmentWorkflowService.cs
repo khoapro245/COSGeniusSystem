@@ -139,7 +139,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
                 && (!RequiresFullPayment || paid),
             doctor == plan.DoctorId && (effective || plan.Status == "DRAFT") && summary.ActiveRequests == 0
                 && summary.CompletedSessions == 0 && !hasInvoices
-                && !await db.UsageHistories.AnyAsync(u => u.Session.PlanId == id, ct), services);
+                && !await db.UsageHistories.AnyAsync(u => u.Session.PlanId == id, ct), services, plan.SessionDetailsJson);
     }
 
     public async Task<PagedResult<SessionSummary>> SessionsAsync(ClaimsPrincipal actor, SessionQuery query, bool mine, CancellationToken ct)
