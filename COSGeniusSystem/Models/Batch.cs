@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -24,6 +24,12 @@ public partial class Batch
     public decimal UnitCost { get; set; }
 
     public string Status { get; set; } = null!;
+
+    // [hieppm] Start: Bổ sung thuộc tính Location và SupplierBatchCode theo Warehouse_Update.sql
+    public string? Location { get; set; }
+
+    public string? SupplierBatchCode { get; set; }
+    // [hieppm] End: Bổ sung thuộc tính Location và SupplierBatchCode theo Warehouse_Update.sql
 
     public virtual ICollection<AuditDetail> AuditDetails { get; set; } = new List<AuditDetail>();
 

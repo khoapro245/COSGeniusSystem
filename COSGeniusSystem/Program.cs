@@ -42,6 +42,10 @@ builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
+// [hieppm] Start: Đăng ký DI cho module Purchase Orders & Goods Receipts
+builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
+builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
+// [hieppm] End: Đăng ký DI cho module Purchase Orders & Goods Receipts
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
