@@ -18,7 +18,7 @@ public class NotificationService : INotificationService
     public async Task<PaginatedResult<NotificationDto>> GetNotificationsAsync(int userId, NotificationQueryParams queryParams)
     {
         var page = queryParams.Page <= 0 ? 1 : queryParams.Page;
-        var pageSize = queryParams.PageSize <= 0 ? 20 : queryParams.PageSize;
+        var pageSize = queryParams.PageSize <= 0 ? 10 : queryParams.PageSize;
 
         var query = _context.Notifications
             .AsNoTracking()

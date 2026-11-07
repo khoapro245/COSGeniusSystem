@@ -23,7 +23,7 @@ namespace COSGeniusSystem.Controllers
         [HttpGet]
         public async Task<ActionResult<ApiResponseModel<PagedResult<PatientResponse>>>> GetAll(
             [FromQuery, Range(1, 1000000)] int pageNumber = 1,
-            [FromQuery, Range(1, 100)] int pageSize = 20, CancellationToken ct = default,
+            [FromQuery, Range(1, 100)] int pageSize = 10, CancellationToken ct = default,
             [FromQuery, StringLength(150)] string? search = null,
             [FromQuery] string? keyword = null,
             [FromQuery] string? code = null,

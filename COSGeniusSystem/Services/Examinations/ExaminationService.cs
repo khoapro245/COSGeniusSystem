@@ -175,33 +175,24 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         return await RegistrationResponseAsync(registrationId, ct);
     }
 
-    public async Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTicketRequest request, CancellationToken ct)
+    public async Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTreatment request, CancellationToken ct)
     {
-        var reason = request?.CancelReason?.Trim();
-        if (string.IsNullOrWhiteSpace(reason))
-            reason = request?.Reason?.Trim();
-        if (string.IsNullOrWhiteSpace(reason))
-            throw new BadRequestException("Lý do hủy là bắt buộc (CancelReason is required).");
-
+        Reception(actor);
+        Validate(request);
+        if (string.IsNullOrWhiteSpace(request.Reason)) throw new BadRequestException("Cancellation reason is required.");
         await WriteAsync(actor, registrationId, false, async registration =>
         {
-            var status = registration.Status?.ToUpperInvariant();
-            if (status is "IN_PROGRESS" or "ĐANG KHÁM")
-                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
-            if (status is "COMPLETED" or "HOÀN TẤT" or "ĐÃ HOÀN TẤT" or "HOÀN THÀNH")
-                throw new BadRequestException("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện.");
-            if (status is "CANCELLED" or "ĐÃ HỦY")
-                return true;
-
+            Version(registration.RowVersion, request.RowVersion);
+            if (registration.Status != "WAITING" || registration.StartedAt != null || registration.CompletedAt != null
+                || await db.MedicalRecords.AnyAsync(r => r.RegistrationId == registrationId, ct))
+                throw new ConflictException("Only unstarted WAITING registrations can be cancelled.");
             var now = DateTime.UtcNow;
             registration.Status = "CANCELLED";
             registration.CancelledAt = now;
             registration.UpdatedAt = now;
-            var audit = $"[Đã hủy lúc {now.AddHours(7):dd/MM/yyyy HH:mm}]: {reason}";
-            registration.Note = string.IsNullOrWhiteSpace(registration.Note) ? audit : $"{registration.Note}\n{audit}";
+            registration.Note = $"{registration.Note}\n[Cancelled {now:O}, user {UserId(actor)}] {request.Reason.Trim()}".Trim();
             return true;
         }, ct);
-
         return await RegistrationResponseAsync(registrationId, ct);
     }
 

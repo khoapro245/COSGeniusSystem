@@ -72,7 +72,7 @@ public sealed class FormulaFilterQuery
     public string? Status { get; set; } // PENDING, APPROVED, REJECTED, ALL
     public bool? IsActive { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 50;
+    public int PageSize { get; set; } = 10;
 }
 
 public sealed class ReviewFormulaRequest

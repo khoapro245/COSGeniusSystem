@@ -45,6 +45,7 @@ builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService
 builder.Services.AddScoped<IFormulaService, FormulaService>();
 builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
 builder.Services.AddScoped<COSGeniusSystem.Services.Interfaces.IDoctorClinicalService, COSGeniusSystem.Services.Impl.DoctorClinicalService>();
+builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddControllers()
     .AddJsonOptions(options =>

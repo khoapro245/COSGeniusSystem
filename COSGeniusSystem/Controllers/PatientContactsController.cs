@@ -21,7 +21,7 @@ namespace COSGeniusSystem.Controllers
         [HttpGet]
         public async Task<ActionResult<ApiResponseModel<PagedResult<PatientContactResponse>>>> GetAll(
             int patientId, [FromQuery, Range(1, 1000000)] int pageNumber = 1,
-            [FromQuery, Range(1, 100)] int pageSize = 20, CancellationToken ct = default)
+            [FromQuery, Range(1, 100)] int pageSize = 10, CancellationToken ct = default)
         {
             var contacts = await _patientContactService.GetAllAsync(patientId, pageNumber, pageSize, ct);
             return SuccessResponse(SystemMessages.ContactsRetrieved, contacts);

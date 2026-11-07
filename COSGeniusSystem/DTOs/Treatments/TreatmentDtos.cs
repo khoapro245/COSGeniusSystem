@@ -57,7 +57,12 @@ public sealed record ServiceProgress(int PlanDetailId, int ServiceId, string Ser
 public sealed record PlanOverview(PlanSummary Plan, PatientResponse Patient, int RegistrationId,
     DateTime ExamDate, string? Diagnosis, string? AllergyNote, string? Description, string TreatmentType,
     DateOnly? StartDate, DateOnly? EndDate, int RemainingSessions, bool FullyPaid, bool RequiresFullPayment,
-    bool CanRequest, bool CanCancel, IReadOnlyList<ServiceProgress> Services);
+    bool CanRequest, bool CanCancel, IReadOnlyList<ServiceProgress> Services,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? SessionDetailsJson = null)
+{
+    public IReadOnlyList<PlannedSessionRequest> Sessions => string.IsNullOrEmpty(SessionDetailsJson)
+        ? [] : System.Text.Json.JsonSerializer.Deserialize<List<PlannedSessionRequest>>(SessionDetailsJson) ?? [];
+}
 public sealed record SessionSummary(int SessionId, int PlanId, string? PlanCode, string PlanName,
     int SessionNumber, int PatientId, string? PatientCode, string PatientName, string? Phone,
     int? AssignedDoctorId, string? AssignedDoctorName, int? PerformedBy, string? PerformedByName,

@@ -27,6 +27,19 @@ internal static class SchemaFixture
         };
     }
 
+    internal static ExaminationRegistration Registration(int id = 1)
+    {
+        var user = new User { UserId = id, Username = $"user{id}", FullName = "Staff", PasswordHash = "hash" };
+        var doctor = new Doctor { DoctorId = id, FullName = "Doctor", User = user, IsActive = true };
+        var patient = new Patient { PatientId = id, FullName = "Patient" };
+        return new ExaminationRegistration
+        {
+            RegistrationId = id, Patient = patient, Doctor = doctor, RegisteredByNavigation = user,
+            RegistrationCode = $"KCB{id:D5}", BusinessDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)),
+            QueueNumber = id, RegisteredAt = DateTime.UtcNow, Status = "WAITING", RowVersion = [1, 2, 3, 4, 5, 6, 7, 8]
+        };
+    }
+
     internal static TreatmentPlan Plan(MedicalRecord record) => new()
     {
         PlanId = 1, Record = record, Doctor = record.Doctor, PlanName = "Plan", TreatmentType = "COURSE",

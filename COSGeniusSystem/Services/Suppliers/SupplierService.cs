@@ -33,7 +33,7 @@ public class SupplierService : ISupplierService
         }
 
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize < 1 ? 20 : Math.Min(query.PageSize, 100);
+        var pageSize = query.PageSize < 1 ? 10 : Math.Min(query.PageSize, 100);
 
         return await q
             .OrderBy(s => s.SupplierCode)

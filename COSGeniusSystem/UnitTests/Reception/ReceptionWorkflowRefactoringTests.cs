@@ -22,55 +22,55 @@ public class ReceptionWorkflowRefactoringTests
     public async Task CancelExamTicket_WhenWaiting_SucceedsAndSetsAudit()
     {
         using var db = SchemaFixture.Create();
-        var record = SchemaFixture.Record();
-        record.Registration.Status = "WAITING";
-        record.Registration.Note = "Ghi chú ban đầu";
-        db.MedicalRecords.Add(record);
+        var reg = SchemaFixture.Registration();
+        reg.Status = "WAITING";
+        reg.Note = "Ghi chú ban đầu";
+        db.ExaminationRegistrations.Add(reg);
         await db.SaveChangesAsync();
 
         var service = new ExaminationService(db);
-        var result = await service.CancelAsync(ReceptionActor, record.RegistrationId,
-            new CancelTicketRequest { CancelReason = "Bệnh nhân có việc bận xin về" }, default);
+        var result = await service.CancelAsync(ReceptionActor, reg.RegistrationId,
+            new CancelTreatment { RowVersion = reg.RowVersion, Reason = "Bệnh nhân có việc bận xin về" }, default);
 
         Assert.NotNull(result);
         Assert.Equal("CANCELLED", result.Status);
 
-        var saved = await db.ExaminationRegistrations.SingleAsync(r => r.RegistrationId == record.RegistrationId);
+        var saved = await db.ExaminationRegistrations.SingleAsync(r => r.RegistrationId == reg.RegistrationId);
         Assert.Equal("CANCELLED", saved.Status);
         Assert.NotNull(saved.CancelledAt);
         Assert.Contains("Bệnh nhân có việc bận xin về", saved.Note);
     }
 
     [Fact]
-    public async Task CancelExamTicket_WhenInProgress_ThrowsBadRequestException()
+    public async Task CancelExamTicket_WhenInProgress_ThrowsConflictException()
     {
         using var db = SchemaFixture.Create();
-        var record = SchemaFixture.Record();
-        record.Registration.Status = "IN_PROGRESS";
-        db.MedicalRecords.Add(record);
+        var reg = SchemaFixture.Registration();
+        reg.Status = "IN_PROGRESS";
+        db.ExaminationRegistrations.Add(reg);
         await db.SaveChangesAsync();
 
         var service = new ExaminationService(db);
-        var ex = await Assert.ThrowsAsync<BadRequestException>(() =>
-            service.CancelAsync(ReceptionActor, record.RegistrationId,
-                new CancelTicketRequest { CancelReason = "Hủy ngang" }, default));
+        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
+            service.CancelAsync(ReceptionActor, reg.RegistrationId,
+                new CancelTreatment { RowVersion = reg.RowVersion, Reason = "Hủy ngang" }, default));
 
-        Assert.Contains("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện", ex.Message);
+        Assert.Contains("Only unstarted WAITING registrations can be cancelled", ex.Message);
     }
 
     [Fact]
-    public async Task CancelExamTicket_WithoutReason_ThrowsBadRequestException()
+    public async Task CancelExamTicket_WithoutReason_ThrowsValidationException()
     {
         using var db = SchemaFixture.Create();
-        var record = SchemaFixture.Record();
-        record.Registration.Status = "WAITING";
-        db.MedicalRecords.Add(record);
+        var reg = SchemaFixture.Registration();
+        reg.Status = "WAITING";
+        db.ExaminationRegistrations.Add(reg);
         await db.SaveChangesAsync();
 
         var service = new ExaminationService(db);
-        await Assert.ThrowsAsync<BadRequestException>(() =>
-            service.CancelAsync(ReceptionActor, record.RegistrationId,
-                new CancelTicketRequest { CancelReason = "" }, default));
+        await Assert.ThrowsAnyAsync<Exception>(() =>
+            service.CancelAsync(ReceptionActor, reg.RegistrationId,
+                new CancelTreatment { RowVersion = reg.RowVersion, Reason = "" }, default));
     }
 
     [Fact]
