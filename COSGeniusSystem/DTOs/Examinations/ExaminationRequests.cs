@@ -60,8 +60,15 @@ public sealed class UpdateRegistrationRequest : RegistrationInput
 
 public class CancelTicketRequest
 {
+    private string _cancelReason = string.Empty;
+
     [Required(ErrorMessage = "Lý do hủy là bắt buộc (CancelReason is required).")]
-    public string CancelReason { get; set; } = string.Empty;
+    public string CancelReason
+    {
+        get => string.IsNullOrWhiteSpace(_cancelReason) ? (Reason ?? string.Empty) : _cancelReason;
+        set => _cancelReason = value;
+    }
+
     public string? Reason { get; set; }
     public byte[]? RowVersion { get; set; }
 }
