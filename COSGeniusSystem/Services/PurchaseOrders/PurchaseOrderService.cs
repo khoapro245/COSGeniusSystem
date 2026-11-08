@@ -255,6 +255,12 @@ public class PurchaseOrderService : IPurchaseOrderService
         decimal totalOrdered = 0;
         decimal totalReceived = 0;
 
+        // [hieppm] Start: Đồng bộ dữ liệu chi tiết và trạng thái PO theo database
+        var dbStatus = (po.Status ?? string.Empty).Trim();
+        bool isDbCompleted = dbStatus.Equals("Đã nhận hàng", StringComparison.OrdinalIgnoreCase) ||
+                             dbStatus.Equals("Đã hoàn thành", StringComparison.OrdinalIgnoreCase) ||
+                             dbStatus.Equals("Hoàn thành", StringComparison.OrdinalIgnoreCase);
+
         foreach (var d in po.Podetails)
         {
             totalOrdered += d.OrderQuantity;
@@ -270,6 +276,12 @@ public class PurchaseOrderService : IPurchaseOrderService
                 receivedForHerb = approvedReceiptDetails
                     .Where(rd => rd.Batch?.HerbId == d.HerbId)
                     .Sum(rd => rd.Quantity);
+            }
+
+            // Nếu đơn hàng trong DB đã đánh dấu là "Đã nhận hàng" / "Đã hoàn thành" nhưng chưa có phiếu duyệt lẻ, đồng bộ số lượng đã nhận
+            if (isDbCompleted && receivedForHerb == 0)
+            {
+                receivedForHerb = d.OrderQuantity;
             }
 
             totalReceived += receivedForHerb;
@@ -294,17 +306,19 @@ public class PurchaseOrderService : IPurchaseOrderService
         string progressStatus;
         string detailStatus;
 
-        if (IsDraftStatus(po.Status))
-        {
-            progressStatus = "Nháp";
-            detailStatus = "Bản nháp - Chờ phát hành";
-        }
-        else if (detailDtos.Count > 0 && detailDtos.All(d => d.RemainingQuantity <= 0))
+        if (isDbCompleted || (detailDtos.Count > 0 && detailDtos.All(d => d.RemainingQuantity <= 0)))
         {
             progressStatus = "Đã hoàn thành";
             detailStatus = "Đã hoàn thành nhận hàng";
         }
-        else if (detailDtos.Any(d => d.ReceivedQuantity > 0))
+        else if (IsDraftStatus(dbStatus))
+        {
+            progressStatus = "Nháp";
+            detailStatus = "Bản nháp - Chờ phát hành";
+        }
+        else if (detailDtos.Any(d => d.ReceivedQuantity > 0) ||
+                 dbStatus.Equals("Nhận 1 phần", StringComparison.OrdinalIgnoreCase) ||
+                 dbStatus.Equals("Nhận một phần", StringComparison.OrdinalIgnoreCase))
         {
             progressStatus = "Nhận một phần";
             detailStatus = "Đang nhận một phần";
@@ -314,6 +328,7 @@ public class PurchaseOrderService : IPurchaseOrderService
             progressStatus = "Chờ nhận";
             detailStatus = "Chờ nhận hàng";
         }
+        // [hieppm] End: Đồng bộ dữ liệu chi tiết và trạng thái PO theo database
 
         return new PurchaseOrderDto
         {

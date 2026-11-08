@@ -200,6 +200,23 @@ public class GoodsReceiptService : IGoodsReceiptService
         }
 
         _context.GoodsReceipts.Add(receipt);
+
+        // [hieppm] Start: Notify to Manager (Theo sơ đồ nghiệp vụ)
+        var managerUser = await _context.Users
+            .FirstOrDefaultAsync(u => u.UserRoles.Any(ur => ur.Role.RoleCode == "MANAGER"), ct);
+        if (managerUser != null)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = managerUser.UserId,
+                Title = "Phiếu nhập kho mới chờ duyệt",
+                Message = $"Thủ kho đã lập phiếu nhập {receiptCode} từ đơn mua {linkedPo?.Pocode ?? "PO"}. Vui lòng kiểm tra và duyệt Putaway.",
+                IsRead = false,
+                CreatedAt = DateTime.Now
+            });
+        }
+        // [hieppm] End: Notify to Manager
+
         await _context.SaveChangesAsync(ct);
 
         return (await GetGoodsReceiptDetailAsync(receipt.ReceiptId.ToString(), ct))!;
@@ -322,6 +339,24 @@ public class GoodsReceiptService : IGoodsReceiptService
                 }
             }
         }
+
+        // [hieppm] Start: Notify to Manager (Ghi nhận thông báo hoàn tất Putaway)
+        var managerToNotify = await _context.Users
+            .FirstOrDefaultAsync(u => u.UserRoles.Any(ur => ur.Role.RoleCode == "MANAGER"), ct);
+        if (managerToNotify != null)
+        {
+            _context.Notifications.Add(new Notification
+            {
+                UserId = managerToNotify.UserId,
+                Title = request.IsApproved ? "Phiếu nhập kho đã hoàn tất Putaway" : "Phiếu nhập kho bị từ chối",
+                Message = request.IsApproved
+                    ? $"Phiếu nhập {receipt.ReceiptCode} đã được phê duyệt tăng tồn kho và cập nhật trạng thái đơn PO."
+                    : $"Phiếu nhập {receipt.ReceiptCode} đã bị từ chối phê duyệt.",
+                IsRead = false,
+                CreatedAt = DateTime.Now
+            });
+        }
+        // [hieppm] End: Notify to Manager
 
         await _context.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
