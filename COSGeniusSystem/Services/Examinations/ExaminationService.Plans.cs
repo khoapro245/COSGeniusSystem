@@ -39,6 +39,21 @@ public sealed partial class ExaminationService
     {
         Validate(request);
         foreach (var item in request.Items) Validate(item);
+        if (request.Items.Any(item => item.PlannedQuantity > request.PlannedSessionCount))
+            throw new BadRequestException("Số lượng mỗi dịch vụ phải nhỏ hơn hoặc bằng tổng số buổi.");
+        if (request.Items.Sum(item => item.PlannedQuantity) < request.PlannedSessionCount)
+            throw new BadRequestException("Tổng số lượng dịch vụ phải lớn hơn hoặc bằng tổng số buổi.");
+        if (request.Sessions != null)
+        {
+            foreach (var session in request.Sessions) Validate(session);
+            if (request.Sessions.Count != request.PlannedSessionCount
+                || request.Sessions.Select(s => s.SessionNumber).Distinct().Count() != request.PlannedSessionCount
+                || request.Sessions.Any(s => s.SessionNumber > request.PlannedSessionCount || s.ServiceIds.Count == 0
+                    || s.ServiceIds.Distinct().Count() != s.ServiceIds.Count
+                    || s.ServiceIds.Any(id => !request.Items.Any(item => item.ServiceId == id)))
+                || request.Items.Any(item => request.Sessions.Count(s => s.ServiceIds.Contains(item.ServiceId)) != item.PlannedQuantity))
+                throw new BadRequestException("Chi tiết từng buổi phải có dịch vụ hợp lệ và khớp số lượng đã kê.");
+        }
         if (request.TreatmentType == "SINGLE" && request.PlannedSessionCount != 1)
             throw new BadRequestException("SINGLE treatment must have exactly one session.");
         if (request.Items.Select(i => i.ServiceId).Distinct().Count() != request.Items.Count)
@@ -59,6 +74,10 @@ public sealed partial class ExaminationService
             plan.TreatmentType = request.TreatmentType;
             plan.PlannedSessionCount = request.PlannedSessionCount;
             plan.Description = request.Description;
+            if (request.Sessions != null)
+                plan.SessionDetailsJson = System.Text.Json.JsonSerializer.Serialize(request.Sessions);
+            else if (plan.SessionDetailsJson != null)
+                throw new BadRequestException("Vui lòng gửi chi tiết các buổi khi cập nhật liệu trình.");
             plan.UpdatedAt = DateTime.UtcNow;
             foreach (var detail in plan.TreatmentPlanDetails.ToList())
                 if (!ids.Contains(detail.ServiceId)) db.TreatmentPlanDetails.Remove(detail);
@@ -97,7 +116,8 @@ public sealed partial class ExaminationService
             Draft(plan.Status);
             Version(plan.RowVersion, request.RowVersion);
             if (string.IsNullOrWhiteSpace(plan.PlanName) || plan.TreatmentPlanDetails.Count == 0
-                || plan.TreatmentPlanDetails.Any(d => d.PlannedQuantity <= 0 || d.UnitPrice < 0)
+                || plan.TreatmentPlanDetails.Any(d => d.PlannedQuantity <= 0 || d.PlannedQuantity > plan.PlannedSessionCount || d.UnitPrice < 0)
+                || plan.TreatmentPlanDetails.Sum(d => d.PlannedQuantity) < plan.PlannedSessionCount
                 || plan.PlannedSessionCount <= 0 || plan.TreatmentType is not ("SINGLE" or "COURSE")
                 || (plan.TreatmentType == "SINGLE" && plan.PlannedSessionCount != 1))
                 throw new BadRequestException("The treatment plan requires a name, valid session count and at least one service with positive quantity.");
@@ -135,12 +155,12 @@ public sealed partial class ExaminationService
             p.PlanId, p.PlanCode, p.RecordId, p.DoctorId, p.PlanName, p.TreatmentType, p.PlannedSessionCount,
             p.Description, p.Status, p.ConfirmedAt, p.RowVersion,
             p.TreatmentPlanDetails.OrderBy(d => d.PlanDetailId).Select(d => new PlanItemResponse(
-                d.PlanDetailId, d.ServiceId, d.ServiceNameSnapshot, d.UnitSnapshot, d.UnitPrice, d.PlannedQuantity, d.Instructions)).ToList()));
+                d.PlanDetailId, d.ServiceId, d.ServiceNameSnapshot, d.UnitSnapshot, d.UnitPrice, d.PlannedQuantity, d.Instructions)).ToList(), p.SessionDetailsJson));
 
     private Task<TreatmentPlanResponse> PlanResponseAsync(int id, CancellationToken ct) => db.TreatmentPlans.AsNoTracking()
         .Where(p => p.PlanId == id).Select(p => new TreatmentPlanResponse(
             p.PlanId, p.PlanCode, p.RecordId, p.DoctorId, p.PlanName, p.TreatmentType, p.PlannedSessionCount,
             p.Description, p.Status, p.ConfirmedAt, p.RowVersion,
             p.TreatmentPlanDetails.OrderBy(d => d.PlanDetailId).Select(d => new PlanItemResponse(
-                d.PlanDetailId, d.ServiceId, d.ServiceNameSnapshot, d.UnitSnapshot, d.UnitPrice, d.PlannedQuantity, d.Instructions)).ToList())).SingleAsync(ct);
+                d.PlanDetailId, d.ServiceId, d.ServiceNameSnapshot, d.UnitSnapshot, d.UnitPrice, d.PlannedQuantity, d.Instructions)).ToList(), p.SessionDetailsJson)).SingleAsync(ct);
 }
