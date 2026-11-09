@@ -18,5 +18,5 @@ public class HerbFilterQuery
 
     /// <summary>Số bản ghi mỗi trang.</summary>
     [System.ComponentModel.DataAnnotations.Range(1, 100)]
-    public int PageSize { get; set; } = 20;
+    public int PageSize { get; set; } = 10;
 }
