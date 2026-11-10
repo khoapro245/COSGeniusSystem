@@ -24,6 +24,13 @@ var errors = sources.SelectMany(p => CSharpSyntaxTree.ParseText(File.ReadAllText
     .GetDiagnostics().Where(d => d.Severity == DiagnosticSeverity.Error)).ToArray();
 foreach (var error in errors) Console.WriteLine(error);
 Check(errors.Length == 0, $"C# syntax for {sources.Length} production source files (not a service build)");
+Check(!Valid(new HerbalistSelection([])), "Herbalist rejects empty grouped request");
+Check(!Valid(new HerbalistSelection(new int[101])), "Herbalist caps grouped request size");
+Check(Valid(new HerbalistSelection([31, 32])), "Herbalist accepts grouped prescription IDs");
+Check(!Valid(new HerbalistReceive("AAAAAAAAAAE=", [])), "Herbalist requires allocation reconciliation");
+Check(!Valid(new HerbalistVersion("")), "Herbalist requires concurrency version");
+Check(!Valid(new HerbalistFilter { PageSize = 101 }), "Herbalist caps pagination");
+Check(!Valid(new HerbalistCreateRequest([31], new string('x', 2001))), "Herbalist note length matches SQL schema");
 
 var controller = typeof(ExaminationsController);
 var classRoles = controller.GetCustomAttribute<AuthorizeAttribute>()!.Roles!.Split(',');

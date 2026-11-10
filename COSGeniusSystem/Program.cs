@@ -9,13 +9,19 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
+using Microsoft.Data.SqlClient;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+{
+    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
+}
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(connectionString));
 
 // Register MemoryCache
 builder.Services.AddMemoryCache();
@@ -167,36 +173,35 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-
-    var dbContext =
-        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
-    var logger =
-        scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var databaseServer = new SqlConnectionStringBuilder(connectionString).DataSource;
+    logger.LogInformation("Initializing database on SQL Server {Server}.", databaseServer);
     for (var i = 0; i < 10; i++)
     {
         try
         {
-            if (dbContext.Database.GetPendingMigrations().Any())
+            if ((await dbContext.Database.GetPendingMigrationsAsync()).Any())
             {
-                dbContext.Database.Migrate();
-
-                logger.LogInformation(
-                    "Database migrations applied successfully.");
+                await dbContext.Database.MigrateAsync();
+                logger.LogInformation("Database migrations applied successfully.");
             }
 
             break;
         }
         catch (Exception ex)
         {
-            logger.LogWarning(
-                "Waiting for database to be ready... Attempt {Attempt}/10. Reason: {Message}",
-                i + 1,
-                ex.Message);
+            if (i == 9)
+            {
+                logger.LogCritical(ex,
+                    "Cannot initialize database on {Server} after 10 attempts. Check ConnectionStrings__DefaultConnection and SQL Server availability. The hostname 'sqlserver' requires the app and SQL Server to run on the same Docker Compose network; use localhost,1433 when running the app on the host.",
+                    databaseServer);
+                throw;
+            }
 
-            Console.WriteLine(ex.ToString());
-            Thread.Sleep(3000);
+            logger.LogWarning(ex,
+                "Waiting for SQL Server {Server} to be ready... Attempt {Attempt}/10.", databaseServer, i + 1);
+            await Task.Delay(TimeSpan.FromSeconds(3));
         }
     }
 }
