@@ -12,7 +12,7 @@ public partial class HerbalistController
     private record SelectionFailure(int Status, string Message);
     private async Task<SelectionFailure?> SelectionError(int[] ids, CancellationToken ct)
     {
-        if (ids.Length == 0 || ids.Distinct().Count() != ids.Length || ids.Any(id => id <= 0)) return new(400, "Chọn từ 1 đến 100 đơn, không trùng mã.");
+        if (ids.Length == 0 || ids.Length > 100 || ids.Distinct().Count() != ids.Length || ids.Any(id => id <= 0)) return new(400, "Chọn từ 1 đến 100 đơn, không trùng mã.");
         if (await Prescriptions().CountAsync(p => ids.Contains(p.PrescriptionId) && p.MedicineDispense == null, ct) != ids.Length) return new(409, "Đơn không tồn tại, chưa gửi hoặc đã được xử lý theo luồng xuất thuốc cũ.");
         if (await db.HerbRequisitionPrescriptions.AnyAsync(l => ids.Contains(l.PrescriptionId) && l.IsActive, ct)) return new(409, "Có đơn đã nằm trong phiếu lĩnh đang xử lý hoặc đã bốc xong. Vui lòng tải lại.");
         var invalidHerbs = await db.HerbalPrescriptionDetails.AsNoTracking()
@@ -96,7 +96,8 @@ public partial class HerbalistController
             var a=r.Allocations.Single(x=>x.Id==line.OutboundDetailId);
             if(a.ReceivedQuantity.HasValue) return Failure(409,"Dòng đã kiểm tra không được ghi đè.");
             var quantity=line.ReceiveFull ? a.QuantityGrams : line.ReceivedQuantity;
-            if(quantity<0 || (quantity.HasValue && decimal.Round(quantity.Value,2)!=quantity)) return Failure(400,"Lượng nhận phải không âm, tối đa 2 số thập phân gam.");
+            if(quantity<0 || (quantity.HasValue && decimal.Round(quantity.Value,3)!=quantity)) return Failure(400,"Lượng nhận phải không âm, tối đa 3 số thập phân gam.");
+            if (line.ReceiveFull && line.ReceivedQuantity.HasValue) return Failure(400,"Không gửi đồng thời nhận đủ và lượng thực nhận.");
             a.ReceivedQuantity=quantity;
             if(quantity.HasValue) { a.ReceivedBy=Actor;a.ReceivedAt=DateTime.UtcNow; }
         }
@@ -132,7 +133,7 @@ public partial class HerbalistController
         var r=link.Request;
         if(link.CompletedAt.HasValue || await db.MedicineDispenses.AnyAsync(x=>x.PrescriptionId==id,ct)) return Failure(409,"Đơn đã bốc xong.");
         if((r.Status!="RECEIVED" && r.Status!="DISCREPANCY") || !Matches(r.RowVersion,input.RowVersion)) return Failure(409,"Chưa đối chiếu xong hoặc phiên bản đã thay đổi.");
-        if(input.Allocations.Select(x=>x.OutboundDetailId).Distinct().Count()!=input.Allocations.Length || input.Allocations.Any(x=>x.QuantityGrams<=0 || decimal.Round(x.QuantityGrams,2)!=x.QuantityGrams || !r.Allocations.Any(a=>a.Id==x.OutboundDetailId))) return Failure(400,"Phân bổ không hợp lệ.");
+        if(input.Allocations.Select(x=>x.OutboundDetailId).Distinct().Count()!=input.Allocations.Length || input.Allocations.Any(x=>x.QuantityGrams<=0 || decimal.Round(x.QuantityGrams,3)!=x.QuantityGrams || !r.Allocations.Any(a=>a.Id==x.OutboundDetailId))) return Failure(400,"Phân bổ không hợp lệ.");
         var needs=await db.HerbRequisitionDetails.Where(x=>x.RequestId==r.Id && x.PrescriptionId==id).GroupBy(x=>x.HerbId).Select(g=>new {HerbId=g.Key,Quantity=g.Sum(x=>x.RequestedQuantity)}).ToDictionaryAsync(x=>x.HerbId,x=>x.Quantity,ct);
         var supplied=input.Allocations.GroupBy(x=>r.Allocations.Single(a=>a.Id==x.OutboundDetailId).HerbId).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.QuantityGrams));
         if(needs.Count!=supplied.Count || needs.Any(x=>supplied.GetValueOrDefault(x.Key)!=x.Value)) return Failure(400,"Phải đủ chính xác nhu cầu từng vị của đơn.");
@@ -147,6 +148,7 @@ public partial class HerbalistController
             dispense.DispenseDetails.Add(new DispenseDetail {BatchId=source.BatchId,HerbId=source.HerbId,HerbOutboundDetailId=source.Id,QuantityTaken=allocation.QuantityGrams});
         }
         db.MedicineDispenses.Add(dispense);link.CompletedAt=DateTime.UtcNow;link.CompletedBy=Actor;
+        if (!await db.HerbRequisitionPrescriptions.AnyAsync(x => x.RequestId == r.Id && x.PrescriptionId != id && x.CompletedAt == null, ct)) r.Status = "COMPLETED";
         db.Entry(r).Property(x=>x.Note).IsModified=true;
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return Data(new {id,dispense.DispenseId,link.CompletedAt});

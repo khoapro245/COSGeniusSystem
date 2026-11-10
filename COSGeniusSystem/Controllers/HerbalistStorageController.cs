@@ -1,4 +1,4 @@
-﻿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations;
 using System.Data;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 namespace COSGeniusSystem.Controllers;
+[COSGeniusSystem.Services.Herbalist.HerbalistConflict]
 [ApiController]
 [Route("api/v1/warehouse/storage-locations")]
 [Authorize(Roles="ADMIN,INVENTORY_STAFF")]

@@ -1,4 +1,4 @@
-﻿namespace COSGeniusSystem.Models;
+namespace COSGeniusSystem.Models;
 
 public class HerbRequisition
 {
@@ -39,7 +39,7 @@ public class HerbRequisitionDetail
  public int PrescriptionId { get; set; }
  public int PrescriptionDetailId { get; set; }
  public int HerbId { get; set; }
- // Workflow quantities are grams. Batch quantities remain kg.
+ // Workflow uses grams; Batch stock follows its explicitly recorded Herb.Unit.
  public decimal RequestedQuantity { get; set; }
  public string UnitSnapshot { get; set; } = "g";
  public HerbRequisition Request { get; set; } = null!;

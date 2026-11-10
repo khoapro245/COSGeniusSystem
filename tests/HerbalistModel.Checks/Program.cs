@@ -6,6 +6,10 @@ using Microsoft.EntityFrameworkCore;
 using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
     .UseSqlServer("Server=localhost;Database=ModelChecks;Integrated Security=true;TrustServerCertificate=true")
     .Options);
+if (db.Model.FindEntityType(typeof(DispenseDetail))!.FindProperty(nameof(DispenseDetail.QuantityTaken))!.GetColumnType() != "decimal(18,3)")
+    throw new Exception("Scaffolded column type must not override dispense milligram precision.");
+if (db.Model.FindEntityType(typeof(Batch))!.FindProperty(nameof(Batch.CurrentQuantity))!.GetColumnType() != "decimal(18,6)")
+    throw new Exception("Scaffolded column type must not override stock conversion precision.");
 var outboundDetailType = db.Model.FindEntityType(typeof(HerbOutboundDetail))!;
 if (outboundDetailType.IsSqlOutputClauseUsed())
     throw new Exception("Outbound receipt writes must not use OUTPUT without INTO on a table with triggers.");

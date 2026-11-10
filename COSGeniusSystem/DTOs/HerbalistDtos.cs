@@ -23,7 +23,7 @@ public record HerbalistReceive([Required] string RowVersion,
     [Required, MinLength(1)] int[] ConfirmedAllocationIds);
 public record ReceiptLine([Range(1,int.MaxValue)] int OutboundDetailId, [Range(typeof(decimal),"0","9999999999")] decimal? ReceivedQuantity, bool ReceiveFull = false);
 public record ReceiveHerbs([Required] string RowVersion, [Required, MinLength(1), MaxLength(1000)] ReceiptLine[] Lines, [StringLength(1000)] string? Reason);
-public record DispenseAllocation([Range(1,int.MaxValue)] int OutboundDetailId, [Range(typeof(decimal),"0.01","9999999999")] decimal QuantityGrams);
+public record DispenseAllocation([Range(1,int.MaxValue)] int OutboundDetailId, [Range(typeof(decimal),"0.001","9999999999")] decimal QuantityGrams);
 public record CompleteHerbs([Required] string RowVersion, [Required, MinLength(1), MaxLength(1000)] DispenseAllocation[] Allocations);
 
 

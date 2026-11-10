@@ -9,16 +9,17 @@ using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Controllers;
 
+[COSGeniusSystem.Services.Herbalist.HerbalistConflict]
 [ApiController]
 [Route("api/v1/herbalist")]
 [Authorize(Roles = "ADMIN,PHARMACIST,HERBALIST")]
 public partial class HerbalistController(ApplicationDbContext db) : ControllerBase
 {
-    private const string MissingSchema = "Database chưa có đủ bảng HerbRequisition, HerbRequisitionPrescription, HerbOutboundDetail. Cần áp dụng script Herbalist_Canonical.sql trước khi sử dụng lĩnh và bốc thuốc.";
+    private const string MissingSchema = "Database chưa có đủ bảng HerbRequisition, HerbRequisitionPrescription, HerbOutboundDetail. Cần xác minh schema canonical và áp dụng Herbalist_IntegrationGuards.sql trước khi sử dụng lĩnh và bốc thuốc.";
     private IActionResult Data(object? value) => Ok(new ApiResponseModel<object>(200, "Thành công.", true, value));
     private IActionResult Failure(int status, string message) => StatusCode(status, new ApiResponseModel<object>(status, message, false, null));
     private async Task<bool> SchemaReady(CancellationToken ct) => await db.Database.SqlQueryRaw<int>(
-        "SELECT CASE WHEN OBJECT_ID(N'dbo.HerbRequisition', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbRequisitionPrescription', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbOutboundDemand', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.HerbOutboundDetail',N'ReceivedQuantity') IS NOT NULL THEN 1 ELSE 0 END AS [Value]").SingleAsync(ct) == 1;
+        "SELECT CASE WHEN OBJECT_ID(N'dbo.HerbRequisition', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbRequisitionPrescription', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbOutboundDemand', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.HerbOutboundDetail',N'ReceivedQuantity') IS NOT NULL AND OBJECT_ID(N'dbo.TR_DispenseDetail_ReceiptBudget', N'TR') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Batch') AND name=N'CurrentQuantity' AND scale>=6) THEN 1 ELSE 0 END AS [Value]").SingleAsync(ct) == 1;
     private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Missing user identity."));
     private static string Code(int id) => $"PL{id:D5}";
     private static object Page<T>(List<T> items, int count, HerbalistFilter f) => new
@@ -220,8 +221,8 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
             .GroupBy(d => new { d.HerbId, d.Herb.HerbCode, d.Herb.CommonName })
             .Select(g => new { g.Key.HerbId, g.Key.HerbCode, g.Key.CommonName, Grams = g.Sum(d => d.DosagePerDose * d.Prescription.TotalDoses) }).ToListAsync(ct);
         var herbIds = needs.Select(n => n.HerbId).ToArray();
-        var stocks = await db.Batches.AsNoTracking().Where(b => herbIds.Contains(b.HerbId) && (!warehouseId.HasValue || b.WarehouseId == warehouseId) && b.StorageLocation != null && b.StorageLocation.IsActive && b.Herb.IsActive && b.Warehouse.IsActive && b.ExpiryDate >= today && b.CurrentQuantity > 0 && b.Status == "Đạt chuẩn" && (b.Herb.Unit == "kg" || b.Herb.Unit == "g"))
-            .GroupBy(b => b.HerbId).Select(g => new { Id = g.Key, Kg = g.Sum(b => b.Herb.Unit == "kg" ? b.CurrentQuantity : b.CurrentQuantity / 1000m) }).ToDictionaryAsync(x => x.Id, x => x.Kg, ct);
+        var stocks = await db.Batches.AsNoTracking().Where(b => herbIds.Contains(b.HerbId) && (!warehouseId.HasValue || b.WarehouseId == warehouseId) && b.StorageLocation != null && b.StorageLocation.IsActive && b.StorageLocation.WarehouseId == b.WarehouseId && b.Herb.IsActive && b.Warehouse.IsActive && b.ExpiryDate >= today && b.CurrentQuantity > 0 && b.Status == "Đạt chuẩn" && (b.Herb.Unit == "kg" || b.Herb.Unit == "g"))
+            .GroupBy(b => b.HerbId).Select(g => new { Id = g.Key, Kg = g.Sum(b => Math.Floor((b.Herb.Unit == "kg" ? b.CurrentQuantity * 1000m : b.CurrentQuantity) * 1000m) / 1000000m) }).ToDictionaryAsync(x => x.Id, x => x.Kg, ct);
         return needs.Select(n => new DemandRow(n.HerbId, n.HerbCode, n.CommonName, n.Grams, stocks.GetValueOrDefault(n.HerbId), Math.Max(0, n.Grams - stocks.GetValueOrDefault(n.HerbId) * 1000))).ToList();
     }
 }

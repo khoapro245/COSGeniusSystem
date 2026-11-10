@@ -1,4 +1,4 @@
-﻿using COSGeniusSystem.Models;
+using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 namespace COSGeniusSystem.Data;
 public partial class ApplicationDbContext
@@ -19,12 +19,12 @@ public partial class ApplicationDbContext
   });
   modelBuilder.Entity<Invoice>().ToTable("Invoice",t=>t.UseSqlOutputClause(false));
   modelBuilder.Entity<InvoiceDetail>().ToTable("InvoiceDetail",t=>t.UseSqlOutputClause(false));
-  modelBuilder.Entity<Batch>().Property(x=>x.CurrentQuantity).HasPrecision(15,5);
-  modelBuilder.Entity<Batch>().Property(x=>x.OriginalQuantity).HasPrecision(15,5);
+  modelBuilder.Entity<Batch>().Property(x=>x.CurrentQuantity).HasColumnType("decimal(18,6)").HasPrecision(18,6);
+  modelBuilder.Entity<Batch>().Property(x=>x.OriginalQuantity).HasColumnType("decimal(18,6)").HasPrecision(18,6);
   modelBuilder.Entity<Batch>().HasOne(x=>x.StorageLocation).WithMany().HasForeignKey(x=>x.StorageLocationId).OnDelete(DeleteBehavior.NoAction);
   modelBuilder.Entity<DispenseDetail>().ToTable("DispenseDetail",t=>t.UseSqlOutputClause(false));
   modelBuilder.Entity<DispenseDetail>().Property(x=>x.HerbOutboundDetailId).HasColumnName("HerbOutboundDetailID");
-  modelBuilder.Entity<DispenseDetail>().Property(x=>x.QuantityTaken).HasPrecision(18,3);
+  modelBuilder.Entity<DispenseDetail>().Property(x=>x.QuantityTaken).HasColumnType("decimal(18,3)").HasPrecision(18,3);
   // Completion inserts must support the enabled MedicineDispense triggers.
   modelBuilder.Entity<MedicineDispense>().ToTable("MedicineDispense",t=>t.UseSqlOutputClause(false));
   modelBuilder.Entity<MedicineDispense>().Property(x=>x.HerbOutboundId).HasColumnName("HerbOutboundID");

@@ -9,19 +9,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
-using Microsoft.Data.SqlClient;
 using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
-{
-    throw new InvalidOperationException("ConnectionStrings:DefaultConnection is not configured.");
-}
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
 // Register MemoryCache
 builder.Services.AddMemoryCache();
@@ -47,7 +41,7 @@ builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>(
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
-builder.Services.AddScoped<IDispensingService, DispensingService>();
+// Grouped Herbalist requisitions replace the legacy DispensingService.
 builder.Services.AddScoped<IAuditService, AuditService>();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
@@ -173,35 +167,36 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-    var databaseServer = new SqlConnectionStringBuilder(connectionString).DataSource;
-    logger.LogInformation("Initializing database on SQL Server {Server}.", databaseServer);
+
+    var dbContext =
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    var logger =
+        scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
     for (var i = 0; i < 10; i++)
     {
         try
         {
-            if ((await dbContext.Database.GetPendingMigrationsAsync()).Any())
+            if (dbContext.Database.GetPendingMigrations().Any())
             {
-                await dbContext.Database.MigrateAsync();
-                logger.LogInformation("Database migrations applied successfully.");
+                dbContext.Database.Migrate();
+
+                logger.LogInformation(
+                    "Database migrations applied successfully.");
             }
 
             break;
         }
         catch (Exception ex)
         {
-            if (i == 9)
-            {
-                logger.LogCritical(ex,
-                    "Cannot initialize database on {Server} after 10 attempts. Check ConnectionStrings__DefaultConnection and SQL Server availability. The hostname 'sqlserver' requires the app and SQL Server to run on the same Docker Compose network; use localhost,1433 when running the app on the host.",
-                    databaseServer);
-                throw;
-            }
+            logger.LogWarning(
+                "Waiting for database to be ready... Attempt {Attempt}/10. Reason: {Message}",
+                i + 1,
+                ex.Message);
 
-            logger.LogWarning(ex,
-                "Waiting for SQL Server {Server} to be ready... Attempt {Attempt}/10.", databaseServer, i + 1);
-            await Task.Delay(TimeSpan.FromSeconds(3));
+            Console.WriteLine(ex.ToString());
+            Thread.Sleep(3000);
         }
     }
 }
