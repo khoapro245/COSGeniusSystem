@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
 
 public partial class MedicineDispense
 {
+    public int? HerbOutboundId { get; set; }
+
     public int DispenseId { get; set; }
 
     public string? DispenseCode { get; set; }

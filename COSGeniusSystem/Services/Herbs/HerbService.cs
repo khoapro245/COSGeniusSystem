@@ -139,6 +139,9 @@ public class HerbService : IHerbService
 
         entity.CommonName = request.CommonName;
         entity.ScientificName = request.ScientificName;
+        // Changing this label would reinterpret existing batch balances and history.
+        if (entity.Unit != request.Unit && await _context.Batches.AnyAsync(b => b.HerbId == id))
+            return (null, "Không thể đổi đơn vị khi vị thuốc đã có lô. Cần quy trình chuyển đổi dữ liệu có đối soát.");
         entity.Unit = request.Unit;
         entity.TasteProperties = request.TasteProperties;
         entity.StandardPrice = request.StandardPrice;

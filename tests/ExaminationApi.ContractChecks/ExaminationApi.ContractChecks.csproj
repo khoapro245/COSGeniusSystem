@@ -10,6 +10,7 @@
     <Reference Include="Microsoft.CodeAnalysis" HintPath="$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll" />
     <Reference Include="Microsoft.CodeAnalysis.CSharp" HintPath="$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.CSharp.dll" />
     <Compile Include="../../COSGeniusSystem/DTOs/Examinations/*.cs" Link="DTOs/%(Filename)%(Extension)" />
+    <Compile Include="../../COSGeniusSystem/DTOs/HerbalistDtos.cs" Link="DTOs/HerbalistDtos.cs" />
     <Compile Include="../../COSGeniusSystem/DTOs/Treatments/*.cs" Link="DTOs/Treatments/%(Filename)%(Extension)" />
     <Compile Include="../../COSGeniusSystem/DTOs/Reception/*.cs" Link="DTOs/Reception/%(Filename)%(Extension)" />
     <Compile Include="../../COSGeniusSystem/DTOs/Invoices/*.cs" Link="DTOs/Invoices/%(Filename)%(Extension)" />

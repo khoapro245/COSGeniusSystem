@@ -1,10 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
 
 public partial class DispenseDetail
 {
+    public int? HerbOutboundDetailId { get; set; }
+
     public int DispenseDetailId { get; set; }
 
     public int DispenseId { get; set; }
