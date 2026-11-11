@@ -2,6 +2,12 @@ namespace COSGeniusSystem.DTOs;
 
 public class InvoiceDetailDto
 {
+    public int RecordId { get; set; }
+    public DateTime ExamDate { get; set; }
+    public string? Phone { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public string? CancellationReason { get; set; }
+    public byte[] RowVersion { get; set; } = [];
     public int InvoiceId { get; set; }
     public string InvoiceCode { get; set; } = string.Empty;
     public DateTime IssuedDate { get; set; }

@@ -5,6 +5,9 @@ namespace COSGeniusSystem.Models;
 
 public partial class Batch
 {
+    public int? StorageLocationId { get; set; }
+    public WarehouseStorageLocation? StorageLocation { get; set; }
+
     public int BatchId { get; set; }
 
     public string BatchNumber { get; set; } = null!;

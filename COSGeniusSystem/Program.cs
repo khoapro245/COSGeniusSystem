@@ -41,12 +41,15 @@ builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>(
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
+// Grouped Herbalist requisitions replace the legacy DispensingService.
 builder.Services.AddScoped<IAuditService, AuditService>();
 // [hieppm] Start: Đăng ký DI cho module Purchase Orders & Goods Receipts
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 // [hieppm] End: Đăng ký DI cho module Purchase Orders & Goods Receipts
+
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
+
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
     // Avoid MVC's default ProblemDetails wrapper alongside ApiResponseModel.
@@ -55,13 +58,20 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
     {
         var message = SystemMessages.ValidationFailed;
         var data = ValidationErrorData.FromModelState(context.ModelState);
-        return new BadRequestObjectResult(new ApiResponseModel<ValidationErrorData>(message.Code, message.Message, false, data));
+
+        return new BadRequestObjectResult(
+            new ApiResponseModel<ValidationErrorData>(
+                message.Code,
+                message.Message,
+                false,
+                data));
     };
 });
 
 // Configure JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
     ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "COSGeniusClient";
 
@@ -74,14 +84,19 @@ builder.Services.AddAuthentication(options =>
 {
     options.RequireHttpsMetadata = false;
     options.SaveToken = true;
+
     options.TokenValidationParameters = new TokenValidationParameters
     {
         ValidateIssuerSigningKey = true,
-        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtSecretKey)),
+        IssuerSigningKey = new SymmetricSecurityKey(
+            Encoding.UTF8.GetBytes(jwtSecretKey)),
+
         ValidateIssuer = true,
         ValidIssuer = jwtIssuer,
+
         ValidateAudience = true,
         ValidAudience = jwtAudience,
+
         ValidateLifetime = true,
         ClockSkew = TimeSpan.Zero
     };
@@ -93,20 +108,41 @@ builder.Services.AddAuthentication(options =>
             context.HandleResponse();
             context.Response.StatusCode = StatusCodes.Status401Unauthorized;
             context.Response.Headers.WWWAuthenticate = "Bearer";
+
             await context.Response.WriteAsJsonAsync(
-                new ApiResponseModel<object?>(401, "Authentication is required.", false, null), context.HttpContext.RequestAborted);
+                new ApiResponseModel<object?>(
+                    401,
+                    "Authentication is required.",
+                    false,
+                    null),
+                context.HttpContext.RequestAborted);
         },
+
         OnForbidden = async context =>
         {
             context.Response.StatusCode = StatusCodes.Status403Forbidden;
+
             await context.Response.WriteAsJsonAsync(
-                new ApiResponseModel<object?>(403, "Access is forbidden.", false, null), context.HttpContext.RequestAborted);
+                new ApiResponseModel<object?>(
+                    403,
+                    "Access is forbidden.",
+                    false,
+                    null),
+                context.HttpContext.RequestAborted);
         },
+
         OnTokenValidated = context =>
         {
-            var blacklistService = context.HttpContext.RequestServices.GetRequiredService<ITokenBlacklistService>();
-            var authHeader = context.Request.Headers.Authorization.ToString();
-            var token = authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+            var blacklistService =
+                context.HttpContext.RequestServices
+                    .GetRequiredService<ITokenBlacklistService>();
+
+            var authHeader =
+                context.Request.Headers.Authorization.ToString();
+
+            var token = authHeader.StartsWith(
+                "Bearer ",
+                StringComparison.OrdinalIgnoreCase)
                 ? authHeader["Bearer ".Length..].Trim()
                 : authHeader.Trim();
 
@@ -135,8 +171,13 @@ app.UseMiddleware<ExceptionHandlingMiddleware>();
 if (app.Environment.IsDevelopment())
 {
     using var scope = app.Services.CreateScope();
-    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
+    var dbContext =
+        scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    var logger =
+        scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+
     for (var i = 0; i < 10; i++)
     {
         try
@@ -144,13 +185,20 @@ if (app.Environment.IsDevelopment())
             if (dbContext.Database.GetPendingMigrations().Any())
             {
                 dbContext.Database.Migrate();
-                logger.LogInformation("Database migrations applied successfully.");
+
+                logger.LogInformation(
+                    "Database migrations applied successfully.");
             }
+
             break;
         }
         catch (Exception ex)
         {
-            logger.LogWarning("Waiting for database to be ready... Attempt {Attempt}/10. Reason: {Message}", i + 1, ex.Message);
+            logger.LogWarning(
+                "Waiting for database to be ready... Attempt {Attempt}/10. Reason: {Message}",
+                i + 1,
+                ex.Message);
+
             Console.WriteLine(ex.ToString());
             Thread.Sleep(3000);
         }
@@ -173,20 +221,36 @@ app.UseExceptionHandler(new ExceptionHandlerOptions
     ExceptionHandler = async context =>
     {
         var message = SystemMessages.InternalError;
+
         context.Response.StatusCode = message.Code;
+
         await context.Response.WriteAsJsonAsync(
-            new ApiResponseModel<object?>(message.Code, message.Message, false, null), context.RequestAborted);
+            new ApiResponseModel<object?>(
+                message.Code,
+                message.Message,
+                false,
+                null),
+            context.RequestAborted);
     }
 });
 
 app.UseStatusCodePages(async statusContext =>
 {
     var context = statusContext.HttpContext;
-    if (!context.Request.Path.StartsWithSegments("/api")) return;
+
+    if (!context.Request.Path.StartsWithSegments("/api"))
+        return;
+
     var code = context.Response.StatusCode;
+
     await context.Response.WriteAsJsonAsync(
-        new ApiResponseModel<object?>(code,
-            Microsoft.AspNetCore.WebUtilities.ReasonPhrases.GetReasonPhrase(code), false, null), context.RequestAborted);
+        new ApiResponseModel<object?>(
+            code,
+            Microsoft.AspNetCore.WebUtilities.ReasonPhrases
+                .GetReasonPhrase(code),
+            false,
+            null),
+        context.RequestAborted);
 });
 
 app.UseHttpsRedirection();

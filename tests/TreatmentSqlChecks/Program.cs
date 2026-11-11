@@ -38,21 +38,24 @@ async Task<T> Exam<T>(Func<IExaminationService,Task<T>> action)
     return await action(new ExaminationService(db,new PatientService(db)));
 }
 var suffix = Guid.NewGuid().ToString("N")[..12];
-int patientId, doctorId, performerId, doctorUserId, performerUserId, receptionistId, serviceId;
+int patientId, doctorId, performerId, doctorUserId, performerUserId, receptionistId, cashierId, serviceId;
 await using (var db = new ApplicationDbContext(options))
 {
     Check(await db.Database.CanConnectAsync(ct), "Dedicated V2 SQL database reachable");
+    var cashierRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleConstants.Cashier,ct);
     var doctorRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleConstants.Doctor,ct);
     var receptionRole = await db.Roles.SingleAsync(r => r.RoleCode == RoleConstants.ReceptionStaff,ct);
     User NewUser(string name, Role role) => new() { Username=name+suffix,FullName=name,PasswordHash="TEST_ONLY",IsActive=true,UserRoles=[new UserRole {Role=role}] };
     var user1=NewUser("prescriber",doctorRole); var user2=NewUser("performer",doctorRole); var reception=NewUser("reception",receptionRole);
-    db.Users.Add(reception);
+    var cashier=NewUser("cashier",cashierRole);
+    db.Users.AddRange(reception,cashier);
     var doctor=new Doctor {User=user1,FullName="Prescriber "+suffix,IsActive=true};
     var performer=new Doctor {User=user2,FullName="Performer "+suffix,IsActive=true};
     db.Doctors.AddRange(doctor,performer);
     var patient=new Patient {FullName="Treatment test "+suffix,AllergyNote="Test allergy"};
     var service=new Service {ServiceCode="T_"+suffix,ServiceName="Test service",Unit="lần",Price=100000,IsActive=true};
     db.Patients.Add(patient); db.Services.Add(service); await db.SaveChangesAsync(ct);
+    cashierId=cashier.UserId;
     (patientId,doctorId,performerId,doctorUserId,performerUserId,receptionistId,serviceId)=
         (patient.PatientId,doctor.DoctorId,performer.DoctorId,user1.UserId,user2.UserId,reception.UserId,service.ServiceId);
 }
@@ -68,19 +71,19 @@ async Task<int> NewPlan()
         RowVersion=plan.RowVersion,PlanName="Treatment "+suffix,TreatmentType="COURSE",PlannedSessionCount=2,
         Items=[new() {ServiceId=serviceId,PlannedQuantity=2}] },ct));
     await Exam(s=>s.ConfirmPlanAsync(prescribingActor,registration.RegistrationId,plan.PlanId,new() {RowVersion=plan.RowVersion},ct));
+    var examination=await Exam(s=>s.GetAsync(prescribingActor,registration.RegistrationId,ct));
+    var record=await Exam(s=>s.SaveAsync(prescribingActor,registration.RegistrationId,new() {
+        RowVersion=examination.MedicalRecord!.RowVersion, Symptoms="Treatment test",FinalDiagnosis="Test diagnosis" },ct));
+    await Exam(s=>s.CompleteAsync(prescribingActor,registration.RegistrationId,new() {RowVersion=record.RowVersion},ct));
     return plan.PlanId;
 }
 async Task Pay(int planId)
 {
     await using var db=new ApplicationDbContext(options);
-    var plan=await db.TreatmentPlans.Include(p=>p.TreatmentPlanDetails).SingleAsync(p=>p.PlanId==planId,ct);
-    var invoice=new Invoice {RecordId=plan.RecordId,CashierId=receptionistId,TotalAmount=200000,FinalAmount=200000,
-        PaymentMethod="CASH",PaymentStatus="PAID",IssuedDate=DateTime.UtcNow};
-    invoice.InvoiceDetails=plan.TreatmentPlanDetails.Select(d=>new InvoiceDetail {ItemType="SERVICE",PlanDetailId=d.PlanDetailId,
-        ItemName=d.ServiceNameSnapshot,Quantity=d.PlannedQuantity,UnitPrice=d.UnitPrice}).ToList();
-    db.Invoices.Add(invoice); await db.SaveChangesAsync(ct);
-}
-async Task<SessionOverview> Request(int planId)
+    var invoice=await db.Invoices.Where(i=>i.PaymentStatus=="UNPAID" && i.InvoiceDetails.Any(d=>d.PlanDetail!=null && d.PlanDetail.PlanId==planId)).SingleAsync(ct);
+    await new InvoiceService(db).PayAsync(Actor(cashierId,RoleConstants.Cashier),invoice.InvoiceId,new() {
+        RowVersion=invoice.RowVersion,PaymentMethod="Tiền mặt",ReceivedInFull=true });
+}async Task<SessionOverview> Request(int planId)
 {
     var plan=await Run(s=>s.PlanAsync(receptionActor,planId,ct));
     return await Run(s=>s.RequestAsync(receptionActor,planId,new() {RowVersion=plan.Plan.RowVersion,AssignedDoctorId=performerId,

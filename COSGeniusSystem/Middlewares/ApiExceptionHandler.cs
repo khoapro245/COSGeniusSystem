@@ -18,13 +18,15 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             message = api.Message;
             if (code >= 500) logger.LogError(exception, "API failure for {Path}", context.Request.Path);
         }
-        else if (exception is DbUpdateConcurrencyException
+        else if (exception is SqlException { Number: >= 51030 and <= 51034 }
+            || exception is DbUpdateException { InnerException: SqlException { Number: >= 51030 and <= 51034 } }
+            || exception is DbUpdateConcurrencyException
             || exception is SqlException { Number: 1205 or 1222 }
             || exception is DbUpdateException { InnerException: SqlException { Number: 1205 or 1222 } })
         {
             logger.LogWarning(exception, "Concurrent update for {Path}", context.Request.Path);
             code = 409;
-            message = "Data changed or is being updated. Reload and retry with the latest RowVersion.";
+            message = "Dữ liệu đã thay đổi hoặc đang được xử lý. Vui lòng tải lại trước khi thao tác tiếp.";
         }
         else if (exception is DbUpdateException { InnerException: SqlException { Number: 547 or 2601 or 2627 } })
         {

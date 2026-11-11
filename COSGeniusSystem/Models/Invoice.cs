@@ -1,17 +1,28 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
 
 public partial class Invoice
 {
+    public string? DoctorNameSnapshot { get; set; }
+    public string? CashierNameSnapshot { get; set; }
+    public DateTime? ExamDateSnapshot { get; set; }
+    public DateTime? PaidAt { get; set; }
+    public int? CancelledBy { get; set; }
+    public DateTime? CancelledAt { get; set; }
+    public string? CancellationReason { get; set; }
+    public string? PatientNameSnapshot { get; set; }
+    public string? PatientCodeSnapshot { get; set; }
+    public string? PhoneSnapshot { get; set; }
+    public byte[] RowVersion { get; set; } = [];
     public int InvoiceId { get; set; }
 
     public string? InvoiceCode { get; set; }
 
     public int RecordId { get; set; }
 
-    public int CashierId { get; set; }
+    public int? CashierId { get; set; }
 
     public decimal TotalAmount { get; set; }
 
@@ -25,7 +36,7 @@ public partial class Invoice
 
     public DateTime IssuedDate { get; set; }
 
-    public virtual User Cashier { get; set; } = null!;
+    public virtual User? Cashier { get; set; } = null!;
 
     public virtual ICollection<InvoiceDetail> InvoiceDetails { get; set; } = new List<InvoiceDetail>();
 

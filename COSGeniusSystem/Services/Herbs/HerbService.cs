@@ -39,7 +39,7 @@ public class HerbService : IHerbService
 
         // Phân trang
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize < 1 ? 20 : query.PageSize;
+        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
 
         return await q
             .OrderBy(h => h.CommonName)
@@ -139,6 +139,9 @@ public class HerbService : IHerbService
 
         entity.CommonName = request.CommonName;
         entity.ScientificName = request.ScientificName;
+        // Changing this label would reinterpret existing batch balances and history.
+        if (entity.Unit != request.Unit && await _context.Batches.AnyAsync(b => b.HerbId == id))
+            return (null, "Không thể đổi đơn vị khi vị thuốc đã có lô. Cần quy trình chuyển đổi dữ liệu có đối soát.");
         entity.Unit = request.Unit;
         entity.TasteProperties = request.TasteProperties;
         entity.StandardPrice = request.StandardPrice;

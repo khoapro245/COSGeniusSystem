@@ -41,7 +41,12 @@ public sealed record PlanItemResponse(int PlanDetailId, int ServiceId, string Se
 
 public sealed record TreatmentPlanResponse(int PlanId, string? PlanCode, int RecordId, int DoctorId,
     string PlanName, string TreatmentType, int PlannedSessionCount, string? Description, string Status,
-    DateTime? ConfirmedAt, byte[] RowVersion, IReadOnlyList<PlanItemResponse> Items);
+    DateTime? ConfirmedAt, byte[] RowVersion, IReadOnlyList<PlanItemResponse> Items,
+    [property: System.Text.Json.Serialization.JsonIgnore] string? SessionDetailsJson = null)
+{
+    public IReadOnlyList<PlannedSessionRequest> Sessions => string.IsNullOrEmpty(SessionDetailsJson)
+        ? [] : System.Text.Json.JsonSerializer.Deserialize<List<PlannedSessionRequest>>(SessionDetailsJson) ?? [];
+}
 
 public sealed record FormulaItemResponse(int HerbId, string HerbName, decimal DosagePerDose,
     string? RoleInFormula, string? Note, bool IsActive);

@@ -46,6 +46,12 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         UpdateRegistrationRequest request, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Saved, await service.UpdateAsync(User, registrationId, request, ct));
 
+    [HttpPost("{registrationId:int:min(1)}/cancel")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
+    public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> Cancel(int registrationId,
+        CancelTreatment request, CancellationToken ct) =>
+        SuccessResponse(ExaminationMessages.Saved, await service.CancelAsync(User, registrationId, request, ct));
+
     [HttpGet("{registrationId:int:min(1)}/history")]
     [Authorize(Roles = RoleConstants.Doctor)]
     public async Task<ActionResult<ApiResponseModel<PagedResult<MedicalRecordResponse>>>> History(int registrationId,

@@ -5,7 +5,7 @@ namespace COSGeniusSystem.DTOs;
 public class PageQuery
 {
     [Range(1, 1000000)] public int PageNumber { get; set; } = 1;
-    [Range(1, 100)] public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 10;
     [StringLength(150)] public string? Search { get; set; }
 }
 
@@ -115,5 +115,12 @@ public sealed class SaveTreatmentPlanRequest : VersionRequest
     [Range(1, 10000)] public int PlannedSessionCount { get; set; } = 1;
     [StringLength(10000)] public string? Description { get; set; }
     [Required, MaxLength(500)] public List<PlanItemRequest> Items { get; set; } = [];
+    [MaxLength(10000)] public List<PlannedSessionRequest>? Sessions { get; set; }
+}
+
+public sealed class PlannedSessionRequest
+{
+    [Range(1, 10000)] public int SessionNumber { get; set; }
+    [Required, MaxLength(500)] public List<int> ServiceIds { get; set; } = [];
 }
 

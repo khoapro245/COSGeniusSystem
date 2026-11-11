@@ -634,6 +634,13 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<Invoice>(entity =>
         {
+            entity.Property(e => e.RowVersion).IsRowVersion();
+            entity.Property(e => e.DoctorNameSnapshot).HasMaxLength(150);
+            entity.Property(e => e.CashierNameSnapshot).HasMaxLength(150);
+            entity.Property(e => e.PatientNameSnapshot).HasMaxLength(150);
+            entity.Property(e => e.PatientCodeSnapshot).HasMaxLength(50);
+            entity.Property(e => e.PhoneSnapshot).HasMaxLength(30);
+            entity.Property(e => e.CancellationReason).HasMaxLength(500);
             entity.HasKey(e => e.InvoiceId).HasName("PK_C2_Invoice");
 
             entity.ToTable("Invoice", tb => tb.HasTrigger("TR_C2_InvoiceNoReassign"));
@@ -675,6 +682,10 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<InvoiceDetail>(entity =>
         {
+            entity.Property(e => e.SourceKey).HasMaxLength(100);
+            entity.Property(e => e.TreatmentTypeSnapshot).HasMaxLength(20);
+            entity.Property(e => e.UnitSnapshot).HasMaxLength(50);
+            entity.HasIndex(e => e.SourceKey).IsUnique().HasFilter("[IsActive]=1 AND [SourceKey] IS NOT NULL");
             entity.HasKey(e => e.InvoiceDetailId).HasName("PK_C2_InvoiceDetail");
 
             entity.ToTable("InvoiceDetail", tb => tb.HasTrigger("TR_C2_InvoiceItemRecord"));
