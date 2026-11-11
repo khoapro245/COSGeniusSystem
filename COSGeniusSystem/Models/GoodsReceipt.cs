@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -20,6 +20,10 @@ public partial class GoodsReceipt
     public decimal TotalCost { get; set; }
 
     public string? Note { get; set; }
+
+    // [hieppm] Start: Bổ sung thuộc tính Status cho GoodsReceipt theo Warehouse_Update.sql
+    public string Status { get; set; } = "PENDING_APPROVAL";
+    // [hieppm] End: Bổ sung thuộc tính Status cho GoodsReceipt theo Warehouse_Update.sql
 
     public virtual PurchaseOrder? Po { get; set; }
 

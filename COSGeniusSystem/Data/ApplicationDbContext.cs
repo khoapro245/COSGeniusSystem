@@ -144,6 +144,11 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.UnitCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
 
+            // [hieppm] Start: Mapping cột Location và SupplierBatchCode cho Batch theo Warehouse_Update.sql
+            entity.Property(e => e.Location).HasMaxLength(100);
+            entity.Property(e => e.SupplierBatchCode).HasMaxLength(50);
+            // [hieppm] End: Mapping cột Location và SupplierBatchCode cho Batch theo Warehouse_Update.sql
+
             entity.HasOne(d => d.Herb).WithMany(p => p.Batches)
                 .HasForeignKey(d => d.HerbId)
                 .OnDelete(DeleteBehavior.ClientSetNull)
@@ -364,6 +369,12 @@ public partial class ApplicationDbContext : DbContext
                 .HasColumnType("datetime");
             entity.Property(e => e.TotalCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
+
+            // [hieppm] Start: Mapping cột Status cho GoodsReceipt theo Warehouse_Update.sql
+            entity.Property(e => e.Status)
+                .HasMaxLength(50)
+                .HasDefaultValue("PENDING_APPROVAL");
+            // [hieppm] End: Mapping cột Status cho GoodsReceipt theo Warehouse_Update.sql
 
             entity.HasOne(d => d.Po).WithMany(p => p.GoodsReceipts)
                 .HasForeignKey(d => d.Poid)
