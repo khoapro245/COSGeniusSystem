@@ -1,10 +1,15 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
 
 public partial class InvoiceDetail
 {
+    public string? SourceKey { get; set; }
+    public bool IsActive { get; set; } = true;
+    public string? TreatmentTypeSnapshot { get; set; }
+    public string? UnitSnapshot { get; set; }
+    public string? IngredientsJson { get; set; }
     public int InvoiceDetailId { get; set; }
 
     public int InvoiceId { get; set; }

@@ -311,6 +311,8 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             registration.Status = "COMPLETED";
             registration.CompletedAt = now;
             registration.UpdatedAt = now;
+            await db.SaveChangesAsync(ct);
+            await InvoiceAccrual.GenerateAsync(db, record.RecordId, ct);
             return true;
         }, ct);
         return await RecordResponseAsync(registrationId, ct);
@@ -364,4 +366,3 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         target.Icddescription = source.Icddescription;
     }
 }
-
