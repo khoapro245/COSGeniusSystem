@@ -150,7 +150,10 @@ public partial class HerbalistController
         db.MedicineDispenses.Add(dispense);link.CompletedAt=DateTime.UtcNow;link.CompletedBy=Actor;
         if (!await db.HerbRequisitionPrescriptions.AnyAsync(x => x.RequestId == r.Id && x.PrescriptionId != id && x.CompletedAt == null, ct)) r.Status = "COMPLETED";
         db.Entry(r).Property(x=>x.Note).IsModified=true;
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await db.SaveChangesAsync(ct);
+        var recordId = await db.HerbalPrescriptions.Where(p => p.PrescriptionId == id).Select(p => p.RecordId).SingleAsync(ct);
+        await COSGeniusSystem.Services.InvoiceAccrual.GenerateAsync(db, recordId, ct);
+        await tx.CommitAsync(ct);
         return Data(new {id,dispense.DispenseId,link.CompletedAt});
     }
 
@@ -197,6 +200,3 @@ public partial class HerbalistController
         return Data(new {prescriptionId=id,eligible=await db.MedicineDispenses.AnyAsync(d=>d.PrescriptionId==id && d.Status=="COMPLETED",ct)});
     }
 }
-
-
-

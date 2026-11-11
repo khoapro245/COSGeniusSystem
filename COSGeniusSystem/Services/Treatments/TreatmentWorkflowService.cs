@@ -15,8 +15,8 @@ namespace COSGeniusSystem.Services;
 public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientService patients,
     IConfiguration configuration) : ITreatmentWorkflowService
 {
-    // Explicit server policy: default to full prepayment; never infer payment from prescriptions.
-    private bool RequiresFullPayment => configuration.GetValue("Treatments:RequireFullPayment", true);
+    // COURSE requires full prepayment; SINGLE is billed after completed usage.
+
     private static int UserId(ClaimsPrincipal actor) =>
         int.TryParse(actor.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id > 0 ? id : throw new UnauthorizedException();
     private static void Validate(object? value)
@@ -105,14 +105,16 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     {
         // A paid invoice for medicines alone does not settle any treatment service.
         // Quantity coverage uses only paid, same-record service lines at the prescribed snapshot price.
-        return !await db.TreatmentPlanDetails.Where(d => d.PlanId == planId).AnyAsync(d =>
+        return await db.TreatmentPlanDetails.AnyAsync(d => d.PlanId == planId, ct)
+            && !await db.TreatmentPlanDetails.Where(d => d.PlanId == planId).AnyAsync(d =>
             (db.InvoiceDetails.Where(i => i.PlanDetailId == d.PlanDetailId && i.Invoice.RecordId == d.Plan.RecordId
-                && i.Invoice.PaymentStatus == "PAID" && i.ItemType == "SERVICE" && i.UnitPrice == d.UnitPrice)
+                && (i.Invoice.PaymentStatus == "PAID" || i.Invoice.PaymentStatus == "Đã thanh toán") && i.ItemType == "SERVICE" && i.UnitPrice == d.UnitPrice)
                 .Sum(i => (decimal?)i.Quantity) ?? 0) < d.PlannedQuantity, ct);
     }
     private async Task PaymentAsync(int planId, CancellationToken ct)
     {
-        if (RequiresFullPayment && !await FullyPaidAsync(planId, ct))
+        _ = configuration; // Legacy setting cannot disable mandatory COURSE prepayment.
+        if (await db.TreatmentPlans.AnyAsync(p => p.PlanId == planId && p.TreatmentType == "COURSE", ct) && !await FullyPaidAsync(planId, ct))
             throw new ConflictException("All prescribed treatment services must be fully paid before treatment.");
     }
     public async Task<PlanOverview> PlanAsync(ClaimsPrincipal actor, int id, CancellationToken ct)
@@ -133,10 +135,10 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var doctor = actor.IsInRole(RoleConstants.Doctor) ? await DoctorAsync(actor, ct) : (int?)null;
         return new(summary, await patients.GetByIdAsync(record.PatientId, ct), record.RegistrationId,
             record.ExamDate, record.FinalDiagnosis, record.AllergyNoteSnapshot, plan.Description, plan.TreatmentType,
-            plan.StartDate, plan.EndDate, Math.Max(0, plan.PlannedSessionCount - summary.CompletedSessions), paid, RequiresFullPayment,
+            plan.StartDate, plan.EndDate, Math.Max(0, plan.PlannedSessionCount - summary.CompletedSessions), paid, plan.TreatmentType == "COURSE",
             actor.IsInRole(RoleConstants.ReceptionStaff) && effective && summary.ActiveRequests == 0
                 && summary.CompletedSessions < plan.PlannedSessionCount && services.Any(s => s.RemainingQuantity > 0)
-                && (!RequiresFullPayment || paid),
+                && (plan.TreatmentType != "COURSE" || paid),
             doctor == plan.DoctorId && (effective || plan.Status == "DRAFT") && summary.ActiveRequests == 0
                 && summary.CompletedSessions == 0 && !hasInvoices
                 && !await db.UsageHistories.AnyAsync(u => u.Session.PlanId == id, ct), services, plan.SessionDetailsJson);
@@ -178,7 +180,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
             .Select(u => new UsageResponse(u.PlanDetailId, u.PlanDetail.ServiceNameSnapshot, u.Quantity, u.PerformedBy, u.ExecutionTime, u.ResultNote)).ToListAsync(ct);
         var assigned = actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId == await DoctorAsync(actor, ct);
-        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && (!RequiresFullPayment || plan.FullyPaid),
+        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && (!plan.RequiresFullPayment || plan.FullyPaid),
             assigned && session.Status == "IN_PROGRESS", session.Status == "REQUESTED" && (assigned || actor.IsInRole(RoleConstants.ReceptionStaff)));
     }
 
@@ -308,6 +310,8 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             plan.Status = remainingSessions == 0 && servicesComplete ? "COMPLETED" : "IN_PROGRESS";
             if (plan.Status == "COMPLETED") plan.EndDate = DateOnly.FromDateTime(now.AddHours(7));
             plan.UpdatedAt = now;
+            await db.SaveChangesAsync(ct);
+            await InvoiceAccrual.GenerateAsync(db, plan.RecordId, ct);
             return true;
         }, ct);
         return await SessionAsync(actor, id, ct);
