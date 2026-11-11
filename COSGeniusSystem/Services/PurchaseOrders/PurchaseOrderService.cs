@@ -17,8 +17,6 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<List<PurchaseOrderDto>> GetPurchaseOrdersAsync(string? status = null, string? search = null, CancellationToken ct = default)
     {
-        await EnsureSeedSampleDataAsync(ct);
-
         var query = _context.PurchaseOrders
             .AsNoTracking()
             .Include(p => p.Supplier)
@@ -65,8 +63,6 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<PurchaseOrderDto?> GetPurchaseOrderDetailAsync(string idOrCode, CancellationToken ct = default)
     {
-        await EnsureSeedSampleDataAsync(ct);
-
         var query = _context.PurchaseOrders
             .AsNoTracking()
             .Include(p => p.Supplier)
@@ -347,89 +343,5 @@ public class PurchaseOrderService : IPurchaseOrderService
             DetailStatus = detailStatus,
             Details = detailDtos
         };
-    }
-
-    private async Task EnsureSeedSampleDataAsync(CancellationToken ct)
-    {
-        if (await _context.PurchaseOrders.AnyAsync(ct))
-        {
-            return;
-        }
-
-        var supplier = await _context.Suppliers.FirstOrDefaultAsync(ct);
-        if (supplier == null)
-        {
-            supplier = new Supplier
-            {
-                SupplierCode = "NCC-01",
-                SupplierName = "Công ty Dược liệu An Phát",
-                Phone = "0901234567",
-                Email = "anphat@duoclieu.vn",
-                Address = "123 Đường Dược Liệu, Hà Nội",
-                IsActive = true
-            };
-            _context.Suppliers.Add(supplier);
-            await _context.SaveChangesAsync(ct);
-        }
-
-        var herbs = await _context.Herbs.Take(3).ToListAsync(ct);
-        if (herbs.Count == 0)
-        {
-            herbs.Add(new Herb { HerbCode = "VT00001", CommonName = "Cam thảo phiến", Unit = "kg", MinThreshold = 50, StandardPrice = 120000, IsActive = true });
-            herbs.Add(new Herb { HerbCode = "VT00002", CommonName = "Đỗ trọng phiến", Unit = "kg", MinThreshold = 30, StandardPrice = 250000, IsActive = true });
-            herbs.Add(new Herb { HerbCode = "VT00003", CommonName = "Hoàng kỳ phiến", Unit = "kg", MinThreshold = 40, StandardPrice = 180000, IsActive = true });
-            _context.Herbs.AddRange(herbs);
-            await _context.SaveChangesAsync(ct);
-        }
-
-        var user = await _context.Users.FirstOrDefaultAsync(ct);
-        int creatorId = user?.UserId ?? 1;
-
-        // Create PO00016 (Chờ nhận)
-        var po16 = new PurchaseOrder
-        {
-            Pocode = "PO00016",
-            SupplierId = supplier.SupplierId,
-            CreatedBy = creatorId,
-            OrderDate = DateTime.Now.AddDays(-2),
-            DeliveryDate = DateOnly.FromDateTime(DateTime.Now.AddDays(3)),
-            Status = "Chờ nhận",
-            TotalAmount = 6100000
-        };
-        po16.Podetails.Add(new Podetail { HerbId = herbs[0].HerbId, OrderQuantity = 10, UnitPrice = 400000 });
-        po16.Podetails.Add(new Podetail { HerbId = herbs.Count > 1 ? herbs[1].HerbId : herbs[0].HerbId, OrderQuantity = 5, UnitPrice = 300000 });
-        if (herbs.Count > 2)
-            po16.Podetails.Add(new Podetail { HerbId = herbs[2].HerbId, OrderQuantity = 3, UnitPrice = 200000 });
-
-        // Create PO00015 (Nhận 1 phần)
-        var po15 = new PurchaseOrder
-        {
-            Pocode = "PO00015",
-            SupplierId = supplier.SupplierId,
-            CreatedBy = creatorId,
-            OrderDate = DateTime.Now.AddDays(-5),
-            DeliveryDate = DateOnly.FromDateTime(DateTime.Now.AddDays(1)),
-            Status = "Nhận 1 phần",
-            TotalAmount = 5500000
-        };
-        po15.Podetails.Add(new Podetail { HerbId = herbs[0].HerbId, OrderQuantity = 15, UnitPrice = 300000 });
-        if (herbs.Count > 1)
-            po15.Podetails.Add(new Podetail { HerbId = herbs[1].HerbId, OrderQuantity = 5, UnitPrice = 200000 });
-
-        // Create PO00014 (Nháp)
-        var po14 = new PurchaseOrder
-        {
-            Pocode = "PO00014",
-            SupplierId = supplier.SupplierId,
-            CreatedBy = creatorId,
-            OrderDate = DateTime.Now.AddDays(-1),
-            DeliveryDate = DateOnly.FromDateTime(DateTime.Now.AddDays(5)),
-            Status = "Nháp",
-            TotalAmount = 2400000
-        };
-        po14.Podetails.Add(new Podetail { HerbId = herbs[0].HerbId, OrderQuantity = 20, UnitPrice = 120000 });
-
-        _context.PurchaseOrders.AddRange(po16, po15, po14);
-        await _context.SaveChangesAsync(ct);
     }
 }

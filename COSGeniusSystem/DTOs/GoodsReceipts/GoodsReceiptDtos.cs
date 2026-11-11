@@ -2,6 +2,15 @@ using System.ComponentModel.DataAnnotations;
 
 namespace COSGeniusSystem.DTOs;
 
+// [hieppm] Start: Định nghĩa hằng số trạng thái phiếu nhập kho chuẩn theo Database
+public static class GoodsReceiptStatusConstants
+{
+    public const string PendingApproval = "PENDING_APPROVAL";
+    public const string Approved = "APPROVED";
+    public const string Rejected = "REJECTED";
+}
+// [hieppm] End: Định nghĩa hằng số trạng thái phiếu nhập kho chuẩn theo Database
+
 public class ReceiptDetailDto
 {
     public int ReceiptDetailId { get; set; }

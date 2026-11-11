@@ -17,8 +17,6 @@ public class GoodsReceiptService : IGoodsReceiptService
 
     public async Task<List<GoodsReceiptDto>> GetGoodsReceiptsAsync(string? status = null, int? poId = null, CancellationToken ct = default)
     {
-        await EnsureSeedSampleDataAsync(ct);
-
         var query = _context.GoodsReceipts
             .AsNoTracking()
             .Include(g => g.Po)
@@ -44,11 +42,11 @@ public class GoodsReceiptService : IGoodsReceiptService
         {
             var s = status.Trim().ToLower();
             if (s == "pending" || s == "chờ duyệt" || s == "chờ quản lý duyệt")
-                dtos = dtos.Where(d => d.Status.Equals("PENDING_APPROVAL", StringComparison.OrdinalIgnoreCase)).ToList();
+                dtos = dtos.Where(d => d.Status.Equals(GoodsReceiptStatusConstants.PendingApproval, StringComparison.OrdinalIgnoreCase) || d.Status.Equals("Chờ duyệt", StringComparison.OrdinalIgnoreCase)).ToList();
             else if (s == "approved" || s == "đã duyệt" || s == "đã duyệt nhập")
-                dtos = dtos.Where(d => d.Status.Equals("APPROVED", StringComparison.OrdinalIgnoreCase)).ToList();
+                dtos = dtos.Where(d => d.Status.Equals(GoodsReceiptStatusConstants.Approved, StringComparison.OrdinalIgnoreCase) || d.Status.Equals("Đã duyệt", StringComparison.OrdinalIgnoreCase)).ToList();
             else if (s == "rejected" || s == "từ chối" || s == "từ chối duyệt")
-                dtos = dtos.Where(d => d.Status.Equals("REJECTED", StringComparison.OrdinalIgnoreCase)).ToList();
+                dtos = dtos.Where(d => d.Status.Equals(GoodsReceiptStatusConstants.Rejected, StringComparison.OrdinalIgnoreCase) || d.Status.Equals("Từ chối", StringComparison.OrdinalIgnoreCase)).ToList();
         }
 
         return dtos;
@@ -56,8 +54,6 @@ public class GoodsReceiptService : IGoodsReceiptService
 
     public async Task<GoodsReceiptDto?> GetGoodsReceiptDetailAsync(string idOrCode, CancellationToken ct = default)
     {
-        await EnsureSeedSampleDataAsync(ct);
-
         var query = _context.GoodsReceipts
             .AsNoTracking()
             .Include(g => g.Po)
@@ -162,9 +158,18 @@ public class GoodsReceiptService : IGoodsReceiptService
             ReceivedBy = userId > 0 ? userId : 1,
             ReceiptDate = DateTime.Now,
             TotalCost = totalCost,
-            Status = "PENDING_APPROVAL",
+            // [hieppm] Start: Khởi tạo trạng thái mặc định của phiếu nhập kho theo Database Constraint DF_GoodsReceipt_Status
+            Status = GoodsReceiptStatusConstants.PendingApproval,
+            // [hieppm] End: Khởi tạo trạng thái mặc định của phiếu nhập kho theo Database Constraint DF_GoodsReceipt_Status
             Note = request.Note
         };
+
+        // [hieppm] Start: Lấy vị trí kho từ database nếu không nhập vị trí cụ thể
+        var targetWarehouse = await _context.Warehouses.FindAsync(new object[] { request.WarehouseId }, ct);
+        var defaultWarehouseLocation = !string.IsNullOrWhiteSpace(targetWarehouse?.Location)
+            ? targetWarehouse.Location
+            : (targetWarehouse?.WarehouseName ?? "Chưa phân vị trí");
+        // [hieppm] End: Lấy vị trí kho từ database
 
         int batchCounter = 1;
         foreach (var item in request.Items)
@@ -185,7 +190,7 @@ public class GoodsReceiptService : IGoodsReceiptService
                 CurrentQuantity = 0, // Putaway logic: chỉ tăng tồn khi Manager duyệt
                 UnitCost = item.UnitPrice,
                 Status = "Chờ duyệt",
-                Location = !string.IsNullOrWhiteSpace(item.Location) ? item.Location : "Kệ A - Ô01",
+                Location = !string.IsNullOrWhiteSpace(item.Location) ? item.Location.Trim() : defaultWarehouseLocation,
                 SupplierBatchCode = item.SupplierBatchCode.Trim()
             };
 
@@ -230,7 +235,7 @@ public class GoodsReceiptService : IGoodsReceiptService
             throw new NotFoundException($"Không tìm thấy phiếu nhập ID {receiptId}.");
         }
 
-        receipt.Status = "PENDING_APPROVAL";
+        receipt.Status = GoodsReceiptStatusConstants.PendingApproval;
         await _context.SaveChangesAsync(ct);
 
         return (await GetGoodsReceiptDetailAsync(receiptId.ToString(), ct))!;
@@ -252,7 +257,8 @@ public class GoodsReceiptService : IGoodsReceiptService
             throw new NotFoundException($"Không tìm thấy phiếu nhập kho ID {receiptId}.");
         }
 
-        if (receipt.Status.Equals("APPROVED", StringComparison.OrdinalIgnoreCase))
+        if (receipt.Status.Equals(GoodsReceiptStatusConstants.Approved, StringComparison.OrdinalIgnoreCase) ||
+            receipt.Status.Equals("Đã duyệt", StringComparison.OrdinalIgnoreCase))
         {
             throw new BadRequestException($"Phiếu nhập '{receipt.ReceiptCode}' đã được phê duyệt trước đó.");
         }
@@ -260,7 +266,7 @@ public class GoodsReceiptService : IGoodsReceiptService
         if (request.IsApproved)
         {
             // === LOGIC DUYỆT (PUTAWAY): CỘNG SỐ LƯỢNG THUỐC VÀO KHO LƯU TRỮ THEO TỪNG LÔ ===
-            receipt.Status = "APPROVED";
+            receipt.Status = GoodsReceiptStatusConstants.Approved;
             if (!string.IsNullOrWhiteSpace(request.ManagerNote))
             {
                 receipt.Note = string.IsNullOrWhiteSpace(receipt.Note)
@@ -322,7 +328,7 @@ public class GoodsReceiptService : IGoodsReceiptService
         else
         {
             // === LOGIC TỪ CHỐI ===
-            receipt.Status = "REJECTED";
+            receipt.Status = GoodsReceiptStatusConstants.Rejected;
             if (!string.IsNullOrWhiteSpace(request.ManagerNote))
             {
                 receipt.Note = string.IsNullOrWhiteSpace(receipt.Note)
@@ -366,13 +372,15 @@ public class GoodsReceiptService : IGoodsReceiptService
 
     private static GoodsReceiptDto MapToDto(GoodsReceipt receipt)
     {
-        string statusLabel = receipt.Status switch
+        var rawStatus = (receipt.Status ?? string.Empty).Trim().ToUpper();
+        string statusLabel = rawStatus switch
         {
-            "APPROVED" => "Đã duyệt nhập",
-            "REJECTED" => "Từ chối duyệt",
+            GoodsReceiptStatusConstants.Approved or "ĐÃ DUYỆT" or "ĐÃ DUYỆT NHẬP" => "Đã duyệt nhập",
+            GoodsReceiptStatusConstants.Rejected or "TỪ CHỐI" or "TỪ CHỐI DUYỆT" => "Từ chối duyệt",
             _ => "Chờ quản lý duyệt"
         };
 
+        // [hieppm] Start: Lấy batchCode và location từ Database
         var details = receipt.ReceiptDetails.Select(d => new ReceiptDetailDto
         {
             ReceiptDetailId = d.ReceiptDetailId,
@@ -382,13 +390,16 @@ public class GoodsReceiptService : IGoodsReceiptService
             HerbId = d.Batch?.HerbId ?? 0,
             HerbCode = d.Batch?.Herb?.HerbCode ?? $"VT{d.Batch?.HerbId:D5}",
             HerbName = d.Batch?.Herb?.CommonName ?? "Vị thuốc",
-            SupplierBatchCode = d.Batch?.SupplierBatchCode ?? d.Batch?.BatchNumber,
+            SupplierBatchCode = !string.IsNullOrWhiteSpace(d.Batch?.SupplierBatchCode) ? d.Batch.SupplierBatchCode : d.Batch?.BatchNumber,
             ExpiryDate = d.Batch?.ExpiryDate ?? DateOnly.FromDateTime(DateTime.Today.AddYears(1)),
             Quantity = d.Quantity,
             UnitPrice = d.UnitPrice,
             LineTotal = d.Quantity * d.UnitPrice,
-            Location = d.Batch?.Location ?? "Kho Dược liệu"
+            Location = !string.IsNullOrWhiteSpace(d.Batch?.Location)
+                ? d.Batch.Location
+                : (receipt.Warehouse?.Location ?? receipt.Warehouse?.WarehouseName ?? "Chưa phân vị trí")
         }).ToList();
+        // [hieppm] End: Lấy batchCode và location từ Database
 
         decimal totalQty = details.Sum(d => d.Quantity);
 
@@ -409,106 +420,11 @@ public class GoodsReceiptService : IGoodsReceiptService
             Status = receipt.Status,
             StatusLabel = statusLabel,
             Note = receipt.Note,
-            ProcessLog = receipt.Status == "APPROVED"
+            ProcessLog = rawStatus == GoodsReceiptStatusConstants.Approved || rawStatus == "ĐÃ DUYỆT"
                 ? $"{receipt.ReceiptDate:dd/MM/yyyy HH:mm} · Quản lý đã duyệt nhập kho và tăng tồn theo lô."
                 : $"{receipt.ReceiptDate:dd/MM/yyyy HH:mm} · {receipt.ReceivedByNavigation?.FullName ?? "Nhân viên kho"} gửi phiếu chờ quản lý duyệt.\nChưa tăng tồn. Sau duyệt xem lô hàng và giao dịch nhập.",
             Details = details
         };
-    }
-
-    private async Task EnsureSeedSampleDataAsync(CancellationToken ct)
-    {
-        if (await _context.GoodsReceipts.AnyAsync(ct))
-        {
-            return;
-        }
-
-        var po = await _context.PurchaseOrders
-            .Include(p => p.Supplier)
-            .Include(p => p.Podetails)
-                .ThenInclude(d => d.Herb)
-            .FirstOrDefaultAsync(ct);
-
-        if (po == null)
-        {
-            return;
-        }
-
-        var warehouse = await _context.Warehouses.FirstOrDefaultAsync(ct);
-        int warehouseId = warehouse?.WarehouseId ?? 1;
-        var user = await _context.Users.FirstOrDefaultAsync(ct);
-        int receiverId = user?.UserId ?? 1;
-
-        // Seed PN00089 (Đã duyệt)
-        var receipt89 = new GoodsReceipt
-        {
-            ReceiptCode = "PN00089",
-            Poid = po.Poid,
-            WarehouseId = warehouseId,
-            ReceivedBy = receiverId,
-            ReceiptDate = DateTime.Now.AddDays(-2),
-            TotalCost = 3500000,
-            Status = "APPROVED",
-            Note = "Nhập đủ hàng theo đợt 1."
-        };
-
-        var firstHerb = po.Podetails.FirstOrDefault()?.Herb;
-        if (firstHerb != null)
-        {
-            var b1 = new Batch
-            {
-                BatchNumber = "LA26001",
-                HerbId = firstHerb.HerbId,
-                WarehouseId = warehouseId,
-                ImportDate = DateTime.Now.AddDays(-2),
-                ExpiryDate = DateOnly.FromDateTime(DateTime.Today.AddYears(1)),
-                OriginalQuantity = 5,
-                CurrentQuantity = 5,
-                UnitCost = 400000,
-                Status = "Đạt chuẩn",
-                Location = "Kệ A - Ô01",
-                SupplierBatchCode = "NCC-A01"
-            };
-            _context.Batches.Add(b1);
-            receipt89.ReceiptDetails.Add(new ReceiptDetail { Batch = b1, Quantity = 5, UnitPrice = 400000 });
-        }
-
-        // Seed PN00090 (Chờ duyệt)
-        var receipt90 = new GoodsReceipt
-        {
-            ReceiptCode = "PN00090",
-            Poid = po.Poid,
-            WarehouseId = warehouseId,
-            ReceivedBy = receiverId,
-            ReceiptDate = DateTime.Now,
-            TotalCost = 2600000,
-            Status = "PENDING_APPROVAL",
-            Note = "Thông tin thực giao, bao bì hoặc điều kiện đã thỏa thuận"
-        };
-
-        if (po.Podetails.Count > 1)
-        {
-            var secondHerb = po.Podetails.Skip(1).First().Herb;
-            var b2 = new Batch
-            {
-                BatchNumber = "LB26002",
-                HerbId = secondHerb.HerbId,
-                WarehouseId = warehouseId,
-                ImportDate = DateTime.Now,
-                ExpiryDate = DateOnly.FromDateTime(DateTime.Today.AddMonths(18)),
-                OriginalQuantity = 8,
-                CurrentQuantity = 0, // Chờ duyệt -> chưa tăng tồn
-                UnitCost = 300000,
-                Status = "Chờ duyệt",
-                Location = "Kệ B - Ô02",
-                SupplierBatchCode = "NCC-B02"
-            };
-            _context.Batches.Add(b2);
-            receipt90.ReceiptDetails.Add(new ReceiptDetail { Batch = b2, Quantity = 8, UnitPrice = 300000 });
-        }
-
-        _context.GoodsReceipts.AddRange(receipt89, receipt90);
-        await _context.SaveChangesAsync(ct);
     }
 }
 
