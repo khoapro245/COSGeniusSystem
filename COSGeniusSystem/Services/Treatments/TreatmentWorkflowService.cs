@@ -256,7 +256,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var isDoctor = actor.IsInRole(RoleConstants.Doctor) || actor.IsInRole(RoleConstants.Admin);
         var isReception = actor.IsInRole(RoleConstants.ReceptionStaff) || actor.IsInRole(RoleConstants.Admin);
         var canStart = isDoctor && session.Status == "REQUESTED";
-        var canComplete = isDoctor && (session.Status == "IN_PROGRESS" || session.Status == "REQUESTED");
+        var canComplete = isDoctor && session.Status == "IN_PROGRESS";
         var canCancel = (isDoctor || isReception) && session.Status == "REQUESTED";
         return new(session, plan, usage, canStart, canComplete, canCancel);
     }
@@ -373,13 +373,15 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             {
                 return true; // Already completed
             }
+            if (session.Status != "IN_PROGRESS")
+            {
+                throw new ConflictException("Buổi điều trị chưa được bắt đầu. Vui lòng bấm 'Bắt đầu điều trị' trước khi hoàn tất.");
+            }
             Effective(plan);
             Version(session.RowVersion, request.RowVersion);
 
             session.PerformedBy ??= doctorId;
             session.AssignedDoctorId ??= doctorId;
-            if (session.StartedAt == null) session.StartedAt = DateTime.UtcNow;
-            session.Status = "IN_PROGRESS";
 
             var details = await db.TreatmentPlanDetails.Where(d => d.PlanId == plan.PlanId).ToListAsync(ct);
             var used = await db.UsageHistories.Where(u => u.PlanDetail.PlanId == plan.PlanId && u.SessionId != id)
