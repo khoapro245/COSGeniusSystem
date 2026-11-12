@@ -41,7 +41,7 @@ public class PurchaseOrderServiceTests
     #region Group 1: GetPurchaseOrdersAsync
 
     [Fact]
-    public async Task UTC01_GetPurchaseOrdersAsync_NoFilter_ReturnsAllPOs()
+    public async Task UTC001_GetPurchaseOrdersAsync_NoFilter_ReturnsAllPOs()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -59,7 +59,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC02_GetPurchaseOrdersAsync_FilterByStatusPending_ReturnsPendingPOs()
+    public async Task UTC002_GetPurchaseOrdersAsync_FilterByStatusPending_ReturnsPendingPOs()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -78,7 +78,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC03_GetPurchaseOrdersAsync_SearchByPOCode_ReturnsMatchingPO()
+    public async Task UTC003_GetPurchaseOrdersAsync_SearchByPOCode_ReturnsMatchingPO()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -97,7 +97,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC04_GetPurchaseOrdersAsync_SearchBySupplierName_ReturnsMatchingPO()
+    public async Task UTC004_GetPurchaseOrdersAsync_SearchBySupplierName_ReturnsMatchingPO()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -116,7 +116,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC05_GetPurchaseOrdersAsync_EmptyDatabase_ReturnsEmptyList()
+    public async Task UTC005_GetPurchaseOrdersAsync_EmptyDatabase_ReturnsEmptyList()
     {
         using var context = CreateInMemoryDbContext();
         var service = new PurchaseOrderService(context);
@@ -131,7 +131,7 @@ public class PurchaseOrderServiceTests
     #region Group 2: GetPurchaseOrderDetailAsync
 
     [Fact]
-    public async Task UTC06_GetPurchaseOrderDetailAsync_ValidPoid_ReturnsPODetail()
+    public async Task UTC006_GetPurchaseOrderDetailAsync_ValidPoid_ReturnsPODetail()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -151,7 +151,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC07_GetPurchaseOrderDetailAsync_ValidPOCode_ReturnsPODetail()
+    public async Task UTC007_GetPurchaseOrderDetailAsync_ValidPOCode_ReturnsPODetail()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -168,7 +168,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC08_GetPurchaseOrderDetailAsync_NonExistingId_ReturnsNull()
+    public async Task UTC008_GetPurchaseOrderDetailAsync_NonExistingId_ReturnsNull()
     {
         using var context = CreateInMemoryDbContext();
         var service = new PurchaseOrderService(context);
@@ -183,7 +183,7 @@ public class PurchaseOrderServiceTests
     #region Group 3: CreatePOAsync
 
     [Fact]
-    public async Task UTC09_CreatePOAsync_ValidData_CreatesSuccessfully()
+    public async Task UTC009_CreatePOAsync_ValidData_CreatesSuccessfully()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -211,7 +211,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC10_CreatePOAsync_SupplierNotFound_ThrowsNotFoundException()
+    public async Task UTC010_CreatePOAsync_SupplierNotFound_ThrowsNotFoundException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -231,7 +231,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC11_CreatePOAsync_EmptyItems_ThrowsBadRequestException()
+    public async Task UTC011_CreatePOAsync_EmptyItems_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -248,7 +248,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC12_CreatePOAsync_ZeroOrderQuantity_ThrowsBadRequestException()
+    public async Task UTC012_CreatePOAsync_ZeroOrderQuantity_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -268,7 +268,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC13_CreatePOAsync_NegativeOrderQuantity_ThrowsBadRequestException()
+    public async Task UTC013_CreatePOAsync_NegativeOrderQuantity_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -288,7 +288,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC14_CreatePOAsync_NegativeUnitPrice_ThrowsBadRequestException()
+    public async Task UTC014_CreatePOAsync_NegativeUnitPrice_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -312,7 +312,7 @@ public class PurchaseOrderServiceTests
     #region Group 4: UpdatePOAsync
 
     [Fact]
-    public async Task UTC15_UpdatePOAsync_DraftPO_UpdatesSuccessfully()
+    public async Task UTC015_UpdatePOAsync_DraftPO_UpdatesSuccessfully()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -341,7 +341,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC16_UpdatePOAsync_PONotFound_ThrowsNotFoundException()
+    public async Task UTC016_UpdatePOAsync_PONotFound_ThrowsNotFoundException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -361,7 +361,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC17_UpdatePOAsync_NonDraftStatus_ThrowsBadRequestException()
+    public async Task UTC017_UpdatePOAsync_NonDraftStatus_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -385,7 +385,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC18_UpdatePOAsync_EmptyItems_ThrowsBadRequestException()
+    public async Task UTC018_UpdatePOAsync_EmptyItems_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -406,7 +406,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC19_UpdatePOAsync_SupplierNotFound_ThrowsNotFoundException()
+    public async Task UTC019_UpdatePOAsync_SupplierNotFound_ThrowsNotFoundException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -434,7 +434,7 @@ public class PurchaseOrderServiceTests
     #region Group 5: DeletePOAsync
 
     [Fact]
-    public async Task UTC20_DeletePOAsync_DraftPO_DeletesSuccessfully()
+    public async Task UTC020_DeletePOAsync_DraftPO_DeletesSuccessfully()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
@@ -454,7 +454,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC21_DeletePOAsync_PONotFound_ThrowsNotFoundException()
+    public async Task UTC021_DeletePOAsync_PONotFound_ThrowsNotFoundException()
     {
         using var context = CreateInMemoryDbContext();
         var service = new PurchaseOrderService(context);
@@ -464,7 +464,7 @@ public class PurchaseOrderServiceTests
     }
 
     [Fact]
-    public async Task UTC22_DeletePOAsync_NonDraftPO_ThrowsBadRequestException()
+    public async Task UTC022_DeletePOAsync_NonDraftPO_ThrowsBadRequestException()
     {
         using var context = CreateInMemoryDbContext();
         await SeedCommonAsync(context);
