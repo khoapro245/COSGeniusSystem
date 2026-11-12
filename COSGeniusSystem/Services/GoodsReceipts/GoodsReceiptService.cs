@@ -146,6 +146,18 @@ public class GoodsReceiptService : IGoodsReceiptService
             linkedPo = await _context.PurchaseOrders
                 .Include(p => p.Podetails)
                 .FirstOrDefaultAsync(p => p.Poid == request.Poid.Value, ct);
+
+            // [hieppm] Start: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
+            if (linkedPo == null)
+            {
+                throw new NotFoundException($"Không tìm thấy đơn mua hàng ID {request.Poid.Value}.");
+            }
+            var poStatusLower = (linkedPo.Status ?? string.Empty).Trim().ToLower();
+            if (poStatusLower == "nháp" || poStatusLower == "draft" || poStatusLower == "mới tạo")
+            {
+                throw new BadRequestException($"Đơn mua hàng '{linkedPo.Pocode}' đang ở trạng thái '{linkedPo.Status}', chưa phát hành nên không thể lập phiếu nhập kho.");
+            }
+            // [hieppm] End: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
         }
 
         decimal totalCost = request.Items.Sum(i => i.Quantity * i.UnitPrice);
@@ -289,11 +301,16 @@ public class GoodsReceiptService : IGoodsReceiptService
             if (receipt.Po != null)
             {
                 // Lấy tất cả các phiếu nhập đã duyệt của PO này (bao gồm cả phiếu hiện tại)
+                // [hieppm] Start: Đồng bộ kiểm tra các biến thể trạng thái đã duyệt của phiếu nhập
                 var allApprovedDetails = await _context.ReceiptDetails
                     .Include(rd => rd.Batch)
                     .Where(rd => rd.Receipt.Poid == receipt.Po.Poid &&
-                                 (rd.Receipt.Status == "APPROVED" || rd.ReceiptId == receipt.ReceiptId))
+                                 (rd.Receipt.Status == GoodsReceiptStatusConstants.Approved ||
+                                  rd.Receipt.Status == "Đã duyệt" ||
+                                  rd.Receipt.Status == "Đã duyệt nhập" ||
+                                  rd.ReceiptId == receipt.ReceiptId))
                     .ToListAsync(ct);
+                // [hieppm] End: Đồng bộ kiểm tra các biến thể trạng thái đã duyệt của phiếu nhập
 
                 bool allCompleted = true;
                 bool anyReceived = false;

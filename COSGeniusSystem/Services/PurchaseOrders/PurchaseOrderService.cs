@@ -48,7 +48,8 @@ public class PurchaseOrderService : IPurchaseOrderService
         if (!string.IsNullOrWhiteSpace(status) && !status.Equals("all", StringComparison.OrdinalIgnoreCase))
         {
             var s = status.Trim().ToLower();
-            if (s == "pending" || s == "chờ nhận")
+            // [hieppm] Start: Hỗ trợ đầy đủ tham số lọc trạng thái giữa Frontend và Backend
+            if (s == "pending" || s == "pending_delivery" || s == "chờ nhận")
                 dtos = dtos.Where(p => p.ProgressStatus == "Chờ nhận").ToList();
             else if (s == "partial" || s == "nhận 1 phần" || s == "nhận một phần")
                 dtos = dtos.Where(p => p.ProgressStatus == "Nhận một phần" || p.ProgressStatus == "Nhận 1 phần").ToList();
@@ -56,6 +57,7 @@ public class PurchaseOrderService : IPurchaseOrderService
                 dtos = dtos.Where(p => p.ProgressStatus == "Đã hoàn thành").ToList();
             else if (s == "draft" || s == "nháp")
                 dtos = dtos.Where(p => p.Status.Equals("Nháp", StringComparison.OrdinalIgnoreCase) || p.Status.Equals("DRAFT", StringComparison.OrdinalIgnoreCase)).ToList();
+            // [hieppm] End: Hỗ trợ đầy đủ tham số lọc trạng thái giữa Frontend và Backend
         }
 
         return dtos;
@@ -89,10 +91,8 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<PurchaseOrderDto> CreatePOAsync(int userId, CreatePORequest request, CancellationToken ct = default)
     {
-        if (request.Items == null || request.Items.Count == 0)
-        {
-            throw new BadRequestException("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.");
-        }
+        // [hieppm] Start: Validate chặt chẽ vị thuốc, trùng dòng, trạng thái và sinh mã POCode không trùng
+        await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);
         if (supplier == null)
@@ -100,9 +100,16 @@ public class PurchaseOrderService : IPurchaseOrderService
             throw new NotFoundException($"Nhà cung cấp ID {request.SupplierId} không tồn tại.");
         }
 
-        // Generate next POCode e.g. PO00016
-        var maxPoid = await _context.PurchaseOrders.MaxAsync(p => (int?)p.Poid, ct) ?? 0;
-        var poCode = $"PO{(maxPoid + 1):D5}";
+        var normalizedStatus = NormalizeAllowedPOStatus(request.Status, defaultStatus: "Nháp");
+
+        // Generate next unique POCode e.g. PO00016
+        var nextSeq = (await _context.PurchaseOrders.MaxAsync(p => (int?)p.Poid, ct) ?? 0) + 1;
+        var poCode = $"PO{nextSeq:D5}";
+        while (await _context.PurchaseOrders.AnyAsync(p => p.Pocode == poCode, ct))
+        {
+            nextSeq++;
+            poCode = $"PO{nextSeq:D5}";
+        }
 
         decimal totalAmount = request.Items.Sum(i => i.OrderQuantity * i.UnitPrice);
 
@@ -114,20 +121,11 @@ public class PurchaseOrderService : IPurchaseOrderService
             OrderDate = DateTime.Now,
             DeliveryDate = request.DeliveryDate,
             TotalAmount = totalAmount,
-            Status = string.IsNullOrWhiteSpace(request.Status) ? "Nháp" : request.Status,
+            Status = normalizedStatus,
         };
 
         foreach (var item in request.Items)
         {
-            if (item.OrderQuantity <= 0)
-            {
-                throw new BadRequestException("Số lượng đặt phải lớn hơn 0.");
-            }
-            if (item.UnitPrice < 0)
-            {
-                throw new BadRequestException("Đơn giá không được âm.");
-            }
-
             po.Podetails.Add(new Podetail
             {
                 HerbId = item.HerbId,
@@ -140,6 +138,7 @@ public class PurchaseOrderService : IPurchaseOrderService
         await _context.SaveChangesAsync(ct);
 
         return (await GetPurchaseOrderDetailAsync(po.Poid.ToString(), ct))!;
+        // [hieppm] End: Validate chặt chẽ vị thuốc, trùng dòng, trạng thái và sinh mã POCode không trùng
     }
 
     public async Task<PurchaseOrderDto> UpdatePOAsync(int id, UpdatePORequest request, CancellationToken ct = default)
@@ -159,10 +158,8 @@ public class PurchaseOrderService : IPurchaseOrderService
             throw new BadRequestException($"Đơn mua hàng '{po.Pocode}' đang ở trạng thái '{po.Status}'. Chỉ được phép chỉnh sửa đơn mua hàng ở trạng thái 'Nháp'.");
         }
 
-        if (request.Items == null || request.Items.Count == 0)
-        {
-            throw new BadRequestException("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.");
-        }
+        // [hieppm] Start: Validate danh sách vị thuốc & trạng thái khi cập nhật PO nháp
+        await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);
         if (supplier == null)
@@ -174,7 +171,7 @@ public class PurchaseOrderService : IPurchaseOrderService
         po.DeliveryDate = request.DeliveryDate;
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
-            po.Status = request.Status;
+            po.Status = NormalizeAllowedPOStatus(request.Status, defaultStatus: po.Status);
         }
 
         // Remove old details and insert updated
@@ -184,15 +181,6 @@ public class PurchaseOrderService : IPurchaseOrderService
         decimal total = 0;
         foreach (var item in request.Items)
         {
-            if (item.OrderQuantity <= 0)
-            {
-                throw new BadRequestException("Số lượng đặt phải lớn hơn 0.");
-            }
-            if (item.UnitPrice < 0)
-            {
-                throw new BadRequestException("Đơn giá không được âm.");
-            }
-
             total += item.OrderQuantity * item.UnitPrice;
             po.Podetails.Add(new Podetail
             {
@@ -206,6 +194,7 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         await _context.SaveChangesAsync(ct);
         return (await GetPurchaseOrderDetailAsync(po.Poid.ToString(), ct))!;
+        // [hieppm] End: Validate danh sách vị thuốc & trạng thái khi cập nhật PO nháp
     }
 
     public async Task DeletePOAsync(int id, CancellationToken ct = default)
@@ -229,6 +218,69 @@ public class PurchaseOrderService : IPurchaseOrderService
         _context.PurchaseOrders.Remove(po);
         await _context.SaveChangesAsync(ct);
     }
+
+    // [hieppm] Start: Helper kiểm tra danh sách vị thuốc và trạng thái PO hợp lệ
+    private async Task ValidatePOItemsAsync(IReadOnlyCollection<CreatePOItemRequest>? items, CancellationToken ct)
+    {
+        if (items == null || items.Count == 0)
+        {
+            throw new BadRequestException("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.");
+        }
+
+        var seenHerbIds = new HashSet<int>();
+        foreach (var item in items)
+        {
+            if (item.HerbId <= 0)
+            {
+                throw new BadRequestException("Vị thuốc được chọn không hợp lệ.");
+            }
+            if (item.OrderQuantity <= 0)
+            {
+                throw new BadRequestException("Số lượng đặt phải lớn hơn 0.");
+            }
+            if (item.UnitPrice < 0)
+            {
+                throw new BadRequestException("Đơn giá không được âm.");
+            }
+            if (!seenHerbIds.Add(item.HerbId))
+            {
+                throw new BadRequestException($"Vị thuốc ID {item.HerbId} bị trùng lặp trong đơn mua hàng.");
+            }
+        }
+
+        var requestedHerbIds = seenHerbIds.ToList();
+        var existingHerbIds = await _context.Herbs
+            .Where(h => requestedHerbIds.Contains(h.HerbId))
+            .Select(h => h.HerbId)
+            .ToListAsync(ct);
+
+        var missingHerbId = requestedHerbIds.FirstOrDefault(id => !existingHerbIds.Contains(id));
+        if (missingHerbId > 0)
+        {
+            throw new NotFoundException($"Vị thuốc ID {missingHerbId} không tồn tại.");
+        }
+    }
+
+    private static string NormalizeAllowedPOStatus(string? status, string defaultStatus)
+    {
+        if (string.IsNullOrWhiteSpace(status)) return defaultStatus;
+        var s = status.Trim();
+        if (s.Equals("Nháp", StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("DRAFT", StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("Mới tạo", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Nháp";
+        }
+        if (s.Equals("Chờ nhận", StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("Chờ nhận hàng", StringComparison.OrdinalIgnoreCase) ||
+            s.Equals("PENDING", StringComparison.OrdinalIgnoreCase))
+        {
+            return "Chờ nhận";
+        }
+
+        throw new BadRequestException($"Trạng thái '{status}' không hợp lệ khi lập hoặc cập nhật đơn mua hàng.");
+    }
+    // [hieppm] End: Helper kiểm tra danh sách vị thuốc và trạng thái PO hợp lệ
 
     private static bool IsDraftStatus(string status)
     {
