@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs;
 
@@ -22,9 +22,9 @@ public interface IExaminationService
     Task<PrescriptionResponse> SavePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, SavePrescriptionRequest request, CancellationToken ct);
     Task<PrescriptionResponse> LoadFormulaAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, LoadFormulaRequest request, CancellationToken ct);
     Task<PrescriptionResponse> SendPrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest request, CancellationToken ct);
-    Task DeletePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest request, CancellationToken ct);
+    Task DeletePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest? request, CancellationToken ct);
     Task<TreatmentPlanResponse> CreatePlanAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct);
     Task<TreatmentPlanResponse> SavePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, SaveTreatmentPlanRequest request, CancellationToken ct);
     Task<TreatmentPlanResponse> ConfirmPlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct);
-    Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest request, CancellationToken ct);
+    Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest? request, CancellationToken ct);
 }

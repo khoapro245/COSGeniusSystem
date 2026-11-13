@@ -8,10 +8,12 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/examinations")]
+[Route("api/examinations")]
 [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
 public sealed class ExaminationsController(IExaminationService service) : BaseApiController
 {
     [HttpGet]
+    [HttpGet("visits")]
     public async Task<ActionResult<ApiResponseModel<PagedResult<RegistrationResponse>>>> List(
         [FromQuery] RegistrationQuery query, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, false, ct));
@@ -29,6 +31,7 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         SuccessResponse(ExaminationMessages.Retrieved, await service.ListAsync(User, query, true, ct));
 
     [HttpPost]
+    [HttpPost("visits")]
     [Authorize(Roles = RoleConstants.ReceptionStaff)]
     public async Task<ActionResult<ApiResponseModel<RegistrationResponse>>> Create(CreateRegistrationRequest request, CancellationToken ct)
     {
@@ -37,6 +40,7 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
     }
 
     [HttpGet("{registrationId:int:min(1)}")]
+    [HttpGet("visits/{registrationId:int:min(1)}")]
     public async Task<ActionResult<ApiResponseModel<ExaminationResponse>>> Get(int registrationId, CancellationToken ct) =>
         SuccessResponse(ExaminationMessages.Retrieved, await service.GetAsync(User, registrationId, ct));
 
@@ -109,10 +113,18 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         SuccessResponse(ExaminationMessages.Sent, await service.SendPrescriptionAsync(User, registrationId, prescriptionId, request, ct));
 
     [HttpDelete("{registrationId:int:min(1)}/prescriptions/{prescriptionId:int:min(1)}")]
+    [HttpPost("{registrationId:int:min(1)}/prescriptions/{prescriptionId:int:min(1)}/cancel")]
     [Authorize(Roles = RoleConstants.Doctor)]
     public async Task<ActionResult<ApiResponseModel<object?>>> DeletePrescription(int registrationId, int prescriptionId,
-        [FromBody] VersionRequest request, CancellationToken ct)
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] VersionRequest? request,
+        [FromQuery] string? rowVersion,
+        CancellationToken ct)
     {
+        request ??= new VersionRequest();
+        if ((request.RowVersion == null || request.RowVersion.Length == 0) && !string.IsNullOrWhiteSpace(rowVersion))
+        {
+            try { request.RowVersion = Convert.FromBase64String(rowVersion); } catch { }
+        }
         await service.DeletePrescriptionAsync(User, registrationId, prescriptionId, request, ct);
         return SuccessResponse(ExaminationMessages.Deleted);
     }
@@ -135,12 +147,19 @@ public sealed class ExaminationsController(IExaminationService service) : BaseAp
         SuccessResponse(ExaminationMessages.Confirmed, await service.ConfirmPlanAsync(User, registrationId, planId, request, ct));
 
     [HttpDelete("{registrationId:int:min(1)}/treatment-plans/{planId:int:min(1)}")]
+    [HttpPost("{registrationId:int:min(1)}/treatment-plans/{planId:int:min(1)}/cancel")]
     [Authorize(Roles = RoleConstants.Doctor)]
     public async Task<ActionResult<ApiResponseModel<object?>>> DeletePlan(int registrationId, int planId,
-        [FromBody] VersionRequest request, CancellationToken ct)
+        [FromBody(EmptyBodyBehavior = Microsoft.AspNetCore.Mvc.ModelBinding.EmptyBodyBehavior.Allow)] VersionRequest? request,
+        [FromQuery] string? rowVersion,
+        CancellationToken ct)
     {
+        request ??= new VersionRequest();
+        if ((request.RowVersion == null || request.RowVersion.Length == 0) && !string.IsNullOrWhiteSpace(rowVersion))
+        {
+            try { request.RowVersion = Convert.FromBase64String(rowVersion); } catch { }
+        }
         await service.DeletePlanAsync(User, registrationId, planId, request, ct);
         return SuccessResponse(ExaminationMessages.Deleted);
     }
 }
-

@@ -77,3 +77,162 @@ Content-Type: application/json
   "username": "cashier",
   "password": "cashier123"
 }
+
+
+###############################################################################
+# PHÂN HỆ BÁC SĨ (DOCTOR CLINICAL WORKFLOW)
+# Chuỗi 8 Request kiểm thử mẫu theo đúng luồng nghiệp vụ thực tế
+###############################################################################
+
+@examSheetId = 1
+@doctorId = 1
+
+### 10. Tra cứu danh sách đăng ký khám và hàng đợi trong ngày của Bác sĩ (DOC-01 & Cột trái DOC-06)
+GET {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations?doctorId={{doctorId}}&status=Chờ khám&pageNumber=1&pageSize=20
+Accept: application/json
+
+### 11. Nghiệp vụ "Gọi vào khám": Chuyển trạng thái Chờ khám -> Đang khám và mở Workspace
+PATCH {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/call
+Accept: application/json
+
+### 12. Xem toàn bộ hồ sơ khám bệnh Workspace (DOC-02, DOC-05, DOC-06)
+GET {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}
+Accept: application/json
+
+### 13. Lưu thông tin khám lâm sàng: Sinh hiệu, Tứ chẩn YHCT, Chẩn đoán sơ bộ & Mã ICD (DOC-02)
+PUT {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/clinical
+Content-Type: application/json
+
+{
+  "examStartTime": "2026-11-04T08:30:00",
+  "vitalSigns": {
+    "pulseRate": 78,
+    "temperature": 36.8,
+    "respiratoryRate": 18,
+    "height": 165.0,
+    "weight": 58.5,
+    "spO2": 98.0
+  },
+  "symptoms": "Đau mỏi vai gáy lan xuống cẳng tay phải, tê bì ngón tay 1 tuần nay",
+  "preliminaryDiagnosis": "Hội chứng cổ vai cánh tay do thoái hóa đốt sống cổ",
+  "traditionalMedicine": {
+    "vongChan": "Sắc mặt tươi nhuận, thể trạng trung bình, chất lưỡi hồng nhạt, rêu lưỡi trắng mỏng hơi nhớt",
+    "vanChan_NgheNgui": "Tiếng nói to rõ, không ho, hơi thở êm dịu, không có mùi lạ",
+    "vanChan_Hoi": "Đau tăng khi trời lạnh hoặc ngồi làm việc máy tính lâu, mất ngủ do đau mỏi, ăn uống đại tiểu tiện bình thường",
+    "thietChan": "Cơ vùng cổ gáy co cứng nhẹ, ấn cự án vùng phong trì - kiên tỉnh, mạch trầm huyền hữu lực",
+    "fourExamsSummary": "Bệnh thuộc chứng Tý, thể Phong hàn thấp kết hợp Khí trệ huyết ứ kinh lạc",
+    "bienChung": "Phong hàn thấp tà thừa cơ xâm nhập kinh lạc vùng cổ vai làm khí huyết vận hành bất thông sinh ra đau mỏi",
+    "traditionalDiagnosis": "Kiên bối thống (Phong hàn thấp tý / Khí trệ huyết ứ)"
+  },
+  "icdCode": "M54.2",
+  "icdName": "Cervicalgia (Đau cột sống cổ)"
+}
+
+### 14. Kê dịch vụ điều trị (Tab Kê dịch vụ DOC-03): Chỉ định dịch vụ theo liệu trình
+PUT {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/services
+Content-Type: application/json
+
+{
+  "treatmentType": "Theo liệu trình",
+  "totalSessions": 5,
+  "indicationNote": "Liệu trình điện châm kết hợp xoa bóp bấm huyệt thông kinh hoạt lạc vùng cổ gáy",
+  "additionalContent": "Tránh vận động đột ngột vùng cổ, giữ ấm khi ngủ",
+  "services": [
+    {
+      "serviceId": 1,
+      "note": "Điện châm các huyệt Phong trì, Kiên tỉnh, Đại chùy (20 phút)"
+    },
+    {
+      "serviceId": 2,
+      "note": "Xoa bóp bấm huyệt giải cơ vùng cổ vai cánh tay (15 phút)"
+    }
+  ]
+}
+
+### 15. Lấy danh mục bài thuốc mẫu và danh sách dược liệu phục vụ kê đơn thuốc (Tab Kê đơn thuốc DOC-04)
+GET {{COSGeniusSystem_HostAddress}}/api/v1/doctor/prescriptions/catalog
+Accept: application/json
+
+### 16. Kê đơn thuốc: Lưu nháp (ActionType = "SAVE_DRAFT")
+PUT {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/prescription
+Content-Type: application/json
+
+{
+  "actionType": "SAVE_DRAFT",
+  "prescriptionMethod": "Tự kê đơn",
+  "templateFormulaId": null,
+  "totalDoses": 5,
+  "prescriptionNote": "Sắc uống ngày 1 thang, chia 2 lần sáng và chiều sau bữa ăn 30 phút",
+  "ingredients": [
+    {
+      "herbId": 1,
+      "gramsPerDose": 12.0,
+      "note": "Quân dược - Thông kinh hoạt lạc"
+    },
+    {
+      "herbId": 2,
+      "gramsPerDose": 10.0,
+      "note": "Thần dược - Ôn kinh tán hàn"
+    },
+    {
+      "herbId": 3,
+      "gramsPerDose": 8.0,
+      "note": "Tá dược - Hành khí giảm đau"
+    },
+    {
+      "herbId": 4,
+      "gramsPerDose": 6.0,
+      "note": "Sứ dược - Điều hòa các vị thuốc"
+    }
+  ]
+}
+
+### 17. Kê đơn thuốc: Gửi đơn cho Herbalist bốc thuốc (ActionType = "SEND_HERBALIST" - Khóa đơn không cho sửa)
+PUT {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/prescription
+Content-Type: application/json
+
+{
+  "actionType": "SEND_HERBALIST",
+  "prescriptionMethod": "Tự kê đơn",
+  "templateFormulaId": null,
+  "totalDoses": 5,
+  "prescriptionNote": "Sắc uống ngày 1 thang, chia 2 lần sáng và chiều sau bữa ăn 30 phút. Uống ấm.",
+  "ingredients": [
+    {
+      "herbId": 1,
+      "gramsPerDose": 12.0,
+      "note": "Quân dược - Thông kinh hoạt lạc"
+    },
+    {
+      "herbId": 2,
+      "gramsPerDose": 10.0,
+      "note": "Thần dược - Ôn kinh tán hàn"
+    },
+    {
+      "herbId": 3,
+      "gramsPerDose": 8.0,
+      "note": "Tá dược - Hành khí giảm đau"
+    },
+    {
+      "herbId": 4,
+      "gramsPerDose": 6.0,
+      "note": "Sứ dược - Điều hòa các vị thuốc"
+    }
+  ]
+}
+
+### 18. Hoàn tất lượt khám bệnh (Khóa hồ sơ IsReadOnly = true)
+POST {{COSGeniusSystem_HostAddress}}/api/v1/doctor/examinations/{{examSheetId}}/complete
+Content-Type: application/json
+
+{
+  "symptoms": "Bệnh nhân đã được khám lâm sàng, giải thích phác đồ điều trị và đồng ý tiếp nhận",
+  "preliminaryDiagnosis": "Hội chứng cổ vai cánh tay do thoái hóa đốt sống cổ",
+  "traditionalMedicine": {
+    "vongChan": "Sắc mặt tươi nhuận, thể trạng trung bình, chất lưỡi hồng nhạt",
+    "thietChan": "Mạch trầm huyền hữu lực",
+    "traditionalDiagnosis": "Kiên bối thống (Phong hàn thấp tý / Khí trệ huyết ứ)"
+  },
+  "icdCode": "M54.2",
+  "icdName": "Cervicalgia (Đau cột sống cổ)"
+}

@@ -7,6 +7,9 @@ namespace COSGeniusSystem.Controllers;
 
 [ApiController]
 [Route("api/v1/reception/dashboard")]
+[Route("api/reception/dashboard")]
+[Route("api/v1/dashboard")]
+[Route("api/dashboard")]
 public sealed class ReceptionDashboardController : BaseApiController
 {
     private readonly IReceptionDashboardService _dashboardService;
@@ -39,4 +42,3 @@ public sealed class ReceptionDashboardController : BaseApiController
         return SuccessResponse(SystemMessages.DashboardQuickQueuesRetrieved, result);
     }
 }
-

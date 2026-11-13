@@ -1,4 +1,4 @@
-﻿using COSGeniusSystem.Data;
+using COSGeniusSystem.Data;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
@@ -24,6 +24,19 @@ internal static class SchemaFixture
         {
             RecordId = id, Registration = registration, Patient = patient, Doctor = doctor,
             ExamDate = DateTime.UtcNow, Status = "COMPLETED", FinalDiagnosis = "Diagnosis"
+        };
+    }
+
+    internal static ExaminationRegistration Registration(int id = 1)
+    {
+        var user = new User { UserId = id, Username = $"user{id}", FullName = "Staff", PasswordHash = "hash" };
+        var doctor = new Doctor { DoctorId = id, FullName = "Doctor", User = user, IsActive = true };
+        var patient = new Patient { PatientId = id, FullName = "Patient" };
+        return new ExaminationRegistration
+        {
+            RegistrationId = id, Patient = patient, Doctor = doctor, RegisteredByNavigation = user,
+            RegistrationCode = $"KCB{id:D5}", BusinessDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)),
+            QueueNumber = id, RegisteredAt = DateTime.UtcNow, Status = "WAITING", RowVersion = [1, 2, 3, 4, 5, 6, 7, 8]
         };
     }
 

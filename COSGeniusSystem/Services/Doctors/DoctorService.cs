@@ -67,9 +67,106 @@ public class DoctorService : IDoctorService
             LicenseNumber = doctor.LicenseNumber,
             Phone = doctor.Phone,
             IsActive = doctor.IsActive,
-            // Thông tin user liên kết (có thể null nếu bác sĩ chưa có tài khoản)
             Username = doctor.User?.Username,
             Email = doctor.User?.Email
+        };
+    }
+
+    public async Task<DoctorClinicOverviewDto> GetDoctorClinicOverviewAsync(DoctorClinicFilterQuery query, CancellationToken ct = default)
+    {
+        var today = query.BusinessDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+
+        var allDoctors = await _context.Doctors.AsNoTracking().OrderBy(d => d.DoctorId).ToListAsync(ct);
+        var totalDoctorCount = allDoctors.Count;
+        var onDutyDoctorCount = allDoctors.Count(d => d.IsActive);
+
+        var waitingExaminationCount = await _context.ExaminationRegistrations
+            .CountAsync(r => r.BusinessDate == today && (r.Status == "WAITING" || r.Status == "Chờ khám"), ct);
+
+        var waitingTreatmentCount = await _context.TreatmentSessions
+            .CountAsync(s => s.ScheduledDate == today && (s.Status == "REQUESTED" || s.Status == "Chờ điều trị"), ct);
+
+        var specializations = allDoctors
+            .Where(d => !string.IsNullOrWhiteSpace(d.Specialization))
+            .Select(d => d.Specialization!.Trim())
+            .Distinct()
+            .OrderBy(s => s)
+            .ToList();
+
+        // Lọc danh sách bác sĩ theo keyword và specialization
+        var filtered = allDoctors.AsEnumerable();
+
+        if (!string.IsNullOrWhiteSpace(query.Specialization) && query.Specialization.Trim() != "all" && query.Specialization.Trim() != "Tất cả chuyên khoa")
+        {
+            var specTarget = query.Specialization.Trim().ToLowerInvariant();
+            filtered = filtered.Where(d => d.Specialization != null && d.Specialization.ToLowerInvariant().Contains(specTarget));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Keyword))
+        {
+            var kw = query.Keyword.Trim().ToLowerInvariant();
+            filtered = filtered.Where(d =>
+                d.FullName.ToLowerInvariant().Contains(kw) ||
+                (d.Phone != null && d.Phone.ToLowerInvariant().Contains(kw)) ||
+                (d.LicenseNumber != null && d.LicenseNumber.ToLowerInvariant().Contains(kw)));
+        }
+
+        var doctorList = filtered.OrderBy(d => d.DoctorId).ToList();
+
+        // Lấy danh sách lượt khám trong ngày để tính hàng đợi & ca đang khám
+        var todayRegistrations = await _context.ExaminationRegistrations.AsNoTracking()
+            .Include(r => r.Patient)
+            .Where(r => r.BusinessDate == today)
+            .ToListAsync(ct);
+
+        var resultItems = new List<DoctorClinicItemDto>();
+        foreach (var d in doctorList)
+        {
+            var doctorWaitingCount = todayRegistrations
+                .Count(r => r.DoctorId == d.DoctorId && (r.Status == "WAITING" || r.Status == "Chờ khám"));
+
+            var currentExam = todayRegistrations
+                .Where(r => r.DoctorId == d.DoctorId && (r.Status == "IN_PROGRESS" || r.Status == "Đang khám"))
+                .OrderByDescending(r => r.RegistrationId)
+                .FirstOrDefault();
+
+            string? currentPatientText = null;
+            if (currentExam != null && currentExam.Patient != null)
+            {
+                var pCode = currentExam.Patient.PatientCode ?? $"BN{currentExam.Patient.PatientId:D5}";
+                currentPatientText = $"{currentExam.Patient.FullName} ({pCode})";
+            }
+            else
+            {
+                currentPatientText = "0";
+            }
+
+            var item = new DoctorClinicItemDto
+            {
+                DoctorId = d.DoctorId,
+                FullName = d.FullName,
+                Specialization = d.Specialization,
+                LicenseNumber = d.LicenseNumber,
+                Phone = d.Phone,
+                Room = string.Empty,
+                IsActive = d.IsActive,
+                StatusText = d.IsActive ? "Hoạt động" : "Ngừng hoạt động",
+                AbsenceReason = null,
+                WaitingCount = doctorWaitingCount,
+                CurrentExaminingPatient = currentPatientText
+            };
+
+            resultItems.Add(item);
+        }
+
+        return new DoctorClinicOverviewDto
+        {
+            OnDutyDoctorCount = onDutyDoctorCount,
+            TotalDoctorCount = totalDoctorCount,
+            WaitingExaminationCount = waitingExaminationCount,
+            WaitingTreatmentCount = waitingTreatmentCount,
+            Specializations = specializations,
+            Doctors = resultItems
         };
     }
 }

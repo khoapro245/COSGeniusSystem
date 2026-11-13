@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace COSGeniusSystem.Controllers;
 
 [ApiController]
+[Route("api/doctors")]
 [Route("api/v1/doctors")]
 public class DoctorsController : BaseApiController
 {
@@ -16,6 +17,20 @@ public class DoctorsController : BaseApiController
     public DoctorsController(IDoctorService doctorService)
     {
         _doctorService = doctorService;
+    }
+
+    /// <summary>
+    /// API-PHUC-00: Tổng quan danh sách bác sĩ & phòng khám, hàng đợi chờ khám cho Tiếp tân (Gộp thống kê & danh sách trong 1 endpoint).
+    /// GET /api/v1/doctors/overview
+    /// </summary>
+    [HttpGet("overview")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    public async Task<ActionResult<ApiResponseModel<DoctorClinicOverviewDto>>> GetDoctorClinicOverview(
+        [FromQuery] DoctorClinicFilterQuery query,
+        CancellationToken ct = default)
+    {
+        var result = await _doctorService.GetDoctorClinicOverviewAsync(query, ct);
+        return SuccessResponse(SystemMessages.DoctorsRetrieved, result);
     }
 
     /// <summary>
