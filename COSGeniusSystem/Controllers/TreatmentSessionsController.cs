@@ -15,6 +15,11 @@ public sealed class TreatmentSessionsController(ITreatmentWorkflowService servic
     public async Task<ActionResult<ApiResponseModel<PagedResult<SessionSummary>>>> List([FromQuery] SessionQuery query, CancellationToken ct) =>
         SuccessResponse(SystemMessages.TreatmentsRetrieved, await service.SessionsAsync(User, query, false, ct));
 
+    [HttpGet("doctor-workload")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
+    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<TreatmentWorkload>>>> Workload([FromQuery] TreatmentWorkloadQuery query, CancellationToken ct) =>
+        SuccessResponse(SystemMessages.TreatmentsRetrieved, await service.WorkloadAsync(User, query, ct));
+
     [HttpGet("mine")]
     [Authorize(Roles = RoleConstants.Doctor)]
     public async Task<ActionResult<ApiResponseModel<PagedResult<SessionSummary>>>> Mine([FromQuery] SessionQuery query, CancellationToken ct) =>

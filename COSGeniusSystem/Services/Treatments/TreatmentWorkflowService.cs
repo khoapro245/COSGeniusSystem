@@ -94,7 +94,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         s.PerformedBy,
         s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName : null,
         s.RequestedBy,
-        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion);
+        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion, s.Shift, s.RequestCode, s.QueueNumber);
 
     public async Task<PagedResult<PlanSummary>> PlansAsync(ClaimsPrincipal actor, PlanQuery query, CancellationToken ct)
     {
@@ -170,6 +170,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (query.FromDate > query.ToDate) throw new BadRequestException("Invalid date range.");
         var doctor = mine ? await DoctorAsync(actor, ct) : (int?)null;
         var q = db.TreatmentSessions.AsNoTracking();
+        if (query.ExcludePlanned) q = q.Where(s => s.Status != "PLANNED");
         if (mine && doctor.HasValue)
         {
             q = q.Where(s => s.AssignedDoctorId == doctor || s.PerformedBy == doctor);
@@ -204,7 +205,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         if (!string.IsNullOrWhiteSpace(vc))
         {
             var c = vc.Trim();
-            q = q.Where(s => (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(c))
+            q = q.Where(s => (s.RequestCode != null && s.RequestCode.Contains(c)) || (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(c))
                 || (s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(c)));
         }
 
@@ -234,7 +235,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             q = q.Where(s => s.Plan.Record.Patient.FullName.Contains(search)
                 || (s.Plan.Record.Patient.PatientCode != null && s.Plan.Record.Patient.PatientCode.Contains(search))
                 || (s.Plan.Record.Patient.Phone != null && s.Plan.Record.Patient.Phone.Contains(search))
-                || (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(search)));
+                || (s.RequestCode != null && s.RequestCode.Contains(search)) || (s.Plan.PlanCode != null && s.Plan.PlanCode.Contains(search)));
         }
 
         var count = await q.CountAsync(ct);
@@ -278,6 +279,20 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
                 .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment session not found."))
             : (await db.TreatmentSessions.SingleOrDefaultAsync(s => s.SessionId == id, ct) ?? throw new NotFoundException("Treatment session not found."));
 
+    public async Task<IReadOnlyList<TreatmentWorkload>> WorkloadAsync(ClaimsPrincipal actor, TreatmentWorkloadQuery query, CancellationToken ct)
+    {
+        Reception(actor); Validate(query);
+        var sessions = db.TreatmentSessions.AsNoTracking().Where(s => s.ScheduledDate == query.ScheduledDate && s.Shift == query.Shift);
+        var doctors = db.Doctors.AsNoTracking().Where(d => d.IsActive && d.User != null && d.User.IsActive
+            && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor));
+        if (query.DoctorId.HasValue) doctors = doctors.Where(d => d.DoctorId == query.DoctorId);
+        return await doctors.OrderBy(d => d.FullName).Select(d => new TreatmentWorkload(d.DoctorId, d.FullName,
+            sessions.Count(s => s.AssignedDoctorId == d.DoctorId && (s.Status == "REQUESTED" || s.Status == "IN_PROGRESS" || s.Status == "COMPLETED")),
+            sessions.Count(s => s.AssignedDoctorId == d.DoctorId && s.Status == "REQUESTED"),
+            sessions.Count(s => s.AssignedDoctorId == d.DoctorId && s.Status == "IN_PROGRESS"),
+            sessions.Count(s => s.AssignedDoctorId == d.DoctorId && s.Status == "COMPLETED"))).ToListAsync(ct);
+    }
+
     public async Task<SessionOverview> RequestAsync(ClaimsPrincipal actor, int planId, RequestTreatment request, CancellationToken ct)
     {
         Reception(actor); Validate(request);
@@ -319,6 +334,18 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
                 session = new TreatmentSession { PlanId = planId, SessionNumber = checked(last + 1), CreatedAt = DateTime.UtcNow };
                 db.TreatmentSessions.Add(session);
             }
+            // Transaction-owned date lock serializes allocation across all plans and API instances.
+            // Cancelled tickets retain their number, so numbers are never reused.
+            var lockName = $"TreatmentQueue:{request.ScheduledDate:yyyyMMdd}";
+            if (db.Database.IsRelational())
+                await db.Database.ExecuteSqlInterpolatedAsync($@"DECLARE @result int;
+                    EXEC @result = sys.sp_getapplock @Resource={lockName}, @LockMode='Exclusive', @LockOwner='Transaction', @LockTimeout=15000;
+                    IF @result < 0 THROW 51000, 'Cannot allocate treatment queue number. Please retry.', 1;", ct);
+            var lastQueue = await db.TreatmentSessions.Where(s => s.ScheduledDate == request.ScheduledDate)
+                .MaxAsync(s => (int?)s.QueueNumber, ct) ?? 0;
+            session.QueueNumber = checked(lastQueue + 1);
+            session.RequestCode = $"YCDT-{request.ScheduledDate:yyyyMMdd}-{session.QueueNumber:D4}";
+            session.Shift = request.Shift;
             session.Status = "REQUESTED"; session.AssignedDoctorId = request.AssignedDoctorId;
             session.RequestedBy = UserId(actor); session.RequestedAt = DateTime.UtcNow; session.ScheduledDate = request.ScheduledDate;
             if (!string.IsNullOrWhiteSpace(request.Note)) session.ResultNote = request.Note.Trim();

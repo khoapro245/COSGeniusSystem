@@ -1145,6 +1145,11 @@ public partial class ApplicationDbContext : DbContext
 
         modelBuilder.Entity<TreatmentSession>(entity =>
         {
+            entity.Property(e => e.Shift).HasMaxLength(10).IsUnicode(false);
+            entity.Property(e => e.RequestCode).HasMaxLength(40).IsUnicode(false);
+            entity.HasIndex(e => e.RequestCode, "UX_TreatmentRequestCode").IsUnique().HasFilter("[RequestCode] IS NOT NULL");
+            entity.HasIndex(e => new { e.ScheduledDate, e.QueueNumber }, "UX_TreatmentQueue").IsUnique().HasFilter("[QueueNumber] IS NOT NULL");
+            entity.HasIndex(e => new { e.ScheduledDate, e.Shift, e.AssignedDoctorId, e.Status }, "IX_TreatmentWorkload");
             entity.HasKey(e => e.SessionId).HasName("PK_C2_TreatmentSession");
 
             entity.ToTable("TreatmentSession", tb => tb.HasTrigger("TR_C2_SessionNoReassign"));
