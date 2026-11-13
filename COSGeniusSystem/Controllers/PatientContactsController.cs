@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace COSGeniusSystem.Controllers
 {
     [Route("api/patients/{patientId:int:min(1)}/contacts")]
+    [Route("api/v1/patients/{patientId:int:min(1)}/contacts")]
     public sealed class PatientContactsController : BaseApiController
     {
         private readonly IPatientContactService _patientContactService;

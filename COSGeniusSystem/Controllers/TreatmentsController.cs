@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
+
 using COSGeniusSystem.Commons;
+
 using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -9,6 +11,7 @@ namespace COSGeniusSystem.Controllers;
 [ApiController]
 [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
 [Route("api/v1/treatments")]
+[Route("api/treatments")]
 public sealed class TreatmentsController : BaseApiController
 {
     private readonly ITreatmentProtocolService _treatmentProtocolService;
@@ -20,7 +23,7 @@ public sealed class TreatmentsController : BaseApiController
 
     /// <summary>
     /// Lấy danh sách hàng đợi chờ điều trị/trị liệu theo liệu trình trong ngày.
-    /// GET /api/v1/treatments/queue
+    /// GET /api/v1/treatments/queue | GET /api/treatments/queue
     /// </summary>
     [HttpGet("queue")]
     public async Task<ActionResult<ApiResponseModel<List<TreatmentQueueDto>>>> GetQueue(
@@ -32,7 +35,7 @@ public sealed class TreatmentsController : BaseApiController
 
     /// <summary>
     /// Tiếp nhận bệnh nhân vào hàng đợi điều trị/trị liệu theo liệu trình.
-    /// POST /api/v1/treatments/queue
+    /// POST /api/v1/treatments/queue | POST /api/treatments/queue
     /// </summary>
     [HttpPost("queue")]
     [Authorize(Roles = RoleConstants.ReceptionStaff)]
@@ -43,4 +46,3 @@ public sealed class TreatmentsController : BaseApiController
         return CreatedResponse(nameof(GetQueue), new { }, SystemMessages.TreatmentRequestCreated, result);
     }
 }
-

@@ -15,4 +15,5 @@ public interface ITreatmentWorkflowService
     Task<SessionOverview> StartAsync(ClaimsPrincipal actor, int id, VersionRequest request, CancellationToken ct);
     Task<SessionOverview> CompleteAsync(ClaimsPrincipal actor, int id, CompleteTreatment request, CancellationToken ct);
     Task<SessionOverview> CancelAsync(ClaimsPrincipal actor, int id, CancelTreatment request, CancellationToken ct);
+    Task<SessionOverview> CancelSessionTicketAsync(ClaimsPrincipal actor, int id, CancelTicketRequest request, CancellationToken ct);
 }

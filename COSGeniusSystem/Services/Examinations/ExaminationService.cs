@@ -58,14 +58,17 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     private async Task<T> WriteAsync<T>(ClaimsPrincipal actor, int registrationId, bool clinical,
         Func<ExaminationRegistration, Task<T>> action, CancellationToken ct)
     {
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
-        var registration = await db.ExaminationRegistrations
-            .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
-            .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Registration not found.");
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        var registration = db.Database.IsRelational()
+            ? await db.ExaminationRegistrations
+                .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
+                .SingleOrDefaultAsync(ct)
+            : await db.ExaminationRegistrations.SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct);
+        if (registration == null) throw new NotFoundException("Registration not found.");
         await AccessAsync(actor, registration, clinical, ct);
         var result = await action(registration);
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
         return result;
     }
 
@@ -98,11 +101,20 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         var now = DateTime.UtcNow;
         var businessDate = request.BusinessDate ?? DateOnly.FromDateTime(now.AddHours(7));
         ValidateBusinessDate(businessDate);
-        await using var tx = await db.Database.BeginTransactionAsync(ct);
+        var session = string.IsNullOrWhiteSpace(request.Session)
+            ? (now.AddHours(7).Hour < 12 ? "MORNING" : "AFTERNOON")
+            : request.Session.Trim().ToUpperInvariant();
+        if (session is not ("MORNING" or "AFTERNOON"))
+            session = now.AddHours(7).Hour < 12 ? "MORNING" : "AFTERNOON";
+        var symptoms = request.Symptoms ?? request.DoctorAdvice;
+
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         // HOLDLOCK protects the missing-key range on the first registration of the day.
-        var counter = await db.ExaminationQueueCounters
-            .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationQueueCounter WITH (UPDLOCK, HOLDLOCK) WHERE BusinessDate = {businessDate}")
-            .SingleOrDefaultAsync(ct);
+        var counter = db.Database.IsRelational()
+            ? await db.ExaminationQueueCounters
+                .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationQueueCounter WITH (UPDLOCK, HOLDLOCK) WHERE BusinessDate = {businessDate}")
+                .SingleOrDefaultAsync(ct)
+            : await db.ExaminationQueueCounters.SingleOrDefaultAsync(c => c.BusinessDate == businessDate, ct);
         if (counter is null)
         {
             counter = new ExaminationQueueCounter { BusinessDate = businessDate };
@@ -113,12 +125,12 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         {
             PatientId = request.PatientId, DoctorId = request.DoctorId, ContactId = request.ContactId,
             RegisteredBy = UserId(actor), RegisteredAt = now, BusinessDate = businessDate,
-            QueueNumber = counter.LastNumber, Session = request.Session, IsPriority = request.IsPriority,
-            Symptoms = request.Symptoms, Note = request.Note, Status = "WAITING"
+            QueueNumber = counter.LastNumber, Session = session, IsPriority = request.IsPriority,
+            Symptoms = symptoms, Note = request.Note, Status = "WAITING"
         };
         db.ExaminationRegistrations.Add(registration);
         await db.SaveChangesAsync(ct);
-        await tx.CommitAsync(ct);
+        if (tx != null) await tx.CommitAsync(ct);
         return await RegistrationResponseAsync(registration.RegistrationId, ct);
     }
 
@@ -146,10 +158,15 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 registration.QueueNumber = counter.LastNumber = checked(counter.LastNumber + 1);
                 registration.BusinessDate = date;
             }
-            registration.Session = request.Session;
+            var session = string.IsNullOrWhiteSpace(request.Session)
+                ? registration.Session
+                : request.Session.Trim().ToUpperInvariant();
+            if (session is not ("MORNING" or "AFTERNOON"))
+                session = registration.Session;
+            registration.Session = session;
             registration.DoctorId = request.DoctorId;
             registration.ContactId = request.ContactId;
-            registration.Symptoms = request.Symptoms;
+            registration.Symptoms = request.Symptoms ?? request.DoctorAdvice ?? registration.Symptoms;
             registration.Note = request.Note;
             registration.IsPriority = request.IsPriority;
             registration.UpdatedAt = DateTime.UtcNow;
@@ -190,22 +207,119 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             q = q.Where(r => r.DoctorId == doctorId);
         }
         if (query.DoctorId.HasValue) q = q.Where(r => r.DoctorId == query.DoctorId);
+        if (query.PatientId.HasValue) q = q.Where(r => r.PatientId == query.PatientId.Value);
         if (query.FromDate.HasValue) q = q.Where(r => r.BusinessDate >= query.FromDate);
         if (query.ToDate.HasValue) q = q.Where(r => r.BusinessDate <= query.ToDate);
-        if (query.Status != null) q = q.Where(r => r.Status == query.Status);
-        if (query.Session != null) q = q.Where(r => r.Session == query.Session);
-        if (!string.IsNullOrWhiteSpace(query.Search))
+
+        var normalizedStatus = NormalizeStatus(query.Status);
+        if (!string.IsNullOrWhiteSpace(normalizedStatus))
         {
-            var search = query.Search.Trim();
-            q = q.Where(r => r.Patient.FullName.Contains(search) || (r.Patient.Phone != null && r.Patient.Phone.Contains(search))
-                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(search))
-                || (r.RegistrationCode != null && r.RegistrationCode.Contains(search)));
+            q = q.Where(r => r.Status == normalizedStatus);
         }
+
+        if (!string.IsNullOrWhiteSpace(query.Session))
+        {
+            var s = query.Session.Trim().ToUpperInvariant();
+            if (s is "MORNING" or "AFTERNOON")
+                q = q.Where(r => r.Session == s);
+        }
+
+        var searchTerms = new List<string>();
+        if (!string.IsNullOrWhiteSpace(query.Search)) searchTerms.Add(query.Search.Trim());
+        if (!string.IsNullOrWhiteSpace(query.Keyword) && !searchTerms.Contains(query.Keyword.Trim())) searchTerms.Add(query.Keyword.Trim());
+
+        foreach (var term in searchTerms)
+        {
+            q = q.Where(r => r.Patient.FullName.Contains(term)
+                || (r.Patient.Phone != null && r.Patient.Phone.Contains(term))
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(term))
+                || (r.RegistrationCode != null && r.RegistrationCode.Contains(term)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Phone))
+        {
+            var p = query.Phone.Trim();
+            q = q.Where(r => r.Patient.Phone != null && r.Patient.Phone.Contains(p));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.Code))
+        {
+            var c = query.Code.Trim();
+            q = q.Where(r => (r.RegistrationCode != null && r.RegistrationCode.Contains(c))
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(c)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientName))
+        {
+            var name = query.PatientName.Trim();
+            q = q.Where(r => r.Patient.FullName.Contains(name));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientCode))
+        {
+            var pc = query.PatientCode.Trim();
+            q = q.Where(r => r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(pc));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.RegistrationCode))
+        {
+            var rc = query.RegistrationCode.Trim();
+            q = q.Where(r => r.RegistrationCode != null && r.RegistrationCode.Contains(rc));
+        }
+
+        var visitCode = query.VisitCode;
+        if (!string.IsNullOrWhiteSpace(visitCode))
+        {
+            var vc = visitCode.Trim();
+            q = q.Where(r => (r.RegistrationCode != null && r.RegistrationCode.Contains(vc))
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(vc)));
+        }
+
+        if (!string.IsNullOrWhiteSpace(query.PatientKeyword))
+        {
+            var pk = query.PatientKeyword.Trim();
+            q = q.Where(r => r.Patient.FullName.Contains(pk)
+                || (r.Patient.PatientCode != null && r.Patient.PatientCode.Contains(pk)));
+        }
+
         var total = await q.CountAsync(ct);
-        var items = await q.OrderByDescending(r => r.BusinessDate).ThenByDescending(r => r.IsPriority)
-            .ThenBy(r => r.QueueNumber).Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(RegistrationProjection).ToListAsync(ct);
+        var dbItems = await q.OrderByDescending(r => r.BusinessDate)
+            .ThenBy(r =>
+                (r.Status == "IN_PROGRESS" || r.Status == "Đang khám") ? 1 :
+                (r.Status == "WAITING" || r.Status == "Chờ khám") ? 2 :
+                (r.Status == "COMPLETED" || r.Status == "Đã hoàn tất" || r.Status == "Hoàn tất") ? 3 : 4)
+            .ThenByDescending(r => r.IsPriority)
+            .ThenBy(r => r.RegisteredAt)
+            .ThenBy(r => r.QueueNumber)
+            .Skip((query.PageNumber - 1) * query.PageSize)
+            .Take(query.PageSize)
+            .Select(RegistrationProjection)
+            .ToListAsync(ct);
+
+        var items = dbItems.Select((r, index) =>
+            r with { QueueNumber = ((query.PageNumber - 1) * query.PageSize) + index + 1 })
+            .ToList();
+
         return new(items, query.PageNumber, query.PageSize, total);
+    }
+
+    private static string? NormalizeStatus(string? raw)
+    {
+        if (string.IsNullOrWhiteSpace(raw)) return null;
+        var trimmed = raw.Trim();
+        var upper = trimmed.ToUpperInvariant();
+        if (upper is "ALL" or "TẤT CẢ" or "TAT CA") return null;
+
+        if (upper is "WAITING" or "CHỜ KHÁM" or "CHO KHAM" or "CHO_KHAM" or "CHỜ ĐIỀU TRỊ" or "CHO DIEU TRI")
+            return "WAITING";
+        if (upper is "IN_PROGRESS" or "INPROGRESS" or "ĐANG KHÁM" or "DANG KHAM" or "DANG_KHAM" or "ĐANG ĐIỀU TRỊ" or "DANG DIEU TRI")
+            return "IN_PROGRESS";
+        if (upper is "COMPLETED" or "HOÀN THÀNH" or "HOAN THANH" or "HOÀN TẤT" or "HOAN TAT" or "ĐÃ HOÀN TẤT" or "DA HOAN TAT")
+            return "COMPLETED";
+        if (upper is "CANCELLED" or "CANCELED" or "HỦY" or "HUY" or "ĐÃ HỦY" or "DA HUY")
+            return "CANCELLED";
+
+        return upper;
     }
 
     public async Task<ExaminationResponse> GetAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct)
@@ -325,8 +439,13 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleAsync(ct);
 
     private static readonly Expression<Func<ExaminationRegistration, RegistrationResponse>> RegistrationProjection = r =>
-        new(r.RegistrationId, r.RegistrationCode, r.PatientId, r.Patient.PatientCode, r.Patient.FullName, r.Patient.Phone,
-            r.DoctorId, r.Doctor.FullName, r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
+        new(r.RegistrationId, r.RegistrationCode, r.PatientId,
+            r.Patient != null ? r.Patient.PatientCode : null,
+            r.Patient != null ? r.Patient.FullName : "Không xác định",
+            r.Patient != null ? r.Patient.Phone : null,
+            r.DoctorId,
+            r.Doctor != null ? r.Doctor.FullName : "Chưa phân công",
+            r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
             r.ContactId, r.Contact == null ? null : r.Contact.FullName, r.Symptoms, r.Note, r.Status,
             r.StartedAt, r.CompletedAt, r.MedicalRecord == null ? null : r.MedicalRecord.RecordId, r.RowVersion, r.Session);
 

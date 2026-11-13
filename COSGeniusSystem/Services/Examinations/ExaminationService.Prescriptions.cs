@@ -170,15 +170,15 @@ public sealed partial class ExaminationService
         return await PrescriptionResponseAsync(prescriptionId, ct);
     }
 
-    public async Task DeletePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest request, CancellationToken ct)
+    public async Task DeletePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest? request, CancellationToken ct)
     {
-        Validate(request);
         await WriteAsync(actor, registrationId, true, async registration =>
         {
             var record = await RecordAsync(registration, true, ct);
             var prescription = await PrescriptionAsync(record.RecordId, prescriptionId, ct);
             Draft(prescription.Status);
-            Version(prescription.RowVersion, request.RowVersion);
+            if (request?.RowVersion != null && request.RowVersion.Length == 8)
+                Version(prescription.RowVersion, request.RowVersion);
             db.HerbalPrescriptionDetails.RemoveRange(prescription.HerbalPrescriptionDetails);
             db.HerbalPrescriptions.Remove(prescription);
             return true;
