@@ -36,13 +36,13 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
         var q = db.HerbRequisitions.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(r => r.Status == status);
         var count = await q.CountAsync(ct);
-        var items = await q.OrderBy(r => r.Id).Skip((pageNumber - 1) * 20).Take(20).Select(r => new
+        var items = await q.OrderBy(r => r.Id).Skip((pageNumber - 1) * 10).Take(10).Select(r => new
         {
             r.Id, r.RequisitionCode, r.CreatedBy, r.WarehouseId, r.CreatedAt, r.Note, r.Status, rowVersion = Convert.ToBase64String(r.RowVersion),
             prescriptionIds = r.Prescriptions.Select(l => l.PrescriptionId).ToList(),
             ingredients = r.Details.GroupBy(d => new { d.HerbId, d.UnitSnapshot }).Select(g => new { g.Key.HerbId, g.Key.UnitSnapshot, totalGrams = g.Sum(d => d.RequestedQuantity) }).ToList()
         }).ToListAsync(ct);
-        return Result(200, "Thành công.", new { items, totalCount = count, pageNumber, pageSize = 20 });
+        return Result(200, "Thành công.", new { items, totalCount = count, pageNumber, pageSize = 10 });
     }
 
 

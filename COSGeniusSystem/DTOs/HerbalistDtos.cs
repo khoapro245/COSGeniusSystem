@@ -12,7 +12,7 @@ public class HerbalistFilter
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     [Range(1, int.MaxValue)] public int PageNumber { get; set; } = 1;
-    [Range(1, 100)] public int PageSize { get; set; } = 20;
+    [Range(1, 100)] public int PageSize { get; set; } = 10;
 }
 public record HerbalistSelection([Required, MinLength(1), MaxLength(100)] int[] PrescriptionIds, [Range(0, int.MaxValue)] int WarehouseId = 0);
 public record HerbalistCreateRequest(

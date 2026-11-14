@@ -7,7 +7,7 @@ public class DispensingSlipFilterQuery
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
+    public int PageSize { get; set; } = 10;
 }
 
 public class DispensingSlipItemDto
@@ -73,7 +73,7 @@ public class DispenseHistoryFilterQuery
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 20;
+    public int PageSize { get; set; } = 10;
 }
 
 public class DispensedHistoryRecordDto
