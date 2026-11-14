@@ -4,6 +4,7 @@ namespace COSGeniusSystem.DTOs;
 
 public abstract class PatientRequest
 {
+    public bool ConfirmDuplicatePhone { get; set; }
     [Required(ErrorMessage = "Họ và tên là bắt buộc.")]
     [StringLength(100, ErrorMessage = "Họ và tên không được vượt quá 100 ký tự.")]
     public string FullName { get; set; } = string.Empty;

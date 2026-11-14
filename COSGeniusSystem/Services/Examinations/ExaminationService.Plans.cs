@@ -63,7 +63,8 @@ public sealed partial class ExaminationService
             var record = await RecordAsync(registration, true, ct);
             var plan = await PlanAsync(record.RecordId, planId, ct);
             if (plan.DoctorId != record.DoctorId) throw new ConflictException("Treatment plan doctor is inconsistent.");
-            Draft(plan.Status);
+            if (plan.Status is not ("DRAFT" or "CONFIRMED"))
+                throw new ConflictException("Clinical content can no longer be edited.");
             Version(plan.RowVersion, request.RowVersion);
             var ids = request.Items.Select(i => i.ServiceId).ToArray();
             var services = await db.Services.Where(s => ids.Contains(s.ServiceId) && s.IsActive)
@@ -115,22 +116,27 @@ public sealed partial class ExaminationService
             await RecordAsync(registration, true, ct);
             Draft(plan.Status);
             Version(plan.RowVersion, request.RowVersion);
-            if (string.IsNullOrWhiteSpace(plan.PlanName) || plan.TreatmentPlanDetails.Count == 0
-                || plan.TreatmentPlanDetails.Any(d => d.PlannedQuantity <= 0 || d.PlannedQuantity > plan.PlannedSessionCount || d.UnitPrice < 0)
-                || plan.TreatmentPlanDetails.Sum(d => d.PlannedQuantity) < plan.PlannedSessionCount
-                || plan.PlannedSessionCount <= 0 || plan.TreatmentType is not ("SINGLE" or "COURSE")
-                || (plan.TreatmentType == "SINGLE" && plan.PlannedSessionCount != 1))
-                throw new BadRequestException("The treatment plan requires a name, valid session count and at least one service with positive quantity.");
-            var ids = plan.TreatmentPlanDetails.Select(d => d.ServiceId).ToArray();
-            if (await db.Services.CountAsync(s => ids.Contains(s.ServiceId) && s.IsActive, ct) != ids.Length)
-                throw new BadRequestException("The treatment plan contains inactive services.");
-            plan.Status = "CONFIRMED";
-            plan.ConfirmedAt = DateTime.UtcNow;
-            plan.UpdatedAt = plan.ConfirmedAt;
+            await ConfirmPlanContentAsync(plan, ct);
             // Confirmation is an order only. No sessions, usage, payment or scheduling are created here.
             return true;
         }, ct);
         return await PlanResponseAsync(planId, ct);
+    }
+
+    private async Task ConfirmPlanContentAsync(TreatmentPlan plan, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(plan.PlanName) || plan.TreatmentPlanDetails.Count == 0
+            || plan.TreatmentPlanDetails.Any(d => d.PlannedQuantity <= 0 || d.PlannedQuantity > plan.PlannedSessionCount || d.UnitPrice < 0)
+            || plan.TreatmentPlanDetails.Sum(d => d.PlannedQuantity) < plan.PlannedSessionCount
+            || plan.PlannedSessionCount <= 0 || plan.TreatmentType is not ("SINGLE" or "COURSE")
+            || (plan.TreatmentType == "SINGLE" && plan.PlannedSessionCount != 1))
+            throw new BadRequestException("The treatment plan requires a name, valid session count and at least one service with positive quantity.");
+        var ids = plan.TreatmentPlanDetails.Select(d => d.ServiceId).ToArray();
+        if (await db.Services.CountAsync(s => ids.Contains(s.ServiceId) && s.IsActive, ct) != ids.Length)
+            throw new BadRequestException("The treatment plan contains inactive services.");
+        plan.Status = "CONFIRMED";
+        plan.ConfirmedAt ??= DateTime.UtcNow;
+        plan.UpdatedAt = plan.ConfirmedAt;
     }
 
     public async Task DeletePlanAsync(ClaimsPrincipal actor, int registrationId, int planId, VersionRequest? request, CancellationToken ct)

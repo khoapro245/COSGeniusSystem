@@ -47,7 +47,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             message = SystemMessages.InternalError.Message;
         }
         context.Response.StatusCode = code;
-        await context.Response.WriteAsJsonAsync(new ApiResponseModel<object?>(code, message, false, null), ct);
+        await context.Response.WriteAsJsonAsync(new ApiResponseModel<object?>(code, message, false, exception is DuplicatePatientPhoneException duplicate ? duplicate.Warning : null), ct);
         return true;
     }
 }

@@ -32,6 +32,11 @@ public class ExceptionHandlingMiddleware
 
     private async Task HandleExceptionAsync(HttpContext context, Exception exception)
     {
+        if (exception is DuplicatePatientPhoneException duplicate) {
+            context.Response.StatusCode = 409;
+            await context.Response.WriteAsJsonAsync(new ApiResponseModel<object>(409, duplicate.Message, false, duplicate.Warning));
+            return;
+        }
         var response = context.Response;
         response.ContentType = "application/json";
 

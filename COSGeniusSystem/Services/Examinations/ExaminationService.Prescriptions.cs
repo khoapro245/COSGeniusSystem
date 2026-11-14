@@ -73,7 +73,8 @@ public sealed partial class ExaminationService
         {
             var record = await RecordAsync(registration, true, ct);
             var prescription = await PrescriptionAsync(record.RecordId, prescriptionId, ct);
-            Draft(prescription.Status);
+            if (prescription.Status is not ("DRAFT" or "SENT"))
+                throw new ConflictException("Clinical content can no longer be edited.");
             Version(prescription.RowVersion, request.RowVersion);
             var ids = request.Items.Select(i => i.HerbId).ToArray();
             var herbs = await db.Herbs.Where(h => ids.Contains(h.HerbId) && h.IsActive)
@@ -113,7 +114,8 @@ public sealed partial class ExaminationService
         {
             var record = await RecordAsync(registration, true, ct);
             var prescription = await PrescriptionAsync(record.RecordId, prescriptionId, ct);
-            Draft(prescription.Status);
+            if (prescription.Status is not ("DRAFT" or "SENT"))
+                throw new ConflictException("Clinical content can no longer be edited.");
             Version(prescription.RowVersion, request.RowVersion);
             var formula = await db.HerbalFormulas.AsNoTracking().Include(f => f.HerbalFormulaDetails).ThenInclude(d => d.Herb)
                 .SingleOrDefaultAsync(f => f.HerbalFormulaId == request.HerbalFormulaId && f.Status == "APPROVED" && f.IsActive, ct)
@@ -156,18 +158,23 @@ public sealed partial class ExaminationService
             await RecordAsync(registration, true, ct);
             Draft(prescription.Status);
             Version(prescription.RowVersion, request.RowVersion);
-            if (prescription.TotalDoses <= 0 || string.IsNullOrWhiteSpace(prescription.UsageInstructions)
-                || prescription.HerbalPrescriptionDetails.Count == 0 || prescription.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0))
-                throw new BadRequestException("A prescription requires positive TotalDoses, usage instructions and at least one positive herb dosage.");
-            var ids = prescription.HerbalPrescriptionDetails.Select(d => d.HerbId).ToArray();
-            if (await db.Herbs.CountAsync(h => ids.Contains(h.HerbId) && h.IsActive, ct) != ids.Length)
-                throw new BadRequestException("The prescription contains inactive herbs.");
-            prescription.Status = "SENT";
-            prescription.SentAt = DateTime.UtcNow;
-            prescription.UpdatedAt = prescription.SentAt;
+            await SendPrescriptionContentAsync(prescription, ct);
             return true;
         }, ct);
         return await PrescriptionResponseAsync(prescriptionId, ct);
+    }
+
+    private async Task SendPrescriptionContentAsync(HerbalPrescription prescription, CancellationToken ct)
+    {
+        if (prescription.TotalDoses <= 0 || string.IsNullOrWhiteSpace(prescription.UsageInstructions)
+            || prescription.HerbalPrescriptionDetails.Count == 0 || prescription.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0))
+            throw new BadRequestException("A prescription requires positive TotalDoses, usage instructions and at least one positive herb dosage.");
+        var ids = prescription.HerbalPrescriptionDetails.Select(d => d.HerbId).ToArray();
+        if (await db.Herbs.CountAsync(h => ids.Contains(h.HerbId) && h.IsActive, ct) != ids.Length)
+            throw new BadRequestException("The prescription contains inactive herbs.");
+        prescription.Status = "SENT";
+        prescription.SentAt ??= DateTime.UtcNow;
+        prescription.UpdatedAt = prescription.SentAt;
     }
 
     public async Task DeletePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId, VersionRequest? request, CancellationToken ct)

@@ -56,9 +56,10 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     // Every write to an examination, including its child drafts, takes this same lock.
     // This serializes completion against creating/editing/sending either parallel branch.
     private async Task<T> WriteAsync<T>(ClaimsPrincipal actor, int registrationId, bool clinical,
-        Func<ExaminationRegistration, Task<T>> action, CancellationToken ct)
+        Func<ExaminationRegistration, Task<T>> action, CancellationToken ct, bool starting = false)
     {
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        if (starting) await DoctorAvailability.LockAsync(db, await DoctorIdAsync(actor, ct), ct);
         var registration = db.Database.IsRelational()
             ? await db.ExaminationRegistrations
                 .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
@@ -361,6 +362,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 return true;
             }
             if (registration.Status != "WAITING") throw new ConflictException("Only WAITING registrations can be started.");
+            await DoctorAvailability.EnsureAvailableAsync(db, registration.DoctorId, ct);
             var now = DateTime.UtcNow;
             var allergy = await db.Patients.Where(p => p.PatientId == registration.PatientId).Select(p => p.AllergyNote).SingleAsync(ct);
             registration.Status = "IN_PROGRESS";
@@ -374,7 +376,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 ExamDate = now, Status = "IN_PROGRESS", Symptoms = registration.Symptoms, AllergyNoteSnapshot = allergy
             });
             return true;
-        }, ct);
+        }, ct, starting: true);
         return await RecordResponseAsync(registrationId, ct);
     }
 
@@ -415,9 +417,13 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             Version(record.RowVersion, request.RowVersion);
             if (string.IsNullOrWhiteSpace(record.Symptoms) || string.IsNullOrWhiteSpace(record.FinalDiagnosis))
                 throw new BadRequestException("Symptoms and FinalDiagnosis are required to complete an examination.");
-            if (await db.HerbalPrescriptions.AnyAsync(p => p.RecordId == record.RecordId && p.Status == "DRAFT", ct)
-                || await db.TreatmentPlans.AnyAsync(p => p.RecordId == record.RecordId && p.Status == "DRAFT", ct))
-                throw new ConflictException("Confirm/send or delete all drafts before completing the examination.");
+            // Publish saved drafts atomically with completion.
+            var prescriptions = await db.HerbalPrescriptions.Include(p => p.HerbalPrescriptionDetails)
+                .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "SENT")).ToListAsync(ct);
+            var plans = await db.TreatmentPlans.Include(p => p.TreatmentPlanDetails)
+                .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "CONFIRMED")).ToListAsync(ct);
+            foreach (var prescription in prescriptions) await SendPrescriptionContentAsync(prescription, ct);
+            foreach (var plan in plans) await ConfirmPlanContentAsync(plan, ct);
             var now = DateTime.UtcNow;
             record.Status = "COMPLETED";
             record.CompletedAt = now;

@@ -16,6 +16,18 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
                ?? throw new NotFoundException($"Patient with id {patientId} was not found.");
     }
 
+    public async Task<List<PatientResponse>> CheckDuplicatePhoneAsync(string? phone, int? excludePatientId, CancellationToken ct) {
+        var normalized = PatientPhone.Validate(phone);
+        if (normalized == null) return [];
+        var candidates = await db.Patients.AsNoTracking()
+            .Where(p => p.Phone != null && (!excludePatientId.HasValue || p.PatientId != excludePatientId.Value))
+            .Select(PatientMapping.Projection).ToListAsync(ct);
+        return candidates.Where(p => PatientPhone.Normalize(p.Phone) == normalized).ToList();
+    }
+    private async Task WarnDuplicateAsync(PatientRequest request, int? id, CancellationToken ct) {
+        var matches = await CheckDuplicatePhoneAsync(request.Phone, id, ct);
+        if (matches.Count > 0 && !request.ConfirmDuplicatePhone) throw new DuplicatePatientPhoneException(matches);
+    }
     #region Legacy Methods
     public async Task<PagedResult<PatientResponse>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct)
         => await SearchAsync(null, pageNumber, pageSize, ct);
@@ -87,6 +99,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<PatientResponse> CreateAsync(COSGeniusSystem.DTOs.CreatePatientRequest request, CancellationToken ct)
     {
         ValidateLegacy(request);
+        request.Phone = PatientPhone.Validate(request.Phone, required: true)!;
         if (!string.IsNullOrWhiteSpace(request.ContactPhone))
         {
             var clean = NormalizeContactPhone(request.ContactPhone);
@@ -99,6 +112,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
             request.ContactPhone = null;
         }
 
+        await WarnDuplicateAsync(request, null, ct);
         var entity = new Patient();
         PatientMapping.Apply(request, entity);
         if (!string.IsNullOrWhiteSpace(request.ContactFullName))
@@ -123,6 +137,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
             .SingleOrDefaultAsync(p => p.PatientId == patientId, ct)
             ?? throw new NotFoundException($"Patient with id {patientId} was not found.");
 
+        await WarnDuplicateAsync(request, patientId, ct);
         PatientMapping.Apply(request, entity);
 
         // Cập nhật người liên hệ nếu có truyền kèm trong request
@@ -190,9 +205,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         if (string.IsNullOrWhiteSpace(request.Phone))
             throw new BadRequestException("Số điện thoại là bắt buộc.");
 
-        var phone = request.Phone.Trim();
-        if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^(0[35789]\d{8}|0\d{9})$"))
-            throw new BadRequestException("Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0.");
+        request.Phone = PatientPhone.Validate(request.Phone, required: true);
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         if (request.DateOfBirth.HasValue)
@@ -282,14 +295,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         }
     }
 
-    private static string? NormalizeContactPhone(string? raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw)) return null;
-        var clean = raw.Trim().Replace(" ", "").Replace(".", "").Replace("-", "").Replace("(", "").Replace(")", "");
-        if (clean.StartsWith("+84")) clean = "0" + clean[3..];
-        else if (clean.StartsWith("84") && clean.Length >= 11) clean = "0" + clean[2..];
-        return clean;
-    }
+    private static string? NormalizeContactPhone(string? raw) => PatientPhone.Normalize(raw);
 
     public async Task DeleteAsync(int patientId, CancellationToken ct)
     {
