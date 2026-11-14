@@ -38,6 +38,7 @@ public sealed class PatientContactService(ApplicationDbContext db) : IPatientCon
     public async Task<PatientContactResponse> CreateAsync(int patientId, CreatePatientContactRequest request, CancellationToken ct)
     {
         await EnsurePatientAsync(patientId, ct);
+        request.Phone = PatientPhone.Validate(request.Phone, contact: true);
         var entity = new PatientContact { PatientId = patientId };
         PatientContactMapping.Apply(request, entity);
         await db.PatientContacts.AddAsync(entity, ct);
@@ -47,6 +48,7 @@ public sealed class PatientContactService(ApplicationDbContext db) : IPatientCon
 
     public async Task UpdateAsync(int patientId, int contactId, UpdatePatientContactRequest request, CancellationToken ct)
     {
+        request.Phone = PatientPhone.Validate(request.Phone, contact: true);
         var entity = await FindAsync(patientId, contactId, ct);
         PatientContactMapping.Apply(request, entity);
         await db.SaveChangesAsync(ct);

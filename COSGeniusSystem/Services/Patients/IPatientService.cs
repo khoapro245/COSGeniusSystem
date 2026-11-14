@@ -5,6 +5,7 @@ namespace COSGeniusSystem.Services;
 
 public interface IPatientService
 {
+    Task<List<PatientResponse>> CheckDuplicatePhoneAsync(string? phone, int? excludePatientId, CancellationToken ct);
     // Legacy methods
     Task<PagedResult<PatientResponse>> GetAllAsync(int pageNumber, int pageSize, CancellationToken ct);
     Task<PagedResult<PatientResponse>> SearchAsync(string? search, int pageNumber, int pageSize, CancellationToken ct, string? code = null, string? phone = null, string? fullName = null, int? doctorUserId = null);

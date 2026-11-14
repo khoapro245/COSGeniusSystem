@@ -120,6 +120,16 @@ public class DoctorService : IDoctorService
             .ToListAsync(ct);
 
         var resultItems = new List<DoctorClinicItemDto>();
+        var todayTreatments = await _context.TreatmentSessions.AsNoTracking()
+            .Where(s => s.ScheduledDate == today && (s.Status == "REQUESTED" || s.Status == "Chờ điều trị"
+                || s.Status == "IN_PROGRESS"))
+            .Select(s => new
+            {
+                s.AssignedDoctorId, s.PerformedBy, s.Status, s.SessionId,
+                s.Plan.Record.Patient.FullName, s.Plan.Record.Patient.PatientCode,
+                s.Plan.Record.Patient.PatientId
+            }).ToListAsync(ct);
+
         foreach (var d in doctorList)
         {
             var doctorWaitingCount = todayRegistrations
@@ -153,7 +163,14 @@ public class DoctorService : IDoctorService
                 StatusText = d.IsActive ? "Hoạt động" : "Ngừng hoạt động",
                 AbsenceReason = null,
                 WaitingCount = doctorWaitingCount,
-                CurrentExaminingPatient = currentPatientText
+                CurrentExaminingPatient = currentPatientText,
+                WaitingTreatmentCount = todayTreatments.Count(s => s.AssignedDoctorId == d.DoctorId
+                    && (s.Status == "REQUESTED" || s.Status == "Chờ điều trị")),
+                CurrentTreatingPatients = todayTreatments
+                    .Where(s => (s.PerformedBy ?? s.AssignedDoctorId) == d.DoctorId && s.Status == "IN_PROGRESS")
+                    .OrderBy(s => s.SessionId)
+                    .Select(s => $"{s.FullName} ({s.PatientCode ?? $"BN{s.PatientId:D5}"})")
+                    .ToList()
             };
 
             resultItems.Add(item);

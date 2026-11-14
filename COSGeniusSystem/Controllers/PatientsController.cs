@@ -42,6 +42,13 @@ namespace COSGeniusSystem.Controllers
             return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
         }
 
+        [HttpGet("duplicate-phone")]
+        [Authorize(Roles = RoleConstants.ReceptionStaff)]
+        public async Task<ActionResult<ApiResponseModel<List<PatientResponse>>>> CheckDuplicatePhone(
+            [FromQuery] string? phone, [FromQuery, Range(1, int.MaxValue)] int? excludePatientId, CancellationToken ct)
+            => SuccessResponse(SystemMessages.PatientsRetrieved,
+                await _patientService.CheckDuplicatePhoneAsync(phone, excludePatientId, ct));
+
         // GET: api/patients/mine | api/v1/patients/mine
         [HttpGet("mine")]
         [Authorize(Roles = RoleConstants.Doctor)]

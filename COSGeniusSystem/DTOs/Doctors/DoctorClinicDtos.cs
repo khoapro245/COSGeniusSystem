@@ -20,6 +20,8 @@ public class DoctorClinicItemDto
     public string? AbsenceReason { get; set; }
     public int WaitingCount { get; set; }
     public string? CurrentExaminingPatient { get; set; }
+    public int WaitingTreatmentCount { get; set; }
+    public List<string> CurrentTreatingPatients { get; set; } = new();
 }
 
 public class DoctorClinicOverviewDto

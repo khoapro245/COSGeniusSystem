@@ -5,7 +5,7 @@ namespace COSGeniusSystem.DTOs;
 public class UpdatePatientRequest : PatientRequest
 {
     [Required(ErrorMessage = "Số điện thoại là bắt buộc.")]
-    [RegularExpression(@"^(0[35789]\d{8}|0\d{9})$", ErrorMessage = "Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0.")]
+    [COSGeniusSystem.Commons.PatientPhone]
     public new string Phone
     {
         get => base.Phone ?? string.Empty;
