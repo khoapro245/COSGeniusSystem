@@ -8,8 +8,8 @@ public class HerbFilterQuery
     /// <summary>Lọc theo TasteProperties (tính chất / quy kinh) – contains.</summary>
     public string? TasteProperties { get; set; }
 
-    /// <summary>Mặc định lấy true. Client truyền null hoặc false để lọc tương ứng.</summary>
-    public bool? IsActive { get; set; } = true;
+    /// <summary>Lọc theo trạng thái IsActive. Để trống để lấy tất cả.</summary>
+    public bool? IsActive { get; set; }
 
     // ---------- Phân trang ----------
     /// <summary>Trang hiện tại (bắt đầu từ 1).</summary>

@@ -26,6 +26,7 @@ public class InventoryAuditDto
     public string WarehouseName { get; set; } = string.Empty;
     public int AuditedBy { get; set; }
     public string AuditorName { get; set; } = string.Empty;
+    public string AuditorRole { get; set; } = string.Empty;
     public DateTime AuditDate { get; set; }
     public string Status { get; set; } = string.Empty;
     public string? Note { get; set; }
@@ -43,6 +44,8 @@ public class CreateAuditRequest
     public string Scope { get; set; } = "Toàn kho";
     public DateTime? ScheduledDate { get; set; }
     public string? Note { get; set; }
+    public string? InitialStatus { get; set; }
+    public List<int>? BatchIds { get; set; }
 }
 
 public class UpdateAuditCountItem

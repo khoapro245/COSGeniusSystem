@@ -164,26 +164,86 @@ public class HerbService : IHerbService
             return null;
 
         // Lấy các lô kèm thông tin kho, sắp xếp theo FEFO (ExpiryDate tăng dần)
-        var batches = await _context.Batches
+        var batchEntities = await _context.Batches
             .AsNoTracking()
             .Include(b => b.Warehouse)
             .Where(b => b.HerbId == herbId)
             .OrderBy(b => b.ExpiryDate)   // FEFO
             .ThenBy(b => b.ImportDate)    // FIFO trong cùng ngày hết hạn
-            .Select(b => new BatchResponseDto
+            .ToListAsync();
+
+        var auditedBatches = await _context.AuditDetails
+            .AsNoTracking()
+            .Include(ad => ad.Audit)
+            .Where(ad => ad.Audit.Status == "Đã duyệt" && ad.Batch.HerbId == herbId)
+            .GroupBy(ad => ad.BatchId)
+            .Select(g => new
+            {
+                BatchId = g.Key,
+                LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
+                SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
+                LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
+            })
+            .ToListAsync();
+
+        var batchSysMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.SystemQuantity);
+        var auditDateMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditDate);
+        var batchDestroyMap = new Dictionary<int, decimal>();
+        foreach (var item in auditedBatches)
+        {
+            if (!string.IsNullOrEmpty(item.LatestReason))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(item.LatestReason, @"\[Tiêu hủy:\s*([\d\.]+)\s*(?:kg|g)?\]");
+                if (match.Success && decimal.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var qty))
+                {
+                    batchDestroyMap[item.BatchId] = qty;
+                }
+            }
+        }
+
+        var completedDisposalsList = await _context.DisposalDetails
+            .Include(dd => dd.Disposal)
+            .Where(dd => dd.Disposal.Status == "Hoàn thành" || dd.Disposal.Status == "Đã tiêu hủy")
+            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate })
+            .ToListAsync();
+
+        var completedDisposals = completedDisposalsList
+            .Where(dd => !auditDateMap.TryGetValue(dd.BatchId, out var aDate) || dd.DisposalDate >= aDate.AddMinutes(-5))
+            .GroupBy(dd => dd.BatchId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
+
+        var pendingDisposals = await _context.DisposalDetails
+            .Include(dd => dd.Disposal)
+            .Where(dd => (dd.Disposal.Status == "Chờ quản lý duyệt" || dd.Disposal.Status == "Đã duyệt / Chờ hủy" || dd.Disposal.Status == "Đã duyệt")
+                      && dd.Batch.HerbId == herbId)
+            .GroupBy(dd => dd.BatchId)
+            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
+
+        var batches = batchEntities.Select(b =>
+        {
+            var rawDestrQty = batchDestroyMap.TryGetValue(b.BatchId, out var dQty) ? dQty : 0m;
+            var compQty = completedDisposals.TryGetValue(b.BatchId, out var cQty) ? cQty : 0m;
+            var auditPendingDestr = Math.Max(0m, rawDestrQty - compQty);
+            var directPendingDestr = pendingDisposals.TryGetValue(b.BatchId, out var pQty) ? pQty : 0m;
+            var destrQty = Math.Max(auditPendingDestr, directPendingDestr);
+            var usableQty = Math.Max(0m, b.CurrentQuantity - destrQty);
+            return new BatchResponseDto
             {
                 BatchId = b.BatchId,
                 BatchNumber = b.BatchNumber,
                 WarehouseId = b.WarehouseId,
-                WarehouseName = b.Warehouse.WarehouseName,
+                WarehouseName = b.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm",
                 ImportDate = b.ImportDate,
                 ExpiryDate = b.ExpiryDate,
                 OriginalQuantity = b.OriginalQuantity,
                 CurrentQuantity = b.CurrentQuantity,
+                SystemQuantity = batchSysMap.TryGetValue(b.BatchId, out var sysQty) ? sysQty : b.CurrentQuantity,
+                UsableQuantity = usableQty,
+                DestroyQuantity = destrQty,
                 UnitCost = b.UnitCost,
                 Status = b.Status
-            })
-            .ToListAsync();
+            };
+        }).ToList();
 
         return new HerbBatchesResponseDto
         {
@@ -191,6 +251,7 @@ public class HerbService : IHerbService
             HerbCode = herb.HerbCode,
             CommonName = herb.CommonName,
             Unit = herb.Unit,
+            TotalSystemQuantity = batches.Sum(b => b.SystemQuantity),
             TotalCurrentQuantity = batches.Sum(b => b.CurrentQuantity),
             Batches = batches
         };
@@ -233,27 +294,95 @@ public class HerbService : IHerbService
             .OrderBy(h => h.CommonName)
             .ToListAsync(ct);
 
+        // Lấy số tồn sổ sách hệ thống ban đầu và thông tin tiêu hủy của các lô đã kiểm kê
+        var auditedBatches = await _context.AuditDetails
+            .AsNoTracking()
+            .Include(ad => ad.Audit)
+            .Where(ad => ad.Audit.Status == "Đã duyệt")
+            .GroupBy(ad => ad.BatchId)
+            .Select(g => new
+            {
+                BatchId = g.Key,
+                LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
+                SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
+                LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
+            })
+            .ToListAsync(ct);
+
+        var batchSysMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.SystemQuantity);
+        var auditDateMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditDate);
+        var batchDestroyMap = new Dictionary<int, decimal>();
+        foreach (var item in auditedBatches)
+        {
+            if (!string.IsNullOrEmpty(item.LatestReason))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(item.LatestReason, @"\[Tiêu hủy:\s*([\d\.]+)\s*(?:kg|g)?\]");
+                if (match.Success && decimal.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out var qty))
+                {
+                    batchDestroyMap[item.BatchId] = qty;
+                }
+            }
+        }
+
+        var completedDisposalsList = await _context.DisposalDetails
+            .Include(dd => dd.Disposal)
+            .Where(dd => dd.Disposal.Status == "Hoàn thành" || dd.Disposal.Status == "Đã tiêu hủy")
+            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate })
+            .ToListAsync(ct);
+
+        var completedDisposals = completedDisposalsList
+            .Where(dd => !auditDateMap.TryGetValue(dd.BatchId, out var aDate) || dd.DisposalDate >= aDate.AddMinutes(-5))
+            .GroupBy(dd => dd.BatchId)
+            .ToDictionary(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
+
+        var pendingDisposals = await _context.DisposalDetails
+            .Include(dd => dd.Disposal)
+            .Where(dd => dd.Disposal.Status == "Chờ quản lý duyệt" || dd.Disposal.Status == "Đã duyệt / Chờ hủy" || dd.Disposal.Status == "Đã duyệt")
+            .GroupBy(dd => dd.BatchId)
+            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.DisposalQuantity), ct);
+
         return herbs.Select(h =>
         {
             var activeBatches = h.Batches
                 .OrderBy(b => b.ExpiryDate)
                 .ThenBy(b => b.ImportDate)
-                .Select(b => new BatchResponseDto
+                .Select(b =>
                 {
-                    BatchId = b.BatchId,
-                    BatchNumber = b.BatchNumber,
-                    WarehouseId = b.WarehouseId,
-                    WarehouseName = b.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm",
-                    ImportDate = b.ImportDate,
-                    ExpiryDate = b.ExpiryDate,
-                    OriginalQuantity = b.OriginalQuantity,
-                    CurrentQuantity = b.CurrentQuantity,
-                    UnitCost = b.UnitCost,
-                    Status = b.Status
+                    var rawDestrQty = batchDestroyMap.TryGetValue(b.BatchId, out var dQty) ? dQty : 0m;
+                    var compQty = completedDisposals.TryGetValue(b.BatchId, out var cQty) ? cQty : 0m;
+                    var auditPendingDestr = Math.Max(0m, rawDestrQty - compQty);
+                    var directPendingDestr = pendingDisposals.TryGetValue(b.BatchId, out var pQty) ? pQty : 0m;
+                    var destrQty = Math.Max(auditPendingDestr, directPendingDestr);
+                    var usableQty = Math.Max(0m, b.CurrentQuantity - destrQty);
+                    return new BatchResponseDto
+                    {
+                        BatchId = b.BatchId,
+                        BatchNumber = b.BatchNumber,
+                        WarehouseId = b.WarehouseId,
+                        WarehouseName = b.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm",
+                        ImportDate = b.ImportDate,
+                        ExpiryDate = b.ExpiryDate,
+                        OriginalQuantity = b.OriginalQuantity,
+                        CurrentQuantity = b.CurrentQuantity,
+                        SystemQuantity = batchSysMap.TryGetValue(b.BatchId, out var sysQty) ? sysQty : b.CurrentQuantity,
+                        UsableQuantity = usableQty,
+                        DestroyQuantity = destrQty,
+                        UnitCost = b.UnitCost,
+                        Status = b.Status
+                    };
                 })
                 .ToList();
 
-            var totalStock = activeBatches.Sum(b => b.CurrentQuantity);
+            // Tồn kho tổng: giữ nguyên theo hệ thống / sổ sách ban đầu
+            var totalSystemStock = activeBatches.Sum(b => b.SystemQuantity);
+
+            // Tồn kho thực tế: được cập nhật theo số thực đếm sau khi kiểm kê
+            var actualStock = activeBatches.Sum(b => b.CurrentQuantity);
+
+            // Tiêu hủy và có thể dùng
+            var totalDestroyStock = activeBatches.Sum(b => b.DestroyQuantity);
+            var totalUsableStock = Math.Max(0m, actualStock - totalDestroyStock);
+
             var earliestBatch = activeBatches.FirstOrDefault(b => b.CurrentQuantity > 0);
             var nearestExpiryStr = earliestBatch != null
                 ? earliestBatch.ExpiryDate.ToString("dd/MM/yyyy")
@@ -273,8 +402,10 @@ public class HerbService : IHerbService
                 StandardPrice = h.StandardPrice,
                 MinThreshold = h.MinThreshold,
                 IsActive = h.IsActive,
-                TotalStock = totalStock,
-                ActualStock = totalStock,
+                TotalStock = totalSystemStock,
+                ActualStock = actualStock,
+                UsableStock = totalUsableStock,
+                DestroyStock = totalDestroyStock,
                 NearestExpiry = nearestExpiryStr,
                 Location = defaultLocation,
                 Batches = activeBatches

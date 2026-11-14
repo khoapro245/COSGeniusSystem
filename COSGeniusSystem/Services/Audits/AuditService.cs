@@ -23,11 +23,13 @@ public class AuditService : IAuditService
             .AsNoTracking()
             .Include(a => a.Warehouse)
             .Include(a => a.AuditedByNavigation)
+                .ThenInclude(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
             .Include(a => a.AuditDetails)
                 .ThenInclude(d => d.Batch)
                     .ThenInclude(b => b.Herb)
-            .OrderByDescending(a => a.AuditDate)
-            .ThenByDescending(a => a.AuditId)
+            .OrderByDescending(a => a.AuditId)
+            .ThenByDescending(a => a.AuditDate)
             .ToListAsync(ct);
 
         return list.Select(MapToDto).ToList();
@@ -40,6 +42,8 @@ public class AuditService : IAuditService
         var query = _context.InventoryAudits
             .Include(a => a.Warehouse)
             .Include(a => a.AuditedByNavigation)
+                .ThenInclude(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
             .Include(a => a.AuditDetails)
                 .ThenInclude(d => d.Batch)
                     .ThenInclude(b => b.Herb)
@@ -58,14 +62,58 @@ public class AuditService : IAuditService
         return audit == null ? null : MapToDto(audit);
     }
 
-    public async Task<InventoryAuditDto> CreateAuditAsync(CreateAuditRequest request, CancellationToken ct = default)
+    public async Task<InventoryAuditDto> CreateAuditAsync(CreateAuditRequest request, int currentUserId = 0, CancellationToken ct = default)
     {
         await EnsureSeedAuditsAsync(ct);
 
         // Determine Auditor
-        int auditorId = request.AuditedBy ?? 1006;
-        var auditorExists = await _context.Users.AnyAsync(u => u.UserId == auditorId, ct);
-        if (!auditorExists)
+        int auditorId = 0;
+
+        // 1. If warehouse staff is creating a proposal, default to current authenticated user
+        if (request.InitialStatus == "Đề xuất" && currentUserId > 0)
+        {
+            auditorId = currentUserId;
+        }
+
+        // 2. Check if explicitly requested and exists in DB
+        if (auditorId == 0 && request.AuditedBy.HasValue && request.AuditedBy.Value > 0)
+        {
+            if (await _context.Users.AnyAsync(u => u.UserId == request.AuditedBy.Value, ct))
+            {
+                auditorId = request.AuditedBy.Value;
+            }
+        }
+
+        // 3. Try to match by auditorName (FullName or Username)
+        if (auditorId == 0 && !string.IsNullOrWhiteSpace(request.AuditorName))
+        {
+            var cleanName = request.AuditorName.Trim().ToLower();
+            var matchedUser = await _context.Users
+                .FirstOrDefaultAsync(u => u.FullName.ToLower() == cleanName || u.Username.ToLower() == cleanName, ct);
+            if (matchedUser != null)
+            {
+                auditorId = matchedUser.UserId;
+            }
+        }
+
+        // 4. Use current authenticated user if available
+        if (auditorId == 0 && currentUserId > 0)
+        {
+            auditorId = currentUserId;
+        }
+
+        // 5. Fallback: find any INVENTORY_STAFF user
+        if (auditorId == 0)
+        {
+            var staffUser = await _context.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.UserRoles.Any(r => r.Role.RoleName == "INVENTORY_STAFF"), ct);
+            if (staffUser != null) auditorId = staffUser.UserId;
+        }
+
+        // 6. Ultimate fallback
+        if (auditorId == 0)
         {
             var fallbackUser = await _context.Users.FirstOrDefaultAsync(ct);
             if (fallbackUser != null) auditorId = fallbackUser.UserId;
@@ -103,26 +151,40 @@ public class AuditService : IAuditService
             auditDate = dt.TimeOfDay == TimeSpan.Zero ? dt.Date.Add(DateTime.UtcNow.TimeOfDay) : dt;
         }
 
+        string initialStatus = !string.IsNullOrWhiteSpace(request.InitialStatus)
+            ? request.InitialStatus
+            : "Chờ kiểm kê";
+
+        string scopeStr = string.IsNullOrWhiteSpace(request.Scope) ? "Toàn kho" : request.Scope.Trim();
+        string baseNote = request.Note ?? (initialStatus == "Đề xuất" ? "Đề xuất kiểm kê do Nhân viên kho tạo" : "Lịch kiểm kê do Quản lý khởi tạo");
+        string finalNote = baseNote.Contains("[Phạm vi:") ? baseNote : $"[Phạm vi: {scopeStr}] {baseNote}".Trim();
+
         var audit = new InventoryAudit
         {
             AuditCode = nextCode,
             WarehouseId = warehouse.WarehouseId,
             AuditedBy = auditorId,
             AuditDate = auditDate,
-            Status = "Chờ kiểm kê",
-            Note = request.Note ?? "Lịch kiểm kê do Quản lý khởi tạo"
+            Status = initialStatus,
+            Note = finalNote
         };
 
         _context.InventoryAudits.Add(audit);
         await _context.SaveChangesAsync(ct);
 
         // Fetch batches to snapshot
-        var batches = await _context.Batches
+        var batchesQuery = _context.Batches
             .Include(b => b.Herb)
-            .Where(b => b.WarehouseId == warehouse.WarehouseId)
-            .ToListAsync(ct);
+            .Where(b => b.WarehouseId == warehouse.WarehouseId);
 
-        if (batches.Count == 0)
+        if (request.BatchIds != null && request.BatchIds.Count > 0)
+        {
+            batchesQuery = batchesQuery.Where(b => request.BatchIds.Contains(b.BatchId));
+        }
+
+        var batches = await batchesQuery.ToListAsync(ct);
+
+        if (batches.Count == 0 && (request.BatchIds == null || request.BatchIds.Count == 0))
         {
             batches = await _context.Batches
                 .Include(b => b.Herb)
@@ -147,6 +209,25 @@ public class AuditService : IAuditService
         return (await GetAuditByIdOrCodeAsync(audit.AuditCode, ct))!;
     }
 
+    public async Task<InventoryAuditDto> UpdateAuditStatusAsync(string idOrCode, string newStatus, string? note = null, CancellationToken ct = default)
+    {
+        var audit = await FindAuditEntityAsync(idOrCode, ct);
+        if (audit == null)
+            throw new NotFoundException($"Không tìm thấy phiếu kiểm kê {idOrCode}");
+
+        if (audit.Status == "Đã duyệt" && (newStatus == "Đã hủy" || newStatus == "Hủy"))
+            throw new BadRequestException("Không thể hủy phiếu kiểm kê đã được phê duyệt điều chỉnh tồn kho.");
+
+        audit.Status = newStatus;
+        if (!string.IsNullOrWhiteSpace(note))
+        {
+            audit.Note = string.IsNullOrWhiteSpace(audit.Note) ? note : $"{audit.Note} | {note}";
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return MapToDto(audit);
+    }
+
     public async Task<InventoryAuditDto> UpdateAuditCountAsync(string idOrCode, UpdateAuditCountRequest request, CancellationToken ct = default)
     {
         var audit = await FindAuditEntityAsync(idOrCode, ct);
@@ -155,6 +236,9 @@ public class AuditService : IAuditService
 
         if (audit.Status == "Đã duyệt")
             throw new BadRequestException("Phiếu kiểm kê đã được duyệt, không thể chỉnh sửa số liệu.");
+
+        if (audit.Status == "Đã hủy")
+            throw new BadRequestException("Phiếu kiểm kê đã bị hủy, không thể chỉnh sửa số liệu.");
 
         foreach (var item in request.Items)
         {
@@ -175,7 +259,7 @@ public class AuditService : IAuditService
         }
         else
         {
-            audit.Status = "Đang đếm";
+            audit.Status = "Đang kiểm kê";
         }
 
         if (!string.IsNullOrWhiteSpace(request.Note))
@@ -192,6 +276,9 @@ public class AuditService : IAuditService
         var audit = await FindAuditEntityAsync(idOrCode, ct);
         if (audit == null)
             throw new NotFoundException($"Không tìm thấy phiếu kiểm kê {idOrCode}");
+
+        if (audit.Status == "Đã hủy")
+            throw new BadRequestException("Phiếu kiểm kê đã bị hủy, không thể phê duyệt điều chỉnh tồn kho.");
 
         if (audit.Status == "Đã duyệt")
         {
@@ -225,6 +312,8 @@ public class AuditService : IAuditService
         var query = _context.InventoryAudits
             .Include(a => a.Warehouse)
             .Include(a => a.AuditedByNavigation)
+                .ThenInclude(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
             .Include(a => a.AuditDetails)
                 .ThenInclude(d => d.Batch)
                     .ThenInclude(b => b.Herb);
@@ -264,6 +353,29 @@ public class AuditService : IAuditService
 
         int discrepancyCount = details.Count(d => d.Discrepancy != 0);
 
+        var rawRole = a.AuditedByNavigation?.UserRoles?.Select(ur => ur.Role.RoleName).FirstOrDefault() ?? "INVENTORY_STAFF";
+        var roleLabel = rawRole switch
+        {
+            "ADMIN" => "Quản trị viên",
+            "MANAGER" => "Quản lý phòng khám",
+            "INVENTORY_STAFF" => "Nhân viên kho",
+            "DOCTOR" => "Bác sĩ",
+            "HERBALIST" => "Dược sĩ / Bốc thuốc",
+            "CASHIER" => "Thu ngân",
+            "RECEPTION_STAFF" => "Tiếp tân",
+            _ => rawRole
+        };
+
+        string scope = "Toàn kho";
+        if (!string.IsNullOrEmpty(a.Note) && a.Note.Contains("[Phạm vi:"))
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(a.Note, @"\[Phạm vi:\s*([^\]]+)\]");
+            if (match.Success)
+            {
+                scope = match.Groups[1].Value.Trim();
+            }
+        }
+
         return new InventoryAuditDto
         {
             AuditId = a.AuditId,
@@ -271,11 +383,12 @@ public class AuditService : IAuditService
             WarehouseId = a.WarehouseId,
             WarehouseName = a.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm",
             AuditedBy = a.AuditedBy,
-            AuditorName = a.AuditedByNavigation?.FullName ?? "NV kho Trần Văn Bình",
+            AuditorName = a.AuditedByNavigation?.FullName ?? $"User #{a.AuditedBy}",
+            AuditorRole = roleLabel,
             AuditDate = a.AuditDate,
             Status = a.Status,
             Note = a.Note,
-            Scope = "Toàn kho",
+            Scope = scope,
             TotalItems = details.Count,
             DiscrepancyItems = discrepancyCount,
             Details = details

@@ -43,6 +43,7 @@ builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService
 builder.Services.AddScoped<IFormulaService, FormulaService>();
 // Grouped Herbalist requisitions replace the legacy DispensingService.
 builder.Services.AddScoped<IAuditService, AuditService>();
+builder.Services.AddScoped<IDisposalService, DisposalService>();
 // [hieppm] Start: Đăng ký DI cho module Purchase Orders & Goods Receipts
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();

@@ -133,6 +133,7 @@ public class FormulaService : IFormulaService
 
         var formula = new HerbalFormula
         {
+            FormulaCode = formulaCode,
             FormulaName = request.FormulaName.Trim(),
             UsageInstructions = request.UsageInstructions,
             IntendedUse = request.IntendedUse,

@@ -20,11 +20,11 @@ public class UsersController : BaseApiController
     }
 
     /// <summary>
-    /// API-USER-01: Lấy danh sách tài khoản người dùng kèm vai trò (chỉ dành cho ADMIN).
+    /// API-USER-01: Lấy danh sách tài khoản người dùng kèm vai trò (chỉ dành cho ADMIN/MANAGER/Nhân viên nội bộ).
     /// GET /api/v1/users
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = RoleConstants.Admin)]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<UserResponseDto>>>> GetUsers(
         [FromQuery] UserFilterQuery query, CancellationToken ct = default)
     {

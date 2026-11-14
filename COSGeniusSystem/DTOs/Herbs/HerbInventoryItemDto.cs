@@ -13,6 +13,8 @@ public class HerbInventoryItemDto
     public bool IsActive { get; set; }
     public decimal TotalStock { get; set; }
     public decimal ActualStock { get; set; }
+    public decimal UsableStock { get; set; }
+    public decimal DestroyStock { get; set; }
     public string? NearestExpiry { get; set; }
     public string? Location { get; set; }
     public List<BatchResponseDto> Batches { get; set; } = new();

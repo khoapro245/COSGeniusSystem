@@ -23,7 +23,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs
     /// </summary>
     [HttpGet]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<HerbResponseDto>>>> GetHerbs([FromQuery] HerbFilterQuery query, CancellationToken ct = default)
     {
         var result = await _herbService.GetHerbsAsync(query, ct);
@@ -35,7 +35,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/inventory
     /// </summary>
     [HttpGet("inventory")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<HerbInventoryItemDto>>>> GetHerbInventory(CancellationToken ct = default)
     {
         var result = await _herbService.GetHerbInventorySummaryAsync(ct);
@@ -47,7 +47,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/{id}
     /// </summary>
     [HttpGet("{id:int}")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<HerbDetailDto>>> GetHerbById(int id)
     {
         var herb = await _herbService.GetHerbByIdAsync(id);
@@ -106,7 +106,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/{id}/batches
     /// </summary>
     [HttpGet("{id:int}/batches")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<HerbBatchesResponseDto>>> GetHerbBatches(int id)
     {
         var result = await _herbService.GetHerbBatchesAsync(id);
