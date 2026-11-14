@@ -174,6 +174,10 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
             ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
 
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
+        await db.Entry(es).ReloadAsync(ct);
+
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
@@ -183,6 +187,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         if (meta.Status != "Đang khám")
         {
+            await DoctorAvailability.EnsureAvailableAsync(db, es.DoctorId, ct);
             meta.Status = "Đang khám";
             meta.ExamStartTime ??= DateTime.UtcNow;
             es.Status = "IN_PROGRESS";
@@ -190,6 +195,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             await db.SaveChangesAsync(ct);
         }
 
+        if (tx != null) await tx.CommitAsync(ct);
         return await BuildWorkspaceDtoAsync(es, meta, ct);
     }
 
@@ -213,6 +219,10 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
             ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
+        await db.Entry(es).ReloadAsync(ct);
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
@@ -292,6 +302,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         if (meta.Status == "Chờ khám")
         {
+            await DoctorAvailability.EnsureAvailableAsync(db, es.DoctorId, ct);
             meta.Status = "Đang khám";
             es.Status = "IN_PROGRESS";
         }
@@ -300,6 +311,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         es.UpdatedAt = DateTime.UtcNow;
         await db.SaveChangesAsync(ct);
 
+        if (tx != null) await tx.CommitAsync(ct);
         return await BuildWorkspaceDtoAsync(es, meta, ct);
     }
 

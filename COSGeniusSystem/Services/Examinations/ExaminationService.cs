@@ -56,9 +56,10 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     // Every write to an examination, including its child drafts, takes this same lock.
     // This serializes completion against creating/editing/sending either parallel branch.
     private async Task<T> WriteAsync<T>(ClaimsPrincipal actor, int registrationId, bool clinical,
-        Func<ExaminationRegistration, Task<T>> action, CancellationToken ct)
+        Func<ExaminationRegistration, Task<T>> action, CancellationToken ct, bool starting = false)
     {
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        if (starting) await DoctorAvailability.LockAsync(db, await DoctorIdAsync(actor, ct), ct);
         var registration = db.Database.IsRelational()
             ? await db.ExaminationRegistrations
                 .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
@@ -361,6 +362,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 return true;
             }
             if (registration.Status != "WAITING") throw new ConflictException("Only WAITING registrations can be started.");
+            await DoctorAvailability.EnsureAvailableAsync(db, registration.DoctorId, ct);
             var now = DateTime.UtcNow;
             var allergy = await db.Patients.Where(p => p.PatientId == registration.PatientId).Select(p => p.AllergyNote).SingleAsync(ct);
             registration.Status = "IN_PROGRESS";
@@ -374,7 +376,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 ExamDate = now, Status = "IN_PROGRESS", Symptoms = registration.Symptoms, AllergyNoteSnapshot = allergy
             });
             return true;
-        }, ct);
+        }, ct, starting: true);
         return await RecordResponseAsync(registrationId, ct);
     }
 

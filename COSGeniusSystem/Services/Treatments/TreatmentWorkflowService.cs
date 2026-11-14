@@ -258,9 +258,10 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     }
 
     // All writers acquire locks in this order: plan -> session.
-    private async Task<T> WriteAsync<T>(int planId, Func<TreatmentPlan, Task<T>> action, CancellationToken ct)
+    private async Task<T> WriteAsync<T>(int planId, Func<TreatmentPlan, Task<T>> action, CancellationToken ct, int? startingDoctorId = null)
     {
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
+        if (startingDoctorId.HasValue) await DoctorAvailability.LockAsync(db, startingDoctorId.Value, ct);
         var plan = db.Database.IsRelational()
             ? (await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, ROWLOCK) WHERE PlanID = {planId}")
                 .SingleOrDefaultAsync(ct) ?? throw new NotFoundException("Treatment plan not found."))
@@ -358,6 +359,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     public async Task<SessionOverview> StartAsync(ClaimsPrincipal actor, int id, VersionRequest request, CancellationToken ct)
     {
         Validate(request);
+        var doctorId = await DoctorAsync(actor, ct);
         await WriteAsync(await SessionPlanAsync(id, ct), async plan =>
         {
             var session = await LockedSessionAsync(id, ct); await AssignedAsync(actor, session, ct);
@@ -365,11 +367,12 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             Effective(plan); Version(session.RowVersion, request.RowVersion);
             if (session.Status != "REQUESTED") throw new ConflictException("Only REQUESTED sessions can start.");
             if (session.ScheduledDate > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("The treatment date has not arrived.");
+            await DoctorAvailability.EnsureAvailableAsync(db, doctorId, ct);
             await PaymentAsync(plan.PlanId, ct);
-            session.Status = "IN_PROGRESS"; session.PerformedBy = await DoctorAsync(actor, ct); session.StartedAt = DateTime.UtcNow;
+            session.Status = "IN_PROGRESS"; session.PerformedBy = doctorId; session.StartedAt = DateTime.UtcNow;
             plan.UpdatedAt = DateTime.UtcNow;
             return true;
-        }, ct);
+        }, ct, startingDoctorId: doctorId);
         return await SessionAsync(actor, id, ct);
     }
     public async Task<SessionOverview> CompleteAsync(ClaimsPrincipal actor, int id, CompleteTreatment request, CancellationToken ct)
