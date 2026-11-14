@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authorization;
 namespace COSGeniusSystem.Controllers
 {
     [Route("api/patients")]
+    [Route("api/v1/patients")]
     [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
     public sealed class PatientsController : BaseApiController
     {
@@ -18,18 +19,57 @@ namespace COSGeniusSystem.Controllers
             _patientService = patientService;
         }
 
-        // GET: api/patients
+        // GET: api/patients | api/v1/patients
         [HttpGet]
         public async Task<ActionResult<ApiResponseModel<PagedResult<PatientResponse>>>> GetAll(
             [FromQuery, Range(1, 1000000)] int pageNumber = 1,
             [FromQuery, Range(1, 100)] int pageSize = 10, CancellationToken ct = default,
-            [FromQuery, StringLength(150)] string? search = null)
+            [FromQuery, StringLength(150)] string? search = null,
+            [FromQuery] string? keyword = null,
+            [FromQuery] string? code = null,
+            [FromQuery] string? phone = null,
+            [FromQuery] string? fullName = null,
+            [FromQuery] bool mine = false)
         {
-            var patients = await _patientService.SearchAsync(search, pageNumber, pageSize, ct);
+            var term = !string.IsNullOrWhiteSpace(keyword) ? keyword : search;
+            int? doctorUserId = null;
+            if (mine && User.IsInRole(RoleConstants.Doctor))
+            {
+                var val = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+                if (int.TryParse(val, out var uId)) doctorUserId = uId;
+            }
+            var patients = await _patientService.SearchAsync(term, pageNumber, pageSize, ct, code, phone, fullName, doctorUserId);
             return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
         }
 
-        // GET: api/patients/{patientId}
+        [HttpGet("duplicate-phone")]
+        [Authorize(Roles = RoleConstants.ReceptionStaff)]
+        public async Task<ActionResult<ApiResponseModel<List<PatientResponse>>>> CheckDuplicatePhone(
+            [FromQuery] string? phone, [FromQuery, Range(1, int.MaxValue)] int? excludePatientId, CancellationToken ct)
+            => SuccessResponse(SystemMessages.PatientsRetrieved,
+                await _patientService.CheckDuplicatePhoneAsync(phone, excludePatientId, ct));
+
+        // GET: api/patients/mine | api/v1/patients/mine
+        [HttpGet("mine")]
+        [Authorize(Roles = RoleConstants.Doctor)]
+        public async Task<ActionResult<ApiResponseModel<PagedResult<PatientResponse>>>> GetMine(
+            [FromQuery, Range(1, 1000000)] int pageNumber = 1,
+            [FromQuery, Range(1, 100)] int pageSize = 10, CancellationToken ct = default,
+            [FromQuery, StringLength(150)] string? search = null,
+            [FromQuery] string? keyword = null,
+            [FromQuery] string? code = null,
+            [FromQuery] string? phone = null,
+            [FromQuery] string? fullName = null)
+        {
+            var term = !string.IsNullOrWhiteSpace(keyword) ? keyword : search;
+            int? doctorUserId = null;
+            var val = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (int.TryParse(val, out var uId)) doctorUserId = uId;
+            var patients = await _patientService.SearchAsync(term, pageNumber, pageSize, ct, code, phone, fullName, doctorUserId);
+            return SuccessResponse(SystemMessages.PatientsRetrieved, patients);
+        }
+
+        // GET: api/patients/{patientId} | api/v1/patients/{patientId}
         [HttpGet("{patientId:int:min(1)}")]
         public async Task<ActionResult<ApiResponseModel<PatientResponse>>> GetById(int patientId, CancellationToken ct)
         {
@@ -37,7 +77,7 @@ namespace COSGeniusSystem.Controllers
             return SuccessResponse(SystemMessages.PatientRetrieved, patientResponse);
         }
 
-        // POST: api/patients
+        // POST: api/patients | api/v1/patients
         [HttpPost]
         [Authorize(Roles = RoleConstants.ReceptionStaff)]
         public async Task<ActionResult<ApiResponseModel<PatientResponse>>> Create([FromBody] CreatePatientRequest request, CancellationToken ct)
@@ -46,8 +86,9 @@ namespace COSGeniusSystem.Controllers
             return CreatedResponse(nameof(GetById), new { patientId = response.PatientId }, SystemMessages.PatientCreated, response);
         }
 
-        // PUT: api/patients/{patientId}
+        // PUT: api/patients/{patientId} | api/v1/patients/{patientId}
         [HttpPut("{patientId:int:min(1)}")]
+        [HttpPatch("{patientId:int:min(1)}")]
         [Authorize(Roles = RoleConstants.ReceptionStaff)]
         public async Task<ActionResult<ApiResponseModel<object?>>> Update(int patientId, [FromBody] UpdatePatientRequest request, CancellationToken ct)
         {
@@ -55,7 +96,7 @@ namespace COSGeniusSystem.Controllers
             return SuccessResponse(SystemMessages.PatientUpdated);
         }
 
-        // DELETE: api/patients/{patientId}
+        // DELETE: api/patients/{patientId} | api/v1/patients/{patientId}
         [HttpDelete("{patientId:int:min(1)}")]
         [Authorize(Roles = RoleConstants.ReceptionStaff)]
         public async Task<ActionResult<ApiResponseModel<object?>>> Delete(int patientId, CancellationToken ct)

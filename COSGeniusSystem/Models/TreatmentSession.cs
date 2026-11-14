@@ -19,6 +19,10 @@ public partial class TreatmentSession
 
     public DateTime? RequestedAt { get; set; }
 
+    public string? Shift { get; set; }
+    public string? RequestCode { get; set; }
+    public int? QueueNumber { get; set; }
+
     public DateOnly? ScheduledDate { get; set; }
 
     public DateTime? StartedAt { get; set; }

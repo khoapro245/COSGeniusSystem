@@ -1,15 +1,17 @@
+using System.Text;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
 using COSGeniusSystem.Repositories;
 using COSGeniusSystem.Services;
 using COSGeniusSystem.Services.Formulas;
+using COSGeniusSystem.Services.Impl;
+using COSGeniusSystem.Services.Interfaces;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Scalar.AspNetCore;
-using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +69,18 @@ builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
                 false,
                 data));
     };
+});
+
+// Configure CORS for Frontend
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowFrontend", policy =>
+    {
+        policy.WithOrigins("http://localhost:5173", "https://localhost:5173", "http://127.0.0.1:5173")
+              .AllowAnyHeader()
+              .AllowAnyMethod()
+              .AllowCredentials();
+    });
 });
 
 // Configure JWT Authentication
@@ -255,6 +269,8 @@ app.UseStatusCodePages(async statusContext =>
 });
 
 app.UseHttpsRedirection();
+
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -34,6 +34,12 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             code = 409;
             message = "The operation conflicts with related or existing records.";
         }
+        else if (exception is System.Text.Json.JsonException || exception is BadHttpRequestException || exception is FormatException)
+        {
+            logger.LogWarning(exception, "Malformed payload or type mismatch for {Path}", context.Request.Path);
+            code = 400;
+            message = "Dữ liệu gửi lên không đúng định dạng. Các trường số chỉ chấp nhận số, các trường văn bản chỉ chấp nhận chuỗi ký tự.";
+        }
         else
         {
             logger.LogError(exception, "Unhandled failure for {Path}", context.Request.Path);
@@ -41,7 +47,7 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
             message = SystemMessages.InternalError.Message;
         }
         context.Response.StatusCode = code;
-        await context.Response.WriteAsJsonAsync(new ApiResponseModel<object?>(code, message, false, null), ct);
+        await context.Response.WriteAsJsonAsync(new ApiResponseModel<object?>(code, message, false, exception is DuplicatePatientPhoneException duplicate ? duplicate.Warning : null), ct);
         return true;
     }
 }

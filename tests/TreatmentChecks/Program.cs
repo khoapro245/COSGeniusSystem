@@ -10,7 +10,10 @@ void Check(bool condition, string message) { if (!condition) throw new Exception
 bool Valid(object value) => Validator.TryValidateObject(value, new ValidationContext(value), [], true);
 Check(!Valid(new RequestTreatment()), "Request requires doctor, date and version");
 Check(!Valid(new RequestTreatment { AssignedDoctorId = 1, ScheduledDate = DateOnly.MinValue, RowVersion = new byte[7] }), "Reject malformed concurrency token");
-Check(Valid(new RequestTreatment { AssignedDoctorId = 1, ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow), RowVersion = new byte[8] }), "Accept complete request DTO");
+Check(Valid(new RequestTreatment { AssignedDoctorId = 1, Shift = "MORNING", ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow), RowVersion = new byte[8] }), "Accept complete request DTO");
+Check(!Valid(new RequestTreatment { AssignedDoctorId = 1, Shift = "EVENING", ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow) }), "Reject unsupported treatment shift");
+Check(!Valid(new TreatmentWorkloadQuery { Shift = "MORNING" }), "Workload requires a date");
+Check(Valid(new TreatmentWorkloadQuery { ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow).AddDays(10), Shift = "AFTERNOON", DoctorId = 1 }), "Workload accepts future date, shift and doctor");
 Check(!Valid(new CompleteTreatment { RowVersion = new byte[8], ResultNote = "Result" }), "Reject empty service list");
 Check(!Valid(new UsageInput { PlanDetailId = 1, Quantity = 0 }), "Reject zero service quantity");
 Check(!Valid(new UsageInput { PlanDetailId = 1, Quantity = 1, ResultNote = new string('x', 501) }), "Usage note matches 500-character database column");

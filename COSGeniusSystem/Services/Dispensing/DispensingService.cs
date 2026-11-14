@@ -257,7 +257,7 @@ public class DispensingService : IDispensingService
         }
 
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize < 1 ? 20 : query.PageSize;
+        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
 
         return await q
             .OrderByDescending(d => d.DispenseDate)
@@ -412,7 +412,7 @@ public class DispensingService : IDispensingService
         }
 
         var page = query.Page < 1 ? 1 : query.Page;
-        var pageSize = query.PageSize < 1 ? 20 : query.PageSize;
+        var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
 
         return await q
             .OrderByDescending(p => p.UpdatedAt ?? p.CreatedAt)

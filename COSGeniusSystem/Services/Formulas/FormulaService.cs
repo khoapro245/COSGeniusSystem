@@ -40,6 +40,8 @@ public class FormulaService : IFormulaService
             q = q.Where(f => f.Status == statusUpper);
         }
 
+        if (query.ProposalsOnly == true) q = q.Where(f => f.SubmittedAt != null);
+
         if (query.IsActive.HasValue)
         {
             q = q.Where(f => f.IsActive == query.IsActive.Value);
@@ -95,11 +97,26 @@ public class FormulaService : IFormulaService
         var isManager = actor.IsInRole(RoleConstants.Manager) || actor.IsInRole(RoleConstants.Admin);
 
         var doctor = await _db.Doctors.FirstOrDefaultAsync(d => d.UserId == userId, ct)
-                     ?? await _db.Doctors.FirstOrDefaultAsync(d => d.IsActive, ct)
-                     ?? await _db.Doctors.FirstOrDefaultAsync(ct);
+                     ?? (isManager ? await _db.Doctors.FirstOrDefaultAsync(d => d.IsActive, ct) : null);
 
         if (doctor == null)
-            throw new BadRequestException("No doctor account available to associate with the formula.");
+            throw new BadRequestException("Tài khoản chưa có hồ sơ bác sĩ đang hoạt động.");
+        if (!doctor.IsActive) throw new BadRequestException("Hồ sơ bác sĩ đã ngừng hoạt động.");
+        if (string.IsNullOrWhiteSpace(request.FormulaName) || request.FormulaName.Trim().Length > 150)
+            throw new BadRequestException("Tên công thức bắt buộc và không quá 150 ký tự.");
+        if (request.Items == null || request.Items.Count == 0 || request.Items.Any(i => i.DosagePerDose <= 0 || i.RoleInFormula?.Length > 50 || i.Note?.Length > 255) || request.Items.Select(i => i.HerbId).Distinct().Count() != request.Items.Count)
+            throw new BadRequestException("Cần ít nhất một vị thuốc, không trùng lặp, liều lượng dương và ghi chú hợp lệ.");
+        if (request.ProposalType != null && request.ProposalType != "CREATE" && request.ProposalType != "UPDATE")
+            throw new BadRequestException("Loại đề xuất không hợp lệ.");
+        if (request.ProposalType == "UPDATE")
+        {
+            var baseFormula = await _db.HerbalFormulas.FirstOrDefaultAsync(f => f.FormulaCode == request.BaseFormulaCode && f.Status == "APPROVED" && f.IsActive, ct);
+            if (baseFormula == null) throw new BadRequestException("Công thức gốc không tồn tại hoặc không còn được sử dụng.");
+            request.BaseFormulaCode = baseFormula.FormulaCode;
+        }
+
+        if (request.ProposalReason?.Trim().Length > 1000)
+            throw new BadRequestException("Lý do đề xuất không quá 1000 ký tự.");
 
         // Generate FormulaCode if not provided
         string formulaCode;
@@ -131,6 +148,9 @@ public class FormulaService : IFormulaService
             reviewNote = $"[VERSION:{version}]";
         }
 
+        if (!string.IsNullOrWhiteSpace(request.ProposalReason))
+            reviewNote += $"[REASON:{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(request.ProposalReason.Trim()))}]";
+
         var formula = new HerbalFormula
         {
             FormulaCode = formulaCode,
@@ -152,7 +172,7 @@ public class FormulaService : IFormulaService
             foreach (var item in request.Items)
             {
                 var herb = await _db.Herbs.FindAsync([item.HerbId], ct);
-                if (herb == null)
+                if (herb == null || !herb.IsActive)
                     throw new BadRequestException($"Herb with ID {item.HerbId} does not exist.");
 
                 formula.HerbalFormulaDetails.Add(new HerbalFormulaDetail
@@ -304,17 +324,13 @@ public class FormulaService : IFormulaService
 
     private static HerbalFormulaDto MapToDto(HerbalFormula f, List<HerbalFormula>? approvedList = null)
     {
-        var rawNote = f.ReviewNote ?? "";
+        var rawNote = RemoveProposalReason(f.ReviewNote ?? "");
         var version = ExtractVersion(rawNote);
         var baseCode = ExtractBaseFormulaCode(rawNote, f.FormulaCode);
         var isUpdate = rawNote.Contains("[UPDATE:") || (!string.IsNullOrWhiteSpace(baseCode) && f.Status == "PENDING");
         var proposalType = isUpdate ? $"Sửa {ExtractFromVersion(rawNote) ?? "v2"} → {version ?? "v3"}" : "Tạo mới";
 
-        var displayCode = f.Status == "PENDING"
-            ? $"DX{f.HerbalFormulaId:D5}"
-            : (f.FormulaCode != null && f.FormulaCode.StartsWith("CT")
-                ? $"CT{f.HerbalFormulaId:D5}"
-                : (f.FormulaCode ?? $"CT{f.HerbalFormulaId:D5}"));
+        var displayCode = f.FormulaCode ?? $"CT{f.HerbalFormulaId}";
 
         HerbalFormula? baseFormula = null;
         if (!string.IsNullOrWhiteSpace(baseCode) && approvedList != null)
@@ -351,23 +367,24 @@ public class FormulaService : IFormulaService
             );
         }).ToList();
 
-        var displayBaseCode = baseFormula != null ? $"CT{baseFormula.HerbalFormulaId:D5}" : baseCode;
+        var displayBaseCode = baseFormula?.FormulaCode ?? baseCode;
 
         return new HerbalFormulaDto(
             f.HerbalFormulaId,
             displayCode,
             f.FormulaName,
             version ?? (f.Status == "APPROVED" ? "v1" : "v1"),
-            f.Status == "PENDING" ? proposalType : null,
+            f.SubmittedAt != null ? proposalType : null,
             displayBaseCode,
+            ExtractProposalReason(f.ReviewNote ?? ""),
             f.UsageInstructions,
             f.IntendedUse,
             f.Status,
             f.ProposedByDoctorId,
-            f.ProposedByDoctor?.FullName ?? "BS. Lê Minh",
+            f.ProposedByDoctor?.FullName,
             f.SubmittedAt ?? f.CreatedAt,
             f.ReviewedBy,
-            f.ReviewedByNavigation?.FullName ?? "Quản lý",
+            f.ReviewedByNavigation?.FullName,
             f.ReviewedAt,
             StripVersionPrefix(f.ReviewNote),
             f.IsActive,
@@ -381,6 +398,12 @@ public class FormulaService : IFormulaService
     private static string? ExtractVersion(string note)
     {
         if (string.IsNullOrWhiteSpace(note)) return null;
+        if (note.Contains("[UPDATE:"))
+        {
+            var start = note.IndexOf("[UPDATE:", StringComparison.Ordinal) + 8;
+            var end = note.IndexOf(']', start);
+            if (end > start) return note.Substring(start, end - start).Split(':').Last().Trim();
+        }
         if (note.Contains("[VERSION:"))
         {
             var start = note.IndexOf("[VERSION:", StringComparison.Ordinal) + 9;
@@ -427,8 +450,20 @@ public class FormulaService : IFormulaService
         return null;
     }
 
+    private static string? ExtractProposalReason(string note)
+    {
+        var match = System.Text.RegularExpressions.Regex.Match(note, @"\[REASON:([A-Za-z0-9+/=]*)\]");
+        if (!match.Success) return null;
+        try { return System.Text.Encoding.UTF8.GetString(Convert.FromBase64String(match.Groups[1].Value)); }
+        catch (FormatException) { return null; }
+    }
+
+    private static string RemoveProposalReason(string note) =>
+        System.Text.RegularExpressions.Regex.Replace(note, @"\[REASON:[A-Za-z0-9+/=]*\]", "");
+
     private static string StripVersionPrefix(string? note)
     {
+        note = RemoveProposalReason(note ?? "");
         if (string.IsNullOrWhiteSpace(note)) return "";
         if (note.StartsWith("["))
         {

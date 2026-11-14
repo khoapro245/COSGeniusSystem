@@ -20,6 +20,7 @@ public sealed record HerbalFormulaDto(
     string? Version,
     string? ProposalType,
     string? BaseFormulaCode,
+    string? ProposalReason,
     string? UsageInstructions,
     string? IntendedUse,
     string Status,
@@ -51,6 +52,7 @@ public sealed class CreateHerbalFormulaRequest
     public string? Version { get; set; }
     public string? ProposalType { get; set; } // "CREATE" or "UPDATE"
     public string? BaseFormulaCode { get; set; }
+    public string? ProposalReason { get; set; }
     public string? UsageInstructions { get; set; }
     public string? IntendedUse { get; set; }
     public List<CreateFormulaItemRequest> Items { get; set; } = new();
@@ -68,6 +70,7 @@ public sealed class UpdateHerbalFormulaRequest
 
 public sealed class FormulaFilterQuery
 {
+    public bool? ProposalsOnly { get; set; }
     public string? Keyword { get; set; }
     public string? Status { get; set; } // PENDING, APPROVED, REJECTED, ALL
     public bool? IsActive { get; set; }
