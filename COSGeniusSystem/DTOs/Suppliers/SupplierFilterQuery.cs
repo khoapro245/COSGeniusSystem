@@ -2,7 +2,7 @@ namespace COSGeniusSystem.DTOs;
 
 public class SupplierFilterQuery
 {
-    /// <summary>Tìm kiếm tương đối theo SupplierCode, SupplierName, Phone, Email, TaxCode.</summary>
+    /// <summary>Tìm kiếm tương đối theo SupplierCode, SupplierName, Phone(ErrorMessage = "Invalid phone number format."), Email, TaxCode.</summary>
     public string? Keyword { get; set; }
 
     /// <summary>Lọc theo trạng thái IsActive. Để trống để lấy tất cả.</summary>

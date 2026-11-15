@@ -97,7 +97,7 @@ public class DisposalService : IDisposalService
         await _context.SaveChangesAsync(ct);
 
         return await GetDisposalByIdOrCodeAsync(entity.DisposalCode, ct)
-            ?? throw new InvalidOperationException("Failed to load created disposal.");
+            ?? throw new InvalidOperationException("The newly created disposal could not be loaded.");
     }
 
     public async Task<DisposalDto> ApproveDisposalAsync(string idOrCode, ApproveDisposalRequest request, CancellationToken ct = default)
@@ -106,7 +106,7 @@ public class DisposalService : IDisposalService
         var item = await _context.Disposals
             .Include(d => d.DisposalDetails)
             .FirstOrDefaultAsync(d => (isNumeric && d.DisposalId == id) || d.DisposalCode == idOrCode, ct)
-            ?? throw new NotFoundException($"Disposal with code '{idOrCode}' not found.");
+            ?? throw new NotFoundException($"Disposal '{idOrCode}' was not found.");
 
         item.Status = "Đã duyệt / Chờ hủy";
         var nowStr = DateTime.Now.ToString("dd/MM/yyyy · HH:mm");
@@ -125,7 +125,7 @@ public class DisposalService : IDisposalService
         var isNumeric = int.TryParse(idOrCode, out int id);
         var item = await _context.Disposals
             .FirstOrDefaultAsync(d => (isNumeric && d.DisposalId == id) || d.DisposalCode == idOrCode, ct)
-            ?? throw new NotFoundException($"Disposal with code '{idOrCode}' not found.");
+            ?? throw new NotFoundException($"Disposal '{idOrCode}' was not found.");
 
         item.Status = "Từ chối";
         if (!string.IsNullOrWhiteSpace(reason))
@@ -144,7 +144,7 @@ public class DisposalService : IDisposalService
             .Include(d => d.DisposalDetails)
                 .ThenInclude(dd => dd.Batch)
             .FirstOrDefaultAsync(d => (isNumeric && d.DisposalId == id) || d.DisposalCode == idOrCode, ct)
-            ?? throw new NotFoundException($"Disposal with code '{idOrCode}' not found.");
+            ?? throw new NotFoundException($"Disposal '{idOrCode}' was not found.");
 
         item.Status = "Hoàn thành";
         var nowStr = DateTime.Now.ToString("dd/MM/yyyy · HH:mm");

@@ -41,7 +41,7 @@ public class TreatmentServicesController : BaseApiController
     {
         var service = await _treatmentService.GetServiceByIdAsync(id, ct);
         if (service is null)
-            throw new NotFoundException($"Treatment service with id {id} was not found.");
+            throw new NotFoundException($"Treatment service {id} was not found.");
 
         return SuccessResponse(SystemMessages.ServiceRetrieved, service);
     }
@@ -56,7 +56,7 @@ public class TreatmentServicesController : BaseApiController
     {
         var service = await _treatmentService.GetServiceByCodeAsync(code, ct);
         if (service is null)
-            throw new NotFoundException($"Treatment service with code '{code}' was not found.");
+            throw new NotFoundException($"Treatment service '{code}' was not found.");
 
         return SuccessResponse(SystemMessages.ServiceRetrieved, service);
     }
@@ -93,7 +93,7 @@ public class TreatmentServicesController : BaseApiController
 
         // dto == null && error == null → không tìm thấy → 404
         if (dto is null && error is null)
-            throw new NotFoundException($"Service with id {id} was not found.");
+            throw new NotFoundException($"Service {id} was not found.");
 
         // dto == null && error != null → lỗi validation (price, trùng tên) → 400
         if (error is not null)
@@ -113,7 +113,7 @@ public class TreatmentServicesController : BaseApiController
         var (success, isDeactivated, error) = await _treatmentService.DeleteServiceAsync(id, ct);
 
         if (!success)
-            throw new NotFoundException(error ?? $"Service with id {id} was not found.");
+            throw new NotFoundException(error ?? $"Service {id} was not found.");
 
         var message = isDeactivated
             ? new SystemMessage(200, "Dịch vụ đã có chỉ định trong liệu trình điều trị, đã chuyển sang trạng thái tạm ngưng.", true)

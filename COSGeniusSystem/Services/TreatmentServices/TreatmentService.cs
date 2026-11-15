@@ -106,14 +106,14 @@ public class TreatmentService : ITreatmentService
                 s.ServiceCode.ToLower() == serviceCode.ToLower(), ct);
 
             if (isDuplicateCode)
-                return (null, "ServiceCode already exists.");
+                return (null, "Service code already exists.");
         }
 
         var isDuplicateName = await _context.Services.AnyAsync(s =>
             s.ServiceName.ToLower() == request.ServiceName.Trim().ToLower(), ct);
 
         if (isDuplicateName)
-            return (null, "ServiceName already exists.");
+            return (null, "Service name already exists.");
 
         var entity = new Service
         {
@@ -148,7 +148,7 @@ public class TreatmentService : ITreatmentService
             s.ServiceId != id, ct);
 
         if (isDuplicateName)
-            return (null, $"ServiceName '{request.ServiceName}' already exists in another service.");
+            return (null, $"Name '{request.ServiceName}' is already used by another service.");
 
         entity.ServiceName = request.ServiceName.Trim();
         entity.Price = request.Price;
@@ -169,7 +169,7 @@ public class TreatmentService : ITreatmentService
             .FirstOrDefaultAsync(s => s.ServiceId == id, ct);
 
         if (entity is null)
-            return (false, false, "Không tìm thấy dịch vụ điều trị.");
+            return (false, false, "Treatment service was not found.");
 
         var isReferenced = entity.TreatmentPlanDetails.Any();
 

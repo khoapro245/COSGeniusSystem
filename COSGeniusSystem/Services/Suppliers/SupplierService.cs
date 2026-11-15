@@ -104,11 +104,11 @@ public class SupplierService : ISupplierService
                 .AnyAsync(s => s.SupplierCode.ToLower() == supplierCode.ToLower(), ct);
 
             if (exists)
-                return (null, "Mã nhà cung cấp đã tồn tại trong hệ thống.");
+                return (null, "Supplier code already exists in the system.");
         }
 
         if (string.IsNullOrWhiteSpace(request.SupplierName))
-            return (null, "Tên nhà cung cấp không được để trống.");
+            return (null, "Supplier name must not be blank.");
 
         var supplier = new Supplier
         {
@@ -146,7 +146,7 @@ public class SupplierService : ISupplierService
             return (null, null);
 
         if (string.IsNullOrWhiteSpace(request.SupplierName))
-            return (null, "Tên nhà cung cấp không được để trống.");
+            return (null, "Supplier name must not be blank.");
 
         supplier.SupplierName = request.SupplierName.Trim();
         supplier.Phone = string.IsNullOrWhiteSpace(request.Phone) ? null : request.Phone.Trim();
@@ -179,7 +179,7 @@ public class SupplierService : ISupplierService
             .FirstOrDefaultAsync(s => s.SupplierId == id, ct);
 
         if (supplier is null)
-            return (false, false, "Không tìm thấy nhà cung cấp.");
+            return (false, false, "Supplier was not found.");
 
         var hasPurchaseOrders = supplier.PurchaseOrders.Any();
 

@@ -11,7 +11,7 @@ public static class PatientPhone {
   var value = Normalize(raw);
   if (value == null && !required) return null;
   if (value == null || !Regex.IsMatch(value, contact ? @"^0[0-9]{9,10}$" : @"^0[0-9]{9}$"))
-   throw new BadRequestException("Số điện thoại không đúng định dạng.");
+   throw new BadRequestException("Invalid phone number format.");
   return value;
  }
 }

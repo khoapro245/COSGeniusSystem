@@ -132,7 +132,7 @@ public class UserServiceTests
 
         Assert.Null(dto);
         Assert.NotNull(error);
-        Assert.Contains("đã được sử dụng", error);
+        Assert.Contains("already in use", error);
     }
 
     [Fact]
@@ -216,7 +216,7 @@ public class UserServiceTests
         Assert.False(success);
         Assert.True(isActive);
         Assert.NotNull(error);
-        Assert.Contains("không thể tự vô hiệu hóa", error);
+        Assert.Contains("cannot disable your own", error);
     }
 
     [Fact]

@@ -125,7 +125,7 @@ public class AuditService : IAuditService
             ?? await _context.Warehouses.FirstOrDefaultAsync(ct);
         if (warehouse == null)
         {
-            throw new BadRequestException("Không tìm thấy kho dược liệu.");
+            throw new BadRequestException("Herbal warehouse was not found.");
         }
 
         // Generate next AuditCode: KK00009...
@@ -213,10 +213,10 @@ public class AuditService : IAuditService
     {
         var audit = await FindAuditEntityAsync(idOrCode, ct);
         if (audit == null)
-            throw new NotFoundException($"Không tìm thấy phiếu kiểm kê {idOrCode}");
+            throw new NotFoundException($"Inventory audit {idOrCode} was not found.");
 
         if (audit.Status == "Đã duyệt" && (newStatus == "Đã hủy" || newStatus == "Hủy"))
-            throw new BadRequestException("Không thể hủy phiếu kiểm kê đã được phê duyệt điều chỉnh tồn kho.");
+            throw new BadRequestException("An inventory audit with approved stock adjustments cannot be cancelled.");
 
         audit.Status = newStatus;
         if (!string.IsNullOrWhiteSpace(note))
@@ -232,13 +232,13 @@ public class AuditService : IAuditService
     {
         var audit = await FindAuditEntityAsync(idOrCode, ct);
         if (audit == null)
-            throw new NotFoundException($"Không tìm thấy phiếu kiểm kê {idOrCode}");
+            throw new NotFoundException($"Inventory audit {idOrCode} was not found.");
 
         if (audit.Status == "Đã duyệt")
-            throw new BadRequestException("Phiếu kiểm kê đã được duyệt, không thể chỉnh sửa số liệu.");
+            throw new BadRequestException("The inventory audit has been approved; quantities cannot be edited.");
 
         if (audit.Status == "Đã hủy")
-            throw new BadRequestException("Phiếu kiểm kê đã bị hủy, không thể chỉnh sửa số liệu.");
+            throw new BadRequestException("The inventory audit has been cancelled; quantities cannot be edited.");
 
         foreach (var item in request.Items)
         {
@@ -275,10 +275,10 @@ public class AuditService : IAuditService
     {
         var audit = await FindAuditEntityAsync(idOrCode, ct);
         if (audit == null)
-            throw new NotFoundException($"Không tìm thấy phiếu kiểm kê {idOrCode}");
+            throw new NotFoundException($"Inventory audit {idOrCode} was not found.");
 
         if (audit.Status == "Đã hủy")
-            throw new BadRequestException("Phiếu kiểm kê đã bị hủy, không thể phê duyệt điều chỉnh tồn kho.");
+            throw new BadRequestException("The inventory audit has been cancelled; stock adjustments cannot be approved.");
 
         if (audit.Status == "Đã duyệt")
         {

@@ -72,7 +72,7 @@ public class AuthController : BaseApiController
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!int.TryParse(userIdClaim, out var userId))
         {
-            throw new UnauthorizedException("Invalid token user identifier.");
+            throw new UnauthorizedException("The user identifier in the session is invalid.");
         }
 
         var profile = await _authService.GetCurrentUserProfileAsync(userId);

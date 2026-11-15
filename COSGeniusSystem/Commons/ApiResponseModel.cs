@@ -18,7 +18,7 @@ public sealed class ApiResponseModel<T>
     public ApiResponseModel(int code, string message, bool isSuccess, T? data)
     {
         if (code < 100 || code > 599 || isSuccess != (code >= 200 && code < 300))
-            throw new ArgumentException("HTTP code and success flag must agree.");
+            throw new ArgumentException("The HTTP status code and success flag must be consistent.");
         Code = code;
         Message = message;
         IsSuccess = isSuccess;
@@ -28,7 +28,7 @@ public sealed class ApiResponseModel<T>
     public static ApiResponseModel<T> Success(SystemMessage message, T? data)
     {
         if (!message.IsSuccess || message.Code < 200 || message.Code >= 300)
-            throw new ArgumentException("A successful HTTP message is required.", nameof(message));
+            throw new ArgumentException("A successful HTTP response message is required.", nameof(message));
         return new(message.Code, message.Message, true, data);
     }
 }

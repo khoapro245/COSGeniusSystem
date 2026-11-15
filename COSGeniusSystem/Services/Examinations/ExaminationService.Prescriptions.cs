@@ -53,28 +53,30 @@ public sealed partial class ExaminationService
     private async Task<HerbalPrescription> PrescriptionAsync(int recordId, int id, CancellationToken ct) =>
         await db.HerbalPrescriptions.Include(p => p.HerbalPrescriptionDetails)
             .SingleOrDefaultAsync(p => p.RecordId == recordId && p.PrescriptionId == id, ct)
-        ?? throw new NotFoundException("Prescription does not belong to this examination.");
+        ?? throw new NotFoundException("The prescription does not belong to this examination.");
 
     private static void Draft(string status)
     {
-        if (status != "DRAFT") throw new ConflictException("Only DRAFT content can be changed or deleted.");
+        if (status != "DRAFT") throw new ConflictException("Only draft content can be edited or deleted.");
     }
 
     public async Task<PrescriptionResponse> SavePrescriptionAsync(ClaimsPrincipal actor, int registrationId, int prescriptionId,
         SavePrescriptionRequest request, CancellationToken ct)
     {
         Validate(request);
+        if (request.Items.Count == 0)
+            throw new BadRequestException("Select and apply a formula or add at least one herb before saving a draft prescription.");
         foreach (var item in request.Items) Validate(item);
         if (request.Items.Select(i => i.HerbId).Distinct().Count() != request.Items.Count)
             throw new BadRequestException("Each herb may appear only once in a prescription.");
         if (request.Items.Any(i => decimal.Round(i.DosagePerDose, 3) != i.DosagePerDose))
-            throw new BadRequestException("DosagePerDose supports at most three decimal places.");
+            throw new BadRequestException("The dose per pack may have at most 3 decimal places.");
         await WriteAsync(actor, registrationId, true, async registration =>
         {
             var record = await RecordAsync(registration, true, ct);
             var prescription = await PrescriptionAsync(record.RecordId, prescriptionId, ct);
             if (prescription.Status is not ("DRAFT" or "SENT"))
-                throw new ConflictException("Clinical content can no longer be edited.");
+                throw new ConflictException("Examination content cannot be edited in the current status.");
             Version(prescription.RowVersion, request.RowVersion);
             var ids = request.Items.Select(i => i.HerbId).ToArray();
             var herbs = await db.Herbs.Where(h => ids.Contains(h.HerbId) && h.IsActive)
@@ -115,13 +117,13 @@ public sealed partial class ExaminationService
             var record = await RecordAsync(registration, true, ct);
             var prescription = await PrescriptionAsync(record.RecordId, prescriptionId, ct);
             if (prescription.Status is not ("DRAFT" or "SENT"))
-                throw new ConflictException("Clinical content can no longer be edited.");
+                throw new ConflictException("Examination content cannot be edited in the current status.");
             Version(prescription.RowVersion, request.RowVersion);
             var formula = await db.HerbalFormulas.AsNoTracking().Include(f => f.HerbalFormulaDetails).ThenInclude(d => d.Herb)
                 .SingleOrDefaultAsync(f => f.HerbalFormulaId == request.HerbalFormulaId && f.Status == "APPROVED" && f.IsActive, ct)
-                ?? throw new BadRequestException("Only active APPROVED formulas may be loaded.");
+                ?? throw new BadRequestException("Only active and approved formulas can be used.");
             if (formula.HerbalFormulaDetails.Count == 0 || formula.HerbalFormulaDetails.Any(d => !d.Herb.IsActive || d.DosagePerDose <= 0))
-                throw new BadRequestException("The formula must contain active herbs with positive dosages.");
+                throw new BadRequestException("A formula must contain active herbs with positive doses.");
             var ids = formula.HerbalFormulaDetails.Select(d => d.HerbId).ToHashSet();
             foreach (var detail in prescription.HerbalPrescriptionDetails.ToList())
                 if (!ids.Contains(detail.HerbId)) db.HerbalPrescriptionDetails.Remove(detail);
@@ -168,10 +170,10 @@ public sealed partial class ExaminationService
     {
         if (prescription.TotalDoses <= 0 || string.IsNullOrWhiteSpace(prescription.UsageInstructions)
             || prescription.HerbalPrescriptionDetails.Count == 0 || prescription.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0))
-            throw new BadRequestException("A prescription requires positive TotalDoses, usage instructions and at least one positive herb dosage.");
+            throw new BadRequestException("A prescription requires a positive pack count, usage instructions, and at least one herb with a positive dose.");
         var ids = prescription.HerbalPrescriptionDetails.Select(d => d.HerbId).ToArray();
         if (await db.Herbs.CountAsync(h => ids.Contains(h.HerbId) && h.IsActive, ct) != ids.Length)
-            throw new BadRequestException("The prescription contains inactive herbs.");
+            throw new BadRequestException("The prescription contains an inactive herb.");
         prescription.Status = "SENT";
         prescription.SentAt ??= DateTime.UtcNow;
         prescription.UpdatedAt = prescription.SentAt;
