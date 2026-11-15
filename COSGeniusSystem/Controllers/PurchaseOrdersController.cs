@@ -47,7 +47,7 @@ public class PurchaseOrdersController : BaseApiController
         var result = await _purchaseOrderService.GetPurchaseOrderDetailAsync(idOrCode, ct);
         if (result == null)
         {
-            throw new NotFoundException($"Purchase order with identifier '{idOrCode}' was not found.");
+            throw new NotFoundException($"Purchase order '{idOrCode}' was not found.");
         }
 
         return SuccessResponse(new SystemMessage(200, "Purchase order details retrieved successfully.", true), result);

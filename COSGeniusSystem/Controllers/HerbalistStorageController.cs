@@ -21,9 +21,9 @@ public class HerbalistStorageController(ApplicationDbContext db):ControllerBase
  [HttpPost]
  public async Task<IActionResult> Create(CreateLocation input,CancellationToken ct)
  {
-  if(string.IsNullOrWhiteSpace(input.Code) || !await db.Warehouses.AnyAsync(x=>x.WarehouseId==input.WarehouseId && x.IsActive,ct))return Result(400,"Kho hoặc mã kệ/ngăn không hợp lệ.");
+  if(string.IsNullOrWhiteSpace(input.Code) || !await db.Warehouses.AnyAsync(x=>x.WarehouseId==input.WarehouseId && x.IsActive,ct))return Result(400,"Invalid warehouse or shelf/bin code.");
   var location=new WarehouseStorageLocation {WarehouseId=input.WarehouseId,Code=input.Code.Trim()};db.WarehouseStorageLocations.Add(location);
-  try{await db.SaveChangesAsync(ct);}catch(DbUpdateException){return Result(409,"Mã vị trí đã tồn tại trong kho.");}
+  try{await db.SaveChangesAsync(ct);}catch(DbUpdateException){return Result(409,"The location code already exists in this warehouse.");}
   return Result(201,"Đã tạo vị trí.",new {location.Id,location.Code,location.WarehouseId});
  }
  [HttpPut("batches/{batchId:int}")]
@@ -31,8 +31,8 @@ public class HerbalistStorageController(ApplicationDbContext db):ControllerBase
  {
   await using var tx=await db.Database.BeginTransactionAsync(IsolationLevel.Serializable,ct);
   var batch=await db.Batches.SingleOrDefaultAsync(x=>x.BatchId==batchId,ct);
-  if(batch==null)return Result(404,"Không tìm thấy lô.");
-  if(!await db.WarehouseStorageLocations.AnyAsync(x=>x.Id==input.StorageLocationId && x.WarehouseId==batch.WarehouseId && x.IsActive,ct))return Result(400,"Vị trí phải thuộc cùng kho và đang hoạt động.");
+  if(batch==null)return Result(404,"Batch was not found.");
+  if(!await db.WarehouseStorageLocations.AnyAsync(x=>x.Id==input.StorageLocationId && x.WarehouseId==batch.WarehouseId && x.IsActive,ct))return Result(400,"The location must be active and belong to the same warehouse.");
   batch.StorageLocationId=input.StorageLocationId;await db.SaveChangesAsync(ct);await tx.CommitAsync(ct);
   return Result(200,"Đã gán một vị trí cho lô.",new {batch.BatchId,batch.StorageLocationId});
  }

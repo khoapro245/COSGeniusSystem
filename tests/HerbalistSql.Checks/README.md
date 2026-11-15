@@ -1,9 +1,9 @@
-﻿# Chạy kiểm tra Herbalist với SQL Server
+# Chạy kiểm tra Herbalist với SQL Server
 
 `HerbalistSql.Checks` ghi dữ liệu, chỉ chấp nhận tên database bắt đầu `HerbalistIntegration_`. Không dùng connection string database nguồn.
 
 1. Tạo database test riêng với kích thước data/log nhỏ, dựng bảng/constraint và fixture từ `database.sql` (bỏ CREATE DATABASE/USE/ALTER DATABASE trỏ tên nguồn).
-2. Mang các trigger nghiệp vụ đang chạy vào bản test, vì snapshot repository không bao gồm tất cả trigger. Áp dụng `Herbalist_IntegrationGuards.sql` chỉ ở bản test.
+2. Mang các trigger nghiệp vụ đang chạy vào bản test, vì snapshot repository không bao gồm tất cả trigger. Áp dụng `scripts/Herbalist_IntegrationGuards.sql` chỉ ở bản test.
 3. Fixture cần ít nhất bốn đơn SENT, khám và đăng ký COMPLETED, chưa có MedicineDispense/yêu cầu đang hiệu lực. Fixture snapshot hiện có đáp ứng. Test tự gán vị trí lô, dùng một đơn lượng 0.001g để kiểm tra precision thực, rồi tiêu thụ bốn đơn này.
 4. Đặt biến môi trường `HERBALIST_TEST_CONNECTION` bằng connection string database test, không ghi credential vào repo; chạy `dotnet run --project tests/HerbalistSql.Checks`.
 5. Mỗi lần chạy cần fixture sạch riêng. Không chạy dọn dữ liệu test vào database nguồn. Test giữ dữ liệu để review; cleanup database test sau khi không còn cần.

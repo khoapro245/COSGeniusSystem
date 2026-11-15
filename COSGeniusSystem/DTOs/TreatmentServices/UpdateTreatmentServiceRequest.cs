@@ -4,8 +4,8 @@ namespace COSGeniusSystem.DTOs;
 
 public class UpdateTreatmentServiceRequest
 {
-    [Required(ErrorMessage = "ServiceName is required.")]
-    [MaxLength(150, ErrorMessage = "ServiceName must not exceed 150 characters.")]
+    [Required(ErrorMessage = "Service name is required.")]
+    [MaxLength(150, ErrorMessage = "Service name must not exceed 150 characters.")]
     public string ServiceName { get; set; } = null!;
 
     [Required(ErrorMessage = "Price is required.")]

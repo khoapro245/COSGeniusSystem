@@ -32,17 +32,19 @@ public sealed partial class ExaminationService
     private async Task<TreatmentPlan> PlanAsync(int recordId, int id, CancellationToken ct) =>
         await db.TreatmentPlans.Include(p => p.TreatmentPlanDetails)
             .SingleOrDefaultAsync(p => p.RecordId == recordId && p.PlanId == id, ct)
-        ?? throw new NotFoundException("Treatment plan does not belong to this examination.");
+        ?? throw new NotFoundException("The treatment plan does not belong to this examination.");
 
     public async Task<TreatmentPlanResponse> SavePlanAsync(ClaimsPrincipal actor, int registrationId, int planId,
         SaveTreatmentPlanRequest request, CancellationToken ct)
     {
         Validate(request);
+        if (request.Items.Count == 0)
+            throw new BadRequestException("Select at least one service before saving a draft indication.");
         foreach (var item in request.Items) Validate(item);
         if (request.Items.Any(item => item.PlannedQuantity > request.PlannedSessionCount))
-            throw new BadRequestException("Số lượng mỗi dịch vụ phải nhỏ hơn hoặc bằng tổng số buổi.");
+            throw new BadRequestException("The quantity of each service must not exceed the total number of sessions.");
         if (request.Items.Sum(item => item.PlannedQuantity) < request.PlannedSessionCount)
-            throw new BadRequestException("Tổng số lượng dịch vụ phải lớn hơn hoặc bằng tổng số buổi.");
+            throw new BadRequestException("The total service quantity must be at least the total number of sessions.");
         if (request.Sessions != null)
         {
             foreach (var session in request.Sessions) Validate(session);
@@ -52,25 +54,25 @@ public sealed partial class ExaminationService
                     || s.ServiceIds.Distinct().Count() != s.ServiceIds.Count
                     || s.ServiceIds.Any(id => !request.Items.Any(item => item.ServiceId == id)))
                 || request.Items.Any(item => request.Sessions.Count(s => s.ServiceIds.Contains(item.ServiceId)) != item.PlannedQuantity))
-                throw new BadRequestException("Chi tiết từng buổi phải có dịch vụ hợp lệ và khớp số lượng đã kê.");
+                throw new BadRequestException("Session details must contain valid services and match the prescribed quantities.");
         }
         if (request.TreatmentType == "SINGLE" && request.PlannedSessionCount != 1)
-            throw new BadRequestException("SINGLE treatment must have exactly one session.");
+            throw new BadRequestException("A single treatment must have exactly one session.");
         if (request.Items.Select(i => i.ServiceId).Distinct().Count() != request.Items.Count)
             throw new BadRequestException("Each service may appear only once in a treatment plan.");
         await WriteAsync(actor, registrationId, true, async registration =>
         {
             var record = await RecordAsync(registration, true, ct);
             var plan = await PlanAsync(record.RecordId, planId, ct);
-            if (plan.DoctorId != record.DoctorId) throw new ConflictException("Treatment plan doctor is inconsistent.");
+            if (plan.DoctorId != record.DoctorId) throw new ConflictException("The doctor information in the treatment plan is inconsistent.");
             if (plan.Status is not ("DRAFT" or "CONFIRMED"))
-                throw new ConflictException("Clinical content can no longer be edited.");
+                throw new ConflictException("Examination content cannot be edited in the current status.");
             Version(plan.RowVersion, request.RowVersion);
             var ids = request.Items.Select(i => i.ServiceId).ToArray();
             var services = await db.Services.Where(s => ids.Contains(s.ServiceId) && s.IsActive)
                 .Select(s => new { s.ServiceId, s.ServiceName, s.Unit, s.Price }).ToDictionaryAsync(s => s.ServiceId, ct);
             if (services.Count != ids.Length || services.Values.Any(s => s.Price < 0))
-                throw new BadRequestException("All services must be active with valid backend prices.");
+                throw new BadRequestException("All services must be active and have valid prices in the system.");
             plan.PlanName = request.PlanName.Trim();
             plan.TreatmentType = request.TreatmentType;
             plan.PlannedSessionCount = request.PlannedSessionCount;
@@ -78,7 +80,7 @@ public sealed partial class ExaminationService
             if (request.Sessions != null)
                 plan.SessionDetailsJson = System.Text.Json.JsonSerializer.Serialize(request.Sessions);
             else if (plan.SessionDetailsJson != null)
-                throw new BadRequestException("Vui lòng gửi chi tiết các buổi khi cập nhật liệu trình.");
+                throw new BadRequestException("Provide session details when updating the treatment plan.");
             plan.UpdatedAt = DateTime.UtcNow;
             foreach (var detail in plan.TreatmentPlanDetails.ToList())
                 if (!ids.Contains(detail.ServiceId)) db.TreatmentPlanDetails.Remove(detail);
@@ -111,7 +113,7 @@ public sealed partial class ExaminationService
         {
             var record = await RecordAsync(registration, false, ct);
             var plan = await PlanAsync(record.RecordId, planId, ct);
-            if (plan.DoctorId != record.DoctorId) throw new ConflictException("Treatment plan doctor is inconsistent.");
+            if (plan.DoctorId != record.DoctorId) throw new ConflictException("The doctor information in the treatment plan is inconsistent.");
             if (plan.ConfirmedAt.HasValue && plan.Status != "DRAFT") return true;
             await RecordAsync(registration, true, ct);
             Draft(plan.Status);
@@ -130,10 +132,10 @@ public sealed partial class ExaminationService
             || plan.TreatmentPlanDetails.Sum(d => d.PlannedQuantity) < plan.PlannedSessionCount
             || plan.PlannedSessionCount <= 0 || plan.TreatmentType is not ("SINGLE" or "COURSE")
             || (plan.TreatmentType == "SINGLE" && plan.PlannedSessionCount != 1))
-            throw new BadRequestException("The treatment plan requires a name, valid session count and at least one service with positive quantity.");
+            throw new BadRequestException("A treatment plan requires a name, a valid session count, and at least one service with a positive quantity.");
         var ids = plan.TreatmentPlanDetails.Select(d => d.ServiceId).ToArray();
         if (await db.Services.CountAsync(s => ids.Contains(s.ServiceId) && s.IsActive, ct) != ids.Length)
-            throw new BadRequestException("The treatment plan contains inactive services.");
+            throw new BadRequestException("The treatment plan contains an inactive service.");
         plan.Status = "CONFIRMED";
         plan.ConfirmedAt ??= DateTime.UtcNow;
         plan.UpdatedAt = plan.ConfirmedAt;
@@ -149,7 +151,7 @@ public sealed partial class ExaminationService
             if (request?.RowVersion != null && request.RowVersion.Length == 8)
                 Version(plan.RowVersion, request.RowVersion);
             if (await db.TreatmentSessions.AnyAsync(s => s.PlanId == planId, ct))
-                throw new ConflictException("A treatment plan with sessions cannot be deleted through the prescribing API.");
+                throw new ConflictException("A treatment plan with existing sessions cannot be deleted through service indication.");
             db.TreatmentPlanDetails.RemoveRange(plan.TreatmentPlanDetails);
             db.TreatmentPlans.Remove(plan);
             return true;

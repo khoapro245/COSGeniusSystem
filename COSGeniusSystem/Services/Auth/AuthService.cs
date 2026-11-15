@@ -33,7 +33,7 @@ public class AuthService : IAuthService
         // Check if username already exists
         if (await _userRepository.ExistsByUsernameAsync(request.Username))
         {
-            throw new ConflictException($"Username '{request.Username}' is already taken.");
+            throw new ConflictException($"Username '{request.Username}' is already in use.");
         }
 
         // Check if email already exists
@@ -44,7 +44,7 @@ public class AuthService : IAuthService
 
         // Determine role to assign
         var targetRoleCode = string.IsNullOrWhiteSpace(request.RoleCode)
-            ? throw new BadRequestException("RoleCode is required.")
+            ? throw new BadRequestException("Role code is required.")
             : request.RoleCode.Trim().ToUpper();
 
         var role = await _userRepository.GetRoleByCodeAsync(targetRoleCode);
@@ -99,12 +99,12 @@ public class AuthService : IAuthService
         var user = await _userRepository.GetByUsernameAsync(request.Username);
         if (user == null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
-            throw new UnauthorizedException("Invalid username or password.");
+            throw new UnauthorizedException("Incorrect username or password.");
         }
 
         if (!user.IsActive)
         {
-            throw new ForbiddenException("Your account is currently disabled. Please contact the administrator.");
+            throw new ForbiddenException("The account has been disabled. Please contact an administrator.");
         }
 
         var roles = user.UserRoles.Select(ur => ur.Role.RoleCode).ToList();
@@ -147,7 +147,7 @@ public class AuthService : IAuthService
         var user = await _userRepository.GetByIdAsync(userId);
         if (user == null)
         {
-            throw new NotFoundException($"User with ID {userId} was not found.");
+            throw new NotFoundException($"User {userId} was not found.");
         }
 
         var roles = user.UserRoles.Select(ur => ur.Role.RoleCode).ToList();

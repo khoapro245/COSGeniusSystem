@@ -26,19 +26,19 @@ public sealed class ApiExceptionHandler(ILogger<ApiExceptionHandler> logger) : I
         {
             logger.LogWarning(exception, "Concurrent update for {Path}", context.Request.Path);
             code = 409;
-            message = "Dữ liệu đã thay đổi hoặc đang được xử lý. Vui lòng tải lại trước khi thao tác tiếp.";
+            message = "The data has changed or is being processed. Please reload before continuing.";
         }
         else if (exception is DbUpdateException { InnerException: SqlException { Number: 547 or 2601 or 2627 } })
         {
             logger.LogWarning(exception, "Database conflict for {Path}", context.Request.Path);
             code = 409;
-            message = "The operation conflicts with related or existing records.";
+            message = "The operation conflicts with related or existing data.";
         }
         else if (exception is System.Text.Json.JsonException || exception is BadHttpRequestException || exception is FormatException)
         {
             logger.LogWarning(exception, "Malformed payload or type mismatch for {Path}", context.Request.Path);
             code = 400;
-            message = "Dữ liệu gửi lên không đúng định dạng. Các trường số chỉ chấp nhận số, các trường văn bản chỉ chấp nhận chuỗi ký tự.";
+            message = "Invalid request format. Numeric fields accept only numbers, and text fields accept only strings.";
         }
         else
         {

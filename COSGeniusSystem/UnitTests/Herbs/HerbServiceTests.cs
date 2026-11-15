@@ -182,7 +182,7 @@ public class HerbServiceTests
         // Assert: Thất bại do giá không hợp lệ
         Assert.Null(dto);
         Assert.NotNull(errorMessage);
-        Assert.Contains("StandardPrice must be greater than 0", errorMessage);
+        Assert.Contains("Standard price must be greater than 0", errorMessage);
 
         // Đảm bảo không bản ghi nào được lưu
         Assert.Empty(await context.Herbs.ToListAsync());

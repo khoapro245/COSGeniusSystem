@@ -17,7 +17,7 @@ public abstract class BaseApiController : ControllerBase
         string actionName, object routeValues, SystemMessage message, T data)
     {
         if (message.Code != StatusCodes.Status201Created)
-            throw new ArgumentException("Created responses require HTTP 201.", nameof(message));
+            throw new ArgumentException("A creation response must use HTTP status code 201.", nameof(message));
         return CreatedAtAction(actionName, routeValues, ApiResponseModel<T>.Success(message, data));
     }
 }

@@ -55,7 +55,7 @@ public class ReceptionWorkflowRefactoringTests
             service.CancelAsync(ReceptionActor, reg.RegistrationId,
                 new CancelTreatment { RowVersion = reg.RowVersion, Reason = "Hủy ngang" }, default));
 
-        Assert.Contains("Only unstarted WAITING registrations can be cancelled", ex.Message);
+        Assert.Contains("Only a pending registration whose examination has not started can be cancelled", ex.Message);
     }
 
     [Fact]
@@ -183,7 +183,7 @@ public class ReceptionWorkflowRefactoringTests
             service.CancelSessionTicketAsync(ReceptionActor, 51,
                 new CancelTicketRequest { CancelReason = "Hủy buổi trị liệu" }, default));
 
-        Assert.Contains("Không thể hủy phiếu khi bác sĩ/KTV đã bắt đầu thực hiện", ex.Message);
+        Assert.Contains("The request cannot be cancelled after the doctor or technician has started treatment", ex.Message);
     }
 
     [Theory]
@@ -345,7 +345,7 @@ public class ReceptionWorkflowRefactoringTests
         };
 
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.UpdateAsync(2, request, default));
-        Assert.Contains("đã được sử dụng bởi bệnh nhân khác", ex.Message);
+        Assert.Contains("already used by another patient", ex.Message);
     }
 
     [Fact]
@@ -367,6 +367,6 @@ public class ReceptionWorkflowRefactoringTests
         };
 
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.UpdateAsync(1, request, default));
-        Assert.Contains("14 tuổi", ex.Message);
+        Assert.Contains("14 years old", ex.Message);
     }
 }

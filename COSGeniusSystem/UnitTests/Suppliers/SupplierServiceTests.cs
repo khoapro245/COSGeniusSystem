@@ -144,7 +144,7 @@ public class SupplierServiceTests
 
         Assert.Null(dto);
         Assert.NotNull(error);
-        Assert.Contains("đã tồn tại", error);
+        Assert.Contains("already exists", error);
     }
 
     [Fact]
