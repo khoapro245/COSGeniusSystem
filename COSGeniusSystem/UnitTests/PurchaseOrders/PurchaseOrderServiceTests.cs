@@ -244,7 +244,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.CreatePOAsync(1, request));
-        Assert.Equal("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.", ex.Message);
+        Assert.Equal("A purchase order must contain at least one herb item.", ex.Message);
     }
 
     [Fact]
@@ -264,7 +264,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.CreatePOAsync(1, request));
-        Assert.Equal("Số lượng đặt phải lớn hơn 0.", ex.Message);
+        Assert.Equal("Order quantity must be greater than 0.", ex.Message);
     }
 
     [Fact]
@@ -284,7 +284,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.CreatePOAsync(1, request));
-        Assert.Equal("Số lượng đặt phải lớn hơn 0.", ex.Message);
+        Assert.Equal("Order quantity must be greater than 0.", ex.Message);
     }
 
     [Fact]
@@ -304,7 +304,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.CreatePOAsync(1, request));
-        Assert.Equal("Đơn giá không được âm.", ex.Message);
+        Assert.Equal("Unit price must not be negative.", ex.Message);
     }
 
     #endregion
@@ -381,7 +381,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.UpdatePOAsync(1, request));
-        Assert.Contains("Chỉ được phép chỉnh sửa đơn mua hàng ở trạng thái 'Nháp'", ex.Message);
+        Assert.Contains("Only draft purchase orders can be edited", ex.Message);
     }
 
     [Fact]
@@ -402,7 +402,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.UpdatePOAsync(1, request));
-        Assert.Equal("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.", ex.Message);
+        Assert.Equal("A purchase order must contain at least one herb item.", ex.Message);
     }
 
     [Fact]
@@ -475,7 +475,7 @@ public class PurchaseOrderServiceTests
 
         var service = new PurchaseOrderService(context);
         var ex = await Assert.ThrowsAsync<BadRequestException>(() => service.DeletePOAsync(1));
-        Assert.Contains("Chỉ được phép xóa đơn mua hàng ở trạng thái 'Nháp'", ex.Message);
+        Assert.Contains("Only draft purchase orders can be deleted", ex.Message);
     }
 
     #endregion

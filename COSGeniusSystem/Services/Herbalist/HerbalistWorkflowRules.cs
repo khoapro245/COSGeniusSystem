@@ -6,13 +6,13 @@ public static class HerbalistWorkflowRules
     {
         "kg" => quantity * 1000m,
         "g" => quantity,
-        _ => throw new ArgumentException("Unsupported stock unit.", nameof(unit))
+        _ => throw new ArgumentException("The stock unit is unsupported.", nameof(unit))
     };
     public static decimal GramsToStock(decimal grams, string unit) => unit switch
     {
         "kg" => grams / 1000m,
         "g" => grams,
-        _ => throw new ArgumentException("Unsupported stock unit.", nameof(unit))
+        _ => throw new ArgumentException("The stock unit is unsupported.", nameof(unit))
     };
     // Any differing receipt is quarantined until an explicit resolution workflow exists.
     public static decimal UsableReceipt(decimal issuedGrams, decimal? receivedGrams)

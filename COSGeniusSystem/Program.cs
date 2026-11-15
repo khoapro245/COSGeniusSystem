@@ -85,7 +85,7 @@ builder.Services.AddCors(options =>
 
 // Configure JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
-    ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+    ?? throw new InvalidOperationException("The system authentication key is not configured.");
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "COSGeniusClient";
@@ -127,7 +127,7 @@ builder.Services.AddAuthentication(options =>
             await context.Response.WriteAsJsonAsync(
                 new ApiResponseModel<object?>(
                     401,
-                    "Authentication is required.",
+                    "Please sign in to continue.",
                     false,
                     null),
                 context.HttpContext.RequestAborted);
@@ -140,7 +140,7 @@ builder.Services.AddAuthentication(options =>
             await context.Response.WriteAsJsonAsync(
                 new ApiResponseModel<object?>(
                     403,
-                    "Access is forbidden.",
+                    "You do not have permission to perform this action.",
                     false,
                     null),
                 context.HttpContext.RequestAborted);
@@ -163,7 +163,7 @@ builder.Services.AddAuthentication(options =>
 
             if (blacklistService.IsTokenBlacklisted(token))
             {
-                context.Fail("This token has been revoked.");
+                context.Fail("Your session has been revoked. Please sign in again.");
             }
 
             return Task.CompletedTask;

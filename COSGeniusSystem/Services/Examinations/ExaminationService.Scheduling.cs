@@ -11,7 +11,7 @@ public sealed partial class ExaminationService
     private static void ValidateBusinessDate(DateOnly date)
     {
         if (date < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))
-            throw new BadRequestException("BusinessDate cannot be in the past.");
+            throw new BadRequestException("The reception date must not be before today.");
     }
 
     public async Task<IReadOnlyList<DoctorWorkloadResponse>> DoctorWorkloadAsync(

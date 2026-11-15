@@ -40,7 +40,7 @@ public class AuditsController : BaseApiController
     {
         var result = await _auditService.GetAuditByIdOrCodeAsync(idOrCode, ct);
         if (result == null)
-            throw new NotFoundException($"Audit with identifier '{idOrCode}' was not found.");
+            throw new NotFoundException($"Inventory audit '{idOrCode}' was not found.");
 
         return SuccessResponse(new SystemMessage(200, "Audit details retrieved successfully.", true), result);
     }

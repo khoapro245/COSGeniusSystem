@@ -52,7 +52,7 @@ public class HerbsController : BaseApiController
     {
         var herb = await _herbService.GetHerbByIdAsync(id);
         if (herb is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         return SuccessResponse(SystemMessages.HerbRetrieved, herb);
     }
@@ -92,7 +92,7 @@ public class HerbsController : BaseApiController
 
         // dto == null && error == null → không tìm thấy → 404
         if (dto is null && error is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         // dto == null && error != null → lỗi validation → 400
         if (error is not null)
@@ -111,7 +111,7 @@ public class HerbsController : BaseApiController
     {
         var result = await _herbService.GetHerbBatchesAsync(id);
         if (result is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         return SuccessResponse(SystemMessages.HerbsRetrieved, result);
     }
@@ -126,7 +126,7 @@ public class HerbsController : BaseApiController
     {
         var (success, error) = await _herbService.DeleteHerbAsync(id, ct);
         if (!success && error is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         if (!success)
             throw new BadRequestException(error!);

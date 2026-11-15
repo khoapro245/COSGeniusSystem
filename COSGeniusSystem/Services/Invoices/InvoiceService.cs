@@ -19,7 +19,7 @@ public partial class InvoiceService : IInvoiceService
     {
         var page = queryParams.Page <= 0 ? 1 : queryParams.Page;
         var pageSize = Math.Clamp(queryParams.PageSize, 1, 100);
-        if (queryParams.FromDate > queryParams.ToDate) throw new BadRequestException("Khoảng ngày không hợp lệ.");
+        if (queryParams.FromDate > queryParams.ToDate) throw new BadRequestException("Invalid date range.");
 
         var query = _context.Invoices
             .AsNoTracking()
@@ -42,7 +42,7 @@ public partial class InvoiceService : IInvoiceService
                 "PAID" or "Đã thanh toán" => query.Where(i => i.PaymentStatus == "PAID" || i.PaymentStatus == "Đã thanh toán"),
                 "UNPAID" or "Chưa thanh toán" => query.Where(i => i.PaymentStatus == "UNPAID" || i.PaymentStatus == "Chưa thanh toán"),
                 "CANCELLED" or "Đã hủy" => query.Where(i => i.PaymentStatus == "CANCELLED" || i.PaymentStatus == "Đã hủy"),
-                _ => throw new BadRequestException("Trạng thái hóa đơn không hợp lệ.")
+                _ => throw new BadRequestException("Invalid invoice status.")
             };
         }
 
@@ -91,7 +91,7 @@ public partial class InvoiceService : IInvoiceService
 
         if (invoice == null)
         {
-            throw new NotFoundException($"Không tìm thấy hóa đơn với ID: {id}");
+            throw new NotFoundException($"Invoice ID {id} was not found.");
         }
 
         var dto = new InvoiceDetailDto

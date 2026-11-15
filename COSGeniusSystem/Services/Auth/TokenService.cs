@@ -19,7 +19,7 @@ public class TokenService : ITokenService
     public (string Token, int ExpiresIn) GenerateToken(User user, IEnumerable<string> roles)
     {
         var secretKey = _configuration["Jwt:SecretKey"] 
-            ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+            ?? throw new InvalidOperationException("The system authentication key is not configured.");
         var issuer = _configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
         var audience = _configuration["Jwt:Audience"] ?? "COSGeniusClient";
         var expirationMinutes = int.TryParse(_configuration["Jwt:ExpirationMinutes"], out var exp) ? exp : 1440;

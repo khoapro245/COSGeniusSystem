@@ -37,7 +37,7 @@ public class DisposalsController : BaseApiController
     {
         var result = await _disposalService.GetDisposalByIdOrCodeAsync(idOrCode, ct);
         if (result == null)
-            throw new NotFoundException($"Disposal with identifier '{idOrCode}' was not found.");
+            throw new NotFoundException($"Disposal '{idOrCode}' was not found.");
 
         return SuccessResponse(new SystemMessage(200, "Disposal details retrieved successfully.", true), result);
     }

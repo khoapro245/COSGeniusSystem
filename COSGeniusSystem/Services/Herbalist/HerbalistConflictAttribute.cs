@@ -1,4 +1,4 @@
-﻿using COSGeniusSystem.Commons;
+using COSGeniusSystem.Commons;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.Data.SqlClient;
@@ -16,7 +16,7 @@ public sealed class HerbalistConflictAttribute : ExceptionFilterAttribute
         var sql = ex.GetBaseException() as SqlException;
         if (ex is not DbUpdateConcurrencyException && sql?.Number is not (1205 or 2601 or 2627)) return;
         context.Result = new ObjectResult(new ApiResponseModel<object>(409,
-            "Dữ liệu đã thay đổi do thao tác đồng thời. Vui lòng tải lại và thử lại.", false, null)) { StatusCode = 409 };
+            "The data has changed due to a concurrent operation. Please reload and try again.", false, null)) { StatusCode = 409 };
         context.ExceptionHandled = true;
     }
 }

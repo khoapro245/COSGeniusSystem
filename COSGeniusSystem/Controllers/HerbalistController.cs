@@ -15,12 +15,32 @@ namespace COSGeniusSystem.Controllers;
 [Authorize(Roles = "ADMIN,PHARMACIST,HERBALIST")]
 public partial class HerbalistController(ApplicationDbContext db) : ControllerBase
 {
-    private const string MissingSchema = "Database chưa có đủ bảng HerbRequisition, HerbRequisitionPrescription, HerbOutboundDetail. Cần xác minh schema canonical và áp dụng Herbalist_IntegrationGuards.sql trước khi sử dụng lĩnh và bốc thuốc.";
+    private const string MissingSchema = "The database does not meet the safety requirements for requisition and dispensing. Check readiness for missing components; an administrator must review the schema and scripts/Herbalist_IntegrationGuards.sql.";
     private IActionResult Data(object? value) => Ok(new ApiResponseModel<object>(200, "Thành công.", true, value));
     private IActionResult Failure(int status, string message) => StatusCode(status, new ApiResponseModel<object>(status, message, false, null));
-    private async Task<bool> SchemaReady(CancellationToken ct) => await db.Database.SqlQueryRaw<int>(
-        "SELECT CASE WHEN OBJECT_ID(N'dbo.HerbRequisition', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbRequisitionPrescription', N'U') IS NOT NULL AND OBJECT_ID(N'dbo.HerbOutboundDemand', N'U') IS NOT NULL AND COL_LENGTH(N'dbo.HerbOutboundDetail',N'ReceivedQuantity') IS NOT NULL AND OBJECT_ID(N'dbo.TR_DispenseDetail_ReceiptBudget', N'TR') IS NOT NULL AND EXISTS(SELECT 1 FROM sys.columns WHERE object_id=OBJECT_ID(N'dbo.Batch') AND name=N'CurrentQuantity' AND scale>=6) THEN 1 ELSE 0 END AS [Value]").SingleAsync(ct) == 1;
-    private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("Missing user identity."));
+    private async Task<List<string>> SchemaIssues(CancellationToken ct) => await db.Database.SqlQueryRaw<string>("""
+        SELECT CAST(N'Missing table dbo.' + required.Name AS nvarchar(200)) AS [Value]
+        FROM (VALUES (N'HerbRequisition'), (N'HerbRequisitionPrescription'),
+            (N'HerbRequisitionDetail'), (N'HerbOutbound'), (N'HerbOutboundDetail'),
+            (N'HerbOutboundDemand'), (N'HerbReceiptDiscrepancy'),
+            (N'HerbReceiptDiscrepancyDetail'), (N'WarehouseStorageLocation')) required(Name)
+        WHERE OBJECT_ID(N'dbo.' + required.Name, N'U') IS NULL
+        UNION ALL
+        SELECT N'Missing column dbo.HerbOutboundDetail.ReceivedQuantity'
+        WHERE COL_LENGTH(N'dbo.HerbOutboundDetail', N'ReceivedQuantity') IS NULL
+        UNION ALL
+        SELECT N'Missing or disabled trigger dbo.TR_DispenseDetail_ReceiptBudget'
+        WHERE NOT EXISTS (SELECT 1 FROM sys.triggers
+            WHERE object_id = OBJECT_ID(N'dbo.TR_DispenseDetail_ReceiptBudget', N'TR')
+            AND parent_id = OBJECT_ID(N'dbo.DispenseDetail') AND is_disabled = 0)
+        UNION ALL
+        SELECT N'Batch.CurrentQuantity requires a decimal type with at least 6 decimal places'
+        WHERE NOT EXISTS (SELECT 1 FROM sys.columns
+            WHERE object_id = OBJECT_ID(N'dbo.Batch') AND name = N'CurrentQuantity'
+            AND system_type_id IN (106, 108) AND scale >= 6)
+        """).ToListAsync(ct);
+    private async Task<bool> SchemaReady(CancellationToken ct) => (await SchemaIssues(ct)).Count == 0;
+    private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("The user identifier is missing."));
     private static string Code(int id) => $"PL{id:D5}";
     private static object Page<T>(List<T> items, int count, HerbalistFilter f) => new
     {
@@ -30,7 +50,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
     };
     private static void Dates(HerbalistFilter f)
     {
-        if (f.FromDate > f.ToDate) throw new COSGeniusSystem.Exceptions.BadRequestException("Từ ngày phải trước hoặc bằng đến ngày.");
+        if (f.FromDate > f.ToDate) throw new COSGeniusSystem.Exceptions.BadRequestException("The start date must be on or before the end date.");
     }
     private IQueryable<HerbalPrescription> Prescriptions() => db.HerbalPrescriptions.AsNoTracking()
         .Where(p => p.Status == "SENT" && p.Record.Status == "COMPLETED" && p.Record.Registration.Status == "COMPLETED");
@@ -81,11 +101,17 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
     }
 
     [HttpGet("capabilities")]
-    public async Task<IActionResult> Capabilities(CancellationToken ct) => Data(new
+    public async Task<IActionResult> Capabilities(CancellationToken ct)
     {
-        workflowReady = await SchemaReady(ct), message = await SchemaReady(ct) ? null : MissingSchema,
-        missingCatalogFields = new[] { "Nhóm vị thuốc", "Phiên bản công thức" }
-    });
+        var issues = await SchemaIssues(ct);
+        return Data(new
+        {
+            workflowReady = issues.Count == 0,
+            message = issues.Count == 0 ? null : "Requisition and dispensing are unavailable: " + string.Join("; ", issues) + ". Contact an administrator to check the database configuration.",
+            schemaIssues = issues,
+            missingCatalogFields = new[] { "Nhóm vị thuốc", "Phiên bản công thức" }
+        });
+    }
 
     [HttpGet("prescriptions")]
     public async Task<IActionResult> ListPrescriptions([FromQuery] HerbalistFilter f, CancellationToken ct)
@@ -110,7 +136,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
     {
         if (!await SchemaReady(ct)) return Failure(503, MissingSchema);
         var row = await Rows(Prescriptions().Where(p => p.PrescriptionId == id)).SingleOrDefaultAsync(ct);
-        if (row == null) return Failure(404, "Không tìm thấy đơn đã gửi.");
+        if (row == null) return Failure(404, "The submitted prescription was not found.");
         var p = await Prescriptions().Where(p => p.PrescriptionId == id).Select(p => new
         {
             p.Record.RegistrationId, p.PrescriptionName, p.Note, p.UsageInstructions,
@@ -188,7 +214,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
     {
         if (!await SchemaReady(ct)) return Failure(503, MissingSchema);
         var summary = await RequestSummary(id, ct);
-        if (summary == null) return Failure(404, "Không tìm thấy phiếu lĩnh.");
+        if (summary == null) return Failure(404, "Requisition was not found.");
         var ids = await db.HerbRequisitionPrescriptions.Where(l => l.RequestId == id).Select(l => l.PrescriptionId).ToArrayAsync(ct);
         // A herb shared by several prescriptions is one receipt row, with its demand summed.
         var ingredients = await (from detail in db.HerbRequisitionDetails.AsNoTracking()

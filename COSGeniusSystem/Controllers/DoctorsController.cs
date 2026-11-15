@@ -54,7 +54,7 @@ public class DoctorsController : BaseApiController
     {
         var doctor = await _doctorService.GetDoctorByIdAsync(id);
         if (doctor is null)
-            throw new NotFoundException($"Doctor with id {id} was not found.");
+            throw new NotFoundException($"Doctor {id} was not found.");
 
         return SuccessResponse(SystemMessages.DoctorRetrieved, doctor);
     }

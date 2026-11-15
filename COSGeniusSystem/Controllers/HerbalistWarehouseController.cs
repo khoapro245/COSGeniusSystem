@@ -32,7 +32,7 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpGet]
     public async Task<IActionResult> List([FromQuery, Range(1, int.MaxValue)] int pageNumber = 1, [FromQuery] string? status = null, CancellationToken ct = default)
     {
-        if (!await Ready(ct)) return Result(503, "Cần áp dụng Herbalist_Canonical.sql và nâng độ chính xác tồn kho bằng Herbalist_IntegrationGuards.sql.");
+        if (!await Ready(ct)) return Result(503, "Apply Herbalist_Canonical.sql and increase stock precision using Herbalist_IntegrationGuards.sql.");
         var q = db.HerbRequisitions.AsNoTracking().AsQueryable();
         if (!string.IsNullOrWhiteSpace(status)) q = q.Where(r => r.Status == status);
         var count = await q.CountAsync(ct);
@@ -49,9 +49,9 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpGet("{id:int}")]
     public async Task<IActionResult> Detail(int id, CancellationToken ct)
     {
-        if (!await Ready(ct)) return Result(503, "Cần áp dụng Herbalist_Canonical.sql.");
+        if (!await Ready(ct)) return Result(503, "Apply Herbalist_Canonical.sql.");
         var r = await db.HerbRequisitions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
-        if (r == null) return Result(404, "Không tìm thấy phiếu lĩnh.");
+        if (r == null) return Result(404, "Requisition was not found.");
         var warehouse = await db.Warehouses.Where(w => w.WarehouseId == r.WarehouseId).Select(w => w.WarehouseName).SingleAsync(ct);
         var requirements = await (from d in db.HerbRequisitionDetails.AsNoTracking()
             join h in db.Herbs on d.HerbId equals h.HerbId
@@ -69,10 +69,10 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpGet("{id:int}/batches")]
     public async Task<IActionResult> EligibleBatches(int id, CancellationToken ct)
     {
-        if (!await Ready(ct)) return Result(503, "Cần áp dụng Herbalist_Canonical.sql.");
+        if (!await Ready(ct)) return Result(503, "Apply Herbalist_Canonical.sql.");
         var r = await db.HerbRequisitions.AsNoTracking().SingleOrDefaultAsync(x => x.Id == id, ct);
-        if (r == null) return Result(404, "Không tìm thấy phiếu lĩnh.");
-        if (r.Status != "REQUESTED") return Result(409, "Phiếu không còn chờ kho xử lý.");
+        if (r == null) return Result(404, "Requisition was not found.");
+        if (r.Status != "REQUESTED") return Result(409, "The requisition is no longer awaiting warehouse processing.");
         var herbIds = await db.HerbRequisitionDetails.Where(d => d.RequestId == id).Select(d => d.HerbId).Distinct().ToArrayAsync(ct);
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var batches = await db.Batches.AsNoTracking().Include(b => b.Herb).Include(b => b.StorageLocation)
@@ -86,20 +86,20 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpPost("{id:int}/issue")]
     public async Task<IActionResult> Issue(int id, IssueInput input, CancellationToken ct)
     {
-        if (!await Ready(ct)) return Result(503, "Cần bổ sung schema herbalist và độ chính xác tồn kho (6 chữ số thập phân kg).");
-        if (input.Allocations.Select(a => a.BatchId).Distinct().Count() != input.Allocations.Length || input.Allocations.Any(a => decimal.Round(a.QuantityGrams, 3) != a.QuantityGrams)) return Result(400, "Mỗi lô xuất hiện một lần, lượng gam tối đa 3 chữ số thập phân.");
+        if (!await Ready(ct)) return Result(503, "The herbalist schema and stock precision of 6 decimal places in kilograms are required.");
+        if (input.Allocations.Select(a => a.BatchId).Distinct().Count() != input.Allocations.Length || input.Allocations.Any(a => decimal.Round(a.QuantityGrams, 3) != a.QuantityGrams)) return Result(400, "Each batch may appear only once, and quantities in grams may have at most 3 decimal places.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var r = await db.HerbRequisitions.Include(r => r.Prescriptions).ThenInclude(l => l.Prescription).ThenInclude(p => p.HerbalPrescriptionDetails).SingleOrDefaultAsync(r => r.Id == id, ct);
-        if (r == null) return Result(404, "Không tìm thấy phiếu lĩnh.");
-        if (r.Status != "REQUESTED" || !Version(r.RowVersion, input.RowVersion)) return Result(409, "Phiếu đã được xử lý hoặc phiên bản không còn đúng.");
+        if (r == null) return Result(404, "Requisition was not found.");
+        if (r.Status != "REQUESTED" || !Version(r.RowVersion, input.RowVersion)) return Result(409, "The requisition has been processed or its version is outdated.");
         var ids = input.Allocations.Select(a => a.BatchId).ToArray();
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var batches = await db.Batches.Include(b => b.StorageLocation).Include(b => b.Herb).Include(b => b.Warehouse).Where(b => ids.Contains(b.BatchId)).ToDictionaryAsync(b => b.BatchId, ct);
-        if (batches.Count != ids.Length || batches.Values.Any(b => b.WarehouseId != r.WarehouseId || b.StorageLocation == null || !b.StorageLocation.IsActive || b.StorageLocation.WarehouseId != r.WarehouseId || !b.Herb.IsActive || !HerbalistWorkflowRules.SupportsStockUnit(b.Herb.Unit) || !b.Warehouse.IsActive || b.ExpiryDate < today || b.Status != "Đạt chuẩn")) return Result(409, "Có lô không hợp lệ, hết hạn, bị khóa hoặc không lưu tồn bằng g hoặc kg.");
-        if (await db.HerbRequisitionDetails.AnyAsync(d => d.RequestId == id && d.UnitSnapshot != "g", ct)) return Result(422, "Phiếu cũ có đơn vị chưa được đối soát; không tự quy đổi nhu cầu.");
+        if (batches.Count != ids.Length || batches.Values.Any(b => b.WarehouseId != r.WarehouseId || b.StorageLocation == null || !b.StorageLocation.IsActive || b.StorageLocation.WarehouseId != r.WarehouseId || !b.Herb.IsActive || !HerbalistWorkflowRules.SupportsStockUnit(b.Herb.Unit) || !b.Warehouse.IsActive || b.ExpiryDate < today || b.Status != "Đạt chuẩn")) return Result(409, "A batch is invalid, expired, locked, or uses a stock unit other than g or kg.");
+        if (await db.HerbRequisitionDetails.AnyAsync(d => d.RequestId == id && d.UnitSnapshot != "g", ct)) return Result(422, "The legacy requisition contains unreconciled units; required quantities cannot be converted automatically.");
         var demand = await db.HerbRequisitionDetails.Where(d=>d.RequestId==id).GroupBy(d=>d.HerbId).Select(g=>new {HerbId=g.Key,Quantity=g.Sum(d=>d.RequestedQuantity)}).ToDictionaryAsync(x=>x.HerbId,x=>x.Quantity,ct);
         var supplied = input.Allocations.GroupBy(a => batches[a.BatchId].HerbId).ToDictionary(g => g.Key, g => g.Sum(a => a.QuantityGrams));
-        if (demand.Count != supplied.Count || demand.Any(d => supplied.GetValueOrDefault(d.Key) != d.Value)) return Result(400, "Lượng xuất phải khớp chính xác nhu cầu từng vị của các đơn gốc.");
+        if (demand.Count != supplied.Count || demand.Any(d => supplied.GetValueOrDefault(d.Key) != d.Value)) return Result(400, "Issued quantities must exactly match the required amount of each herb in the original prescriptions.");
                 var outbound=new HerbOutbound {RequestId=id,WarehouseId=r.WarehouseId,IssuedBy=Actor,IssuedAt=DateTime.UtcNow};
         db.HerbOutbounds.Add(outbound);
         foreach (var a in input.Allocations.OrderBy(a => a.BatchId))
@@ -109,7 +109,7 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
             var quantityParameter = new Microsoft.Data.SqlClient.SqlParameter("@quantity", SqlDbType.Decimal) { Precision = 18, Scale = 6, Value = stockQuantity };
             var batchParameter = new Microsoft.Data.SqlClient.SqlParameter("@batchId", SqlDbType.Int) { Value = a.BatchId };
             var changed = await db.Database.ExecuteSqlRawAsync("UPDATE dbo.Batch SET CurrentQuantity = CurrentQuantity - @quantity WHERE BatchID = @batchId AND CurrentQuantity >= @quantity", new object[] { quantityParameter, batchParameter }, ct);
-            if (changed != 1) return Result(409, "Tồn lô không đủ hoặc đã thay đổi. Toàn bộ lần xuất được hủy.");
+            if (changed != 1) return Result(409, "Batch stock is insufficient or has changed. The entire issue operation was cancelled.");
             r.Allocations.Add(new HerbOutboundDetail { Outbound=outbound, WarehouseId=r.WarehouseId, HerbId=batches[a.BatchId].HerbId, BatchId = a.BatchId, QuantityGrams = a.QuantityGrams, StorageLocationId=batches[a.BatchId].StorageLocationId!.Value, LocationSnapshot=batches[a.BatchId].StorageLocation!.Code });
         }
         // Requirement attribution only; final physical per-order allocation is DispenseDetail.
@@ -138,12 +138,12 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpPost("{id:int}/reject")]
     public async Task<IActionResult> Reject(int id, RejectInput input, CancellationToken ct)
     {
-        if (!await Ready(ct)) return Result(503, "Cần bổ sung schema herbalist và độ chính xác tồn kho.");
-        if (string.IsNullOrWhiteSpace(input.Reason)) return Result(400, "Cần nhập lý do từ chối.");
+        if (!await Ready(ct)) return Result(503, "The herbalist schema and increased stock precision are required.");
+        if (string.IsNullOrWhiteSpace(input.Reason)) return Result(400, "A rejection reason is required.");
         await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
         var r = await db.HerbRequisitions.Include(r => r.Prescriptions).SingleOrDefaultAsync(r => r.Id == id, ct);
-        if (r == null) return Result(404, "Không tìm thấy phiếu lĩnh.");
-        if (r.Status != "REQUESTED" || !Version(r.RowVersion, input.RowVersion)) return Result(409, "Chỉ từ chối được phiếu đang chờ kho, đúng phiên bản.");
+        if (r == null) return Result(404, "Requisition was not found.");
+        if (r.Status != "REQUESTED" || !Version(r.RowVersion, input.RowVersion)) return Result(409, "Only a requisition awaiting warehouse processing with the current version can be rejected.");
         r.ClosedAt=DateTime.UtcNow; r.ClosedBy=Actor; r.Status = "REJECTED"; r.RejectionReason = input.Reason.Trim();
         foreach (var link in r.Prescriptions) link.IsActive = false;
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
@@ -152,11 +152,11 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     [HttpGet("{id:int}/fefo")]
     public async Task<IActionResult> Fefo(int id,CancellationToken ct)
     {
-        if(!await Ready(ct))return Result(503,"Áp dụng Herbalist_Canonical.sql trước.");
+        if(!await Ready(ct))return Result(503,"Apply Herbalist_Canonical.sql first.");
         var r=await db.HerbRequisitions.AsNoTracking().SingleOrDefaultAsync(x=>x.Id==id,ct);
-        if(r==null)return Result(404,"Không tìm thấy yêu cầu.");
-        if(r.Status != "REQUESTED") return Result(409,"Phiếu không còn chờ kho xử lý.");
-        if (await db.HerbRequisitionDetails.AnyAsync(d => d.RequestId == id && d.UnitSnapshot != "g", ct)) return Result(422, "Phiếu cũ có đơn vị chưa được đối soát.");
+        if(r==null)return Result(404,"Request was not found.");
+        if(r.Status != "REQUESTED") return Result(409,"The requisition is no longer awaiting warehouse processing.");
+        if (await db.HerbRequisitionDetails.AnyAsync(d => d.RequestId == id && d.UnitSnapshot != "g", ct)) return Result(422, "The legacy requisition contains unreconciled units.");
         var demand=await db.HerbRequisitionDetails.Where(x=>x.RequestId==id).GroupBy(x=>x.HerbId).Select(g=>new {HerbId=g.Key,Quantity=g.Sum(x=>x.RequestedQuantity)}).ToListAsync(ct);
         var today=DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var suggestions=new List<object>();

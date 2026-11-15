@@ -22,6 +22,6 @@ public static class DoctorAvailability
                 && (r.Status == "IN_PROGRESS" || r.Status == "Đang khám"), ct)
             || await db.TreatmentSessions.AnyAsync(s => (s.PerformedBy ?? s.AssignedDoctorId) == doctorId
                 && (s.Status == "IN_PROGRESS" || s.Status == "Đang điều trị"), ct))
-            throw new ConflictException("Bác sĩ đang khám hoặc đang điều trị cho bệnh nhân khác. Vui lòng hoàn tất ca hiện tại trước khi tiếp nhận bệnh nhân tiếp theo.");
+            throw new ConflictException("The doctor is examining or treating another patient. Complete the current appointment before accepting the next patient.");
     }
 }

@@ -70,5 +70,5 @@ public static class SystemMessages
     public static readonly SystemMessage FormulaApproved = new(200, "Herbal formula proposal approved successfully.", true);
     public static readonly SystemMessage FormulaRejected = new(200, "Herbal formula proposal rejected successfully.", true);
     public static readonly SystemMessage ValidationFailed = new(400, "One or more fields are invalid.", false);
-    public static readonly SystemMessage InternalError = new(500, "An unexpected error occurred.", false);
+    public static readonly SystemMessage InternalError = new(500, "A system error occurred. Please try again later.", false);
 }

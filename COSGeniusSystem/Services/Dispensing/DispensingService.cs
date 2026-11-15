@@ -95,7 +95,7 @@ public class DispensingService : IDispensingService
     public async Task<AggregateSlipPreviewDto> PreviewAggregateSlipAsync(List<int> orderIds, CancellationToken ct = default)
     {
         if (orderIds == null || !orderIds.Any())
-            throw new BadRequestException("Vui lòng chọn ít nhất 1 đơn thuốc để xem ma trận.");
+            throw new BadRequestException("Select at least one prescription to preview the matrix.");
 
         var orders = await _db.HerbalPrescriptions
             .Include(p => p.Record).ThenInclude(r => r.Patient)
@@ -175,7 +175,7 @@ public class DispensingService : IDispensingService
     public async Task<DispensingSlipItemDto> CreateDispensingSlipAsync(CreateDispensingSlipRequest request, ClaimsPrincipal user, CancellationToken ct = default)
     {
         if (request.OrderIds == null || !request.OrderIds.Any())
-            throw new BadRequestException("Vui lòng chọn ít nhất 1 đơn thuốc để tạo phiếu.");
+            throw new BadRequestException("Select at least one prescription to create a requisition.");
 
         var orders = await _db.HerbalPrescriptions
             .Include(p => p.HerbalPrescriptionDetails)
@@ -183,13 +183,13 @@ public class DispensingService : IDispensingService
             .ToListAsync(ct);
 
         if (orders.Count == 0)
-            throw new NotFoundException("Không tìm thấy đơn thuốc nào được chọn.");
+            throw new NotFoundException("None of the selected prescriptions were found.");
 
         var subClaim = user.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         int userId = int.TryParse(subClaim, out var uId) ? uId : orders.First().CreatedBy;
 
         var defaultWarehouse = await _db.Warehouses.Where(w => w.IsActive).OrderBy(w => w.WarehouseId).FirstOrDefaultAsync(ct)
-            ?? throw new ConflictException("Không tìm thấy kho dược liệu khả dụng trong hệ thống.");
+            ?? throw new ConflictException("No available herbal warehouse was found in the system.");
 
         var firstOrder = orders.First();
         var slip = new MedicineDispense
@@ -290,7 +290,7 @@ public class DispensingService : IDispensingService
             .FirstOrDefaultAsync(x => x.DispenseId == slipId, ct);
 
         if (d == null)
-            throw new NotFoundException($"Phiếu lĩnh thuốc #{slipId} không tồn tại.");
+            throw new NotFoundException($"Herb requisition #{slipId} does not exist.");
 
         var p = d.Prescription;
         var herbs = d.DispenseDetails.Any()
@@ -356,7 +356,7 @@ public class DispensingService : IDispensingService
     {
         var slip = await _db.MedicineDispenses.FirstOrDefaultAsync(d => d.DispenseId == slipId, ct);
         if (slip == null)
-            throw new NotFoundException($"Phiếu lĩnh thuốc #{slipId} không tồn tại.");
+            throw new NotFoundException($"Herb requisition #{slipId} does not exist.");
 
         slip.Status = "RECEIVED";
         await _db.SaveChangesAsync(ct);
@@ -367,7 +367,7 @@ public class DispensingService : IDispensingService
     {
         var rx = await _db.HerbalPrescriptions.FirstOrDefaultAsync(p => p.PrescriptionId == orderId, ct);
         if (rx == null)
-            throw new NotFoundException($"Đơn thuốc #{orderId} không tồn tại.");
+            throw new NotFoundException($"Prescription #{orderId} does not exist.");
 
         rx.Status = "DISPENSED";
         rx.UpdatedAt = DateTime.UtcNow;

@@ -172,7 +172,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .Include(e => e.Doctor)
             .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
@@ -182,7 +182,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám này đã hoàn tất, không thể gọi vào khám lại.");
+            throw new BadRequestException("This examination is complete and cannot be called again.");
         }
 
         if (meta.Status != "Đang khám")
@@ -205,7 +205,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .Include(e => e.Doctor)
             .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
@@ -218,7 +218,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .Include(e => e.Doctor)
             .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
@@ -228,7 +228,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám đã hoàn tất và bị khóa, không thể chỉnh sửa thông tin lâm sàng.");
+            throw new BadRequestException("This examination is complete and locked; clinical information cannot be edited.");
         }
 
         // Cập nhật sinh hiệu vào metadata và bảng
@@ -321,7 +321,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
             .Include(e => e.Doctor)
             .Include(e => e.Patient).ThenInclude(p => p.PatientContacts)
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
@@ -376,13 +376,13 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
     {
         var es = await db.MedicalRecords
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám đã hoàn tất, không thể chỉnh sửa chỉ định dịch vụ.");
+            throw new BadRequestException("This examination is complete; service indications cannot be edited.");
         }
 
         meta.TreatmentType = request.TreatmentType;
@@ -478,18 +478,18 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
     {
         var es = await db.MedicalRecords
             .FirstOrDefaultAsync(e => e.RecordId == examSheetId, ct)
-            ?? throw new NotFoundException($"Medical record with id {examSheetId} was not found.");
+            ?? throw new NotFoundException($"Examination record {examSheetId} was not found.");
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
 
         if (meta.Status == "Hoàn tất")
         {
-            throw new BadRequestException("Lượt khám đã hoàn tất, không thể chỉnh sửa đơn thuốc.");
+            throw new BadRequestException("This examination is complete; prescriptions cannot be edited.");
         }
 
         if (meta.PrescriptionStatus == "Đã gửi Herbalist")
         {
-            throw new BadRequestException("Sau khi gửi Herbalist, nội dung đơn không còn được chỉnh sửa ở màn kê đơn.");
+            throw new BadRequestException("After submission to the herbalist, the prescription can no longer be edited on the prescribing screen.");
         }
 
         var isSend = request.ActionType.Equals("SEND_HERBALIST", StringComparison.OrdinalIgnoreCase);

@@ -47,7 +47,7 @@ public class GoodsReceiptsController : BaseApiController
         var result = await _goodsReceiptService.GetGoodsReceiptDetailAsync(idOrCode, ct);
         if (result == null)
         {
-            throw new NotFoundException($"Goods receipt with identifier '{idOrCode}' was not found.");
+            throw new NotFoundException($"Goods receipt '{idOrCode}' was not found.");
         }
 
         return SuccessResponse(new SystemMessage(200, "Goods receipt details retrieved successfully.", true), result);
