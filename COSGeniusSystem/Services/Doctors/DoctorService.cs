@@ -1,6 +1,8 @@
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Exceptions;
+using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Services;
@@ -44,8 +46,11 @@ public class DoctorService : IDoctorService
             DoctorId = d.DoctorId,
             FullName = d.FullName,
             Specialization = d.Specialization,
+            LicenseNumber = d.LicenseNumber,
             Phone = d.Phone,
-            IsActive = d.IsActive
+            IsActive = d.IsActive,
+            Username = d.User != null ? d.User.Username : null,
+            Email = d.User != null ? d.User.Email : null
         }).ToListAsync(ct);
     }
 
@@ -70,6 +75,57 @@ public class DoctorService : IDoctorService
             Username = doctor.User?.Username,
             Email = doctor.User?.Email
         };
+    }
+
+    public async Task<DoctorDetailDto> CreateDoctorAsync(CreateDoctorRequestDto request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            throw new BadRequestException("Họ và tên bác sĩ không được để trống.");
+
+        if (request.UserId.HasValue && request.UserId.Value > 0)
+        {
+            var user = await _context.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.UserId == request.UserId.Value, ct);
+
+            if (user == null)
+                throw new NotFoundException($"Không tìm thấy tài khoản người dùng có ID {request.UserId.Value}.");
+
+            var existingDoc = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == request.UserId.Value, ct);
+            if (existingDoc != null)
+                throw new ConflictException($"Tài khoản '{user.Username}' đã có hồ sơ bác sĩ trên hệ thống.");
+
+            // Gán role DOCTOR nếu user chưa có
+            if (!user.UserRoles.Any(ur => ur.Role.RoleCode == RoleConstants.Doctor))
+            {
+                var docRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleCode == RoleConstants.Doctor, ct);
+                if (docRole != null)
+                {
+                    user.UserRoles.Add(new UserRole
+                    {
+                        UserId = user.UserId,
+                        RoleId = docRole.RoleId,
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+            }
+        }
+
+        var doctor = new Doctor
+        {
+            UserId = request.UserId > 0 ? request.UserId : null,
+            FullName = request.FullName.Trim(),
+            Specialization = request.Specialization?.Trim(),
+            LicenseNumber = request.LicenseNumber?.Trim(),
+            Phone = request.Phone?.Trim(),
+            IsActive = request.IsActive
+        };
+
+        _context.Doctors.Add(doctor);
+        await _context.SaveChangesAsync(ct);
+
+        return (await GetDoctorByIdAsync(doctor.DoctorId))!;
     }
 
     public async Task<DoctorClinicOverviewDto> GetDoctorClinicOverviewAsync(DoctorClinicFilterQuery query, CancellationToken ct = default)
