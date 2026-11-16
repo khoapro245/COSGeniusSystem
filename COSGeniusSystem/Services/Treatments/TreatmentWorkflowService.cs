@@ -41,9 +41,38 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     {
         if (!actor.IsInRole(RoleConstants.Doctor)) throw new ForbiddenException();
         var userId = UserId(actor);
-        return await db.Doctors.Where(d => d.UserId == userId && d.IsActive && d.User != null && d.User.IsActive
-            && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor))
-            .Select(d => (int?)d.DoctorId).SingleOrDefaultAsync(ct) ?? throw new ForbiddenException("No active doctor account is available.");
+        var doctorId = await db.Doctors.Where(d => d.UserId == userId && d.IsActive && (d.User == null || d.User.IsActive))
+            .Select(d => (int?)d.DoctorId).FirstOrDefaultAsync(ct);
+
+        if (doctorId.HasValue) return doctorId.Value;
+
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, ct);
+        if (user != null)
+        {
+            var existingDoctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == null && d.FullName == user.FullName, ct);
+            if (existingDoctor != null)
+            {
+                existingDoctor.UserId = user.UserId;
+                existingDoctor.IsActive = true;
+                await db.SaveChangesAsync(ct);
+                return existingDoctor.DoctorId;
+            }
+
+            var newDoctor = new Doctor
+            {
+                UserId = user.UserId,
+                FullName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName,
+                Specialization = "Bác sĩ Y học cổ truyền",
+                LicenseNumber = "CCHN-" + user.UserId.ToString("D4"),
+                Phone = user.Phone,
+                IsActive = true
+            };
+            db.Doctors.Add(newDoctor);
+            await db.SaveChangesAsync(ct);
+            return newDoctor.DoctorId;
+        }
+
+        throw new ForbiddenException("No active doctor account.");
     }
     private async Task<int?> ReaderAsync(ClaimsPrincipal actor, CancellationToken ct)
     {

@@ -7,7 +7,7 @@ public class DispensingSlipFilterQuery
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 10;
+    public int PageSize { get; set; } = 20;
 }
 
 public class DispensingSlipItemDto
@@ -73,7 +73,7 @@ public class DispenseHistoryFilterQuery
     public DateTime? FromDate { get; set; }
     public DateTime? ToDate { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 10;
+    public int PageSize { get; set; } = 20;
 }
 
 public class DispensedHistoryRecordDto
@@ -130,4 +130,56 @@ public class CreateDispensingSlipRequest
     public List<int> OrderIds { get; set; } = new();
     public List<int> PrescriptionIds { get => OrderIds; set => OrderIds = value; }
     public string? Note { get; set; }
+}
+
+// ─── DTOs cho Nghiệp vụ Xuất kho (Warehouse Issue & FEFO) ───
+
+public class BatchAllocationItem
+{
+    public int BatchId { get; set; }
+    public decimal QuantityGrams { get; set; }
+}
+
+public class WarehouseIssueRequest
+{
+    public List<BatchAllocationItem> Allocations { get; set; } = new();
+}
+
+public class WarehouseRejectRequest
+{
+    public string Reason { get; set; } = null!;
+}
+
+// ─── DTOs cho bốc thuốc (HB-07) ───
+
+public class DispenseBatchLineRequest
+{
+    public int BatchId { get; set; }
+    public decimal QuantityGrams { get; set; }
+}
+
+public class CompleteDispenseOrderRequest
+{
+    // Frontend gửi lên danh sách lô + lượng thực tế bốc cho đơn này.
+    // Nếu không gửi, server sẽ dùng FEFO tự động.
+    public List<DispenseBatchLineRequest>? BatchLines { get; set; }
+}
+
+public class FefoSuggestedLineDto
+{
+    public int BatchId { get; set; }
+    public string BatchNumber { get; set; } = null!;
+    public string ExpiryDate { get; set; } = null!;
+    public string Location { get; set; } = null!;
+    public decimal QuantityGrams { get; set; }
+    public decimal AvailableGrams { get; set; }
+}
+
+public class FefoHerbSuggestionDto
+{
+    public int HerbId { get; set; }
+    public string HerbName { get; set; } = null!;
+    public decimal RequiredGrams { get; set; }
+    public decimal ShortageGrams { get; set; }
+    public List<FefoSuggestedLineDto> Lines { get; set; } = new();
 }
