@@ -75,13 +75,17 @@ public class HerbOutboundDetail
  public HerbOutbound Outbound { get; set; } = null!;
  public Batch Batch { get; set; } = null!;
 }
+// [hieppm] Start: Bổ sung sức chứa và loại kệ theo yêu cầu mentor
 public class WarehouseStorageLocation
 {
- public int Id { get; set; }
- public int WarehouseId { get; set; }
- public string Code { get; set; } = "";
- public bool IsActive { get; set; } = true;
+    public int Id { get; set; }
+    public int WarehouseId { get; set; }
+    public string Code { get; set; } = "";
+    public bool IsActive { get; set; } = true;
+    public decimal MaxCapacityGrams { get; set; } = 100000;
+    public string StorageType { get; set; } = "STANDARD";
 }
+// [hieppm] End: Bổ sung sức chứa và loại kệ theo yêu cầu mentor
 public class HerbReceiptDiscrepancy
 {
  public int Id { get; set; }

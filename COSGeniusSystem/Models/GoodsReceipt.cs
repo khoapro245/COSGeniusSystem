@@ -21,9 +21,15 @@ public partial class GoodsReceipt
 
     public string? Note { get; set; }
 
-    // [hieppm] Start: Bổ sung thuộc tính Status cho GoodsReceipt theo Warehouse_Update.sql
+    // [hieppm] Start: Bổ sung thuộc tính Status, DriverName, VehicleNumber, DocumentUrl
     public string Status { get; set; } = "PENDING_APPROVAL";
-    // [hieppm] End: Bổ sung thuộc tính Status cho GoodsReceipt theo Warehouse_Update.sql
+
+    public string? DriverName { get; set; }
+
+    public string? VehicleNumber { get; set; }
+
+    public string? DocumentUrl { get; set; }
+    // [hieppm] End: Bổ sung thuộc tính Status, DriverName, VehicleNumber, DocumentUrl
 
     public virtual PurchaseOrder? Po { get; set; }
 

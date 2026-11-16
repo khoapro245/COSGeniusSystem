@@ -46,10 +46,11 @@ builder.Services.AddScoped<IFormulaService, FormulaService>();
 // Grouped Herbalist requisitions replace the legacy DispensingService.
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IDisposalService, DisposalService>();
-// [hieppm] Start: Đăng ký DI cho module Purchase Orders & Goods Receipts
+// [hieppm] Start: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
-// [hieppm] End: Đăng ký DI cho module Purchase Orders & Goods Receipts
+builder.Services.AddScoped<IImportRequestService, ImportRequestService>();
+// [hieppm] End: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
@@ -269,6 +270,10 @@ app.UseStatusCodePages(async statusContext =>
 });
 
 app.UseHttpsRedirection();
+
+// [hieppm] Start: Phục vụ file tĩnh trong wwwroot cho file upload chứng từ
+app.UseStaticFiles();
+// [hieppm] End
 
 app.UseCors("AllowFrontend");
 

@@ -54,6 +54,10 @@ public class HerbService : IHerbService
                 Unit = h.Unit,
                 TasteProperties = h.TasteProperties,
                 StandardPrice = h.StandardPrice,
+                // [hieppm] Start: Mapping LastImportPrice & CurrentStock
+                LastImportPrice = h.LastImportPrice,
+                CurrentStock = h.Batches.Where(b => b.Status == "Đạt chuẩn" || b.CurrentQuantity > 0).Sum(b => (decimal?)b.CurrentQuantity) ?? 0,
+                // [hieppm] End
                 IsActive = h.IsActive
             })
             .ToListAsync(ct);
@@ -78,6 +82,9 @@ public class HerbService : IHerbService
             Unit = herb.Unit,
             TasteProperties = herb.TasteProperties,
             StandardPrice = herb.StandardPrice,
+            // [hieppm] Start: Mapping LastImportPrice
+            LastImportPrice = herb.LastImportPrice,
+            // [hieppm] End
             MinThreshold = herb.MinThreshold,
             IsActive = herb.IsActive
         };
@@ -368,7 +375,11 @@ public class HerbService : IHerbService
                         UsableQuantity = usableQty,
                         DestroyQuantity = destrQty,
                         UnitCost = b.UnitCost,
-                        Status = b.Status
+                        Status = b.Status,
+                        // [hieppm] Start: Bổ sung Location và SupplierBatchCode theo Lô hàng nhập
+                        Location = !string.IsNullOrWhiteSpace(b.Location) ? b.Location : (b.Warehouse?.WarehouseName ?? "Kho Dược liệu trung tâm"),
+                        SupplierBatchCode = b.SupplierBatchCode
+                        // [hieppm] End
                     };
                 })
                 .ToList();
@@ -388,8 +399,12 @@ public class HerbService : IHerbService
                 ? earliestBatch.ExpiryDate.ToString("dd/MM/yyyy")
                 : "—";
 
-            var defaultLocation = activeBatches.FirstOrDefault()?.WarehouseName 
+            // [hieppm] Start: Vị trí kệ kho ưu tiên lấy theo vị trí lô hàng thực tế đã phân kệ
+            var firstWithLocation = activeBatches.FirstOrDefault(b => !string.IsNullOrWhiteSpace(b.Location) && b.CurrentQuantity > 0);
+            var defaultLocation = firstWithLocation?.Location 
+                ?? activeBatches.FirstOrDefault()?.WarehouseName 
                 ?? "Kho Dược liệu trung tâm";
+            // [hieppm] End
 
             return new HerbInventoryItemDto
             {
@@ -423,6 +438,9 @@ public class HerbService : IHerbService
         Unit = h.Unit,
         TasteProperties = h.TasteProperties,
         StandardPrice = h.StandardPrice,
+        // [hieppm] Start: Mapping LastImportPrice
+        LastImportPrice = h.LastImportPrice,
+        // [hieppm] End
         IsActive = h.IsActive
     };
 }
