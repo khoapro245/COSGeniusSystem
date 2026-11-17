@@ -18,6 +18,10 @@ public class BatchResponseDto
     public decimal DestroyQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public string Status { get; set; } = null!;
+    // [hieppm] Start: Bổ sung Location và SupplierBatchCode
+    public string? Location { get; set; }
+    public string? SupplierBatchCode { get; set; }
+    // [hieppm] End
 }
 
 /// <summary>Wrapper trả về danh sách lô kèm tổng tồn kho.</summary>

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -22,6 +22,12 @@ public partial class Herb
     public decimal MinThreshold { get; set; }
 
     public bool IsActive { get; set; }
+
+    // [hieppm] Start: Bổ sung IsColdStorageRequired & LastImportPrice theo yêu cầu PO
+    public bool IsColdStorageRequired { get; set; } = false;
+
+    public decimal? LastImportPrice { get; set; }
+    // [hieppm] End: Bổ sung IsColdStorageRequired & LastImportPrice theo yêu cầu PO
 
     public virtual ICollection<Batch> Batches { get; set; } = new List<Batch>();
 

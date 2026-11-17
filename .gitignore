@@ -40,5 +40,10 @@ ehthumbs.db
 docker-compose.override.yml.local
 *.env.local
 
+## Local application settings & environment overrides
+[Aa]ppsettings.Development.json
+[Aa]ppsettings.*.local.json
+[Aa]ppsettings.local.json
+
 ## Ensure .gitkeep files are always tracked
 !.gitkeep

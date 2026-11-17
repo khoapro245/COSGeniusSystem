@@ -91,7 +91,11 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<PurchaseOrderDto> CreatePOAsync(int userId, CreatePORequest request, CancellationToken ct = default)
     {
-        // [hieppm] Start: Validate chặt chẽ vị thuốc, trùng dòng, trạng thái và sinh mã POCode không trùng
+        // [hieppm] Start: Validate chặt chẽ vị thuốc, ngày giao dự kiến, trạng thái và sinh mã POCode không trùng
+        if (request.DeliveryDate.HasValue && request.DeliveryDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new BadRequestException("Ngày giao dự kiến không được nhỏ hơn ngày hiện tại.");
+        }
         await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);
@@ -118,6 +122,9 @@ public class PurchaseOrderService : IPurchaseOrderService
             Pocode = poCode,
             SupplierId = request.SupplierId,
             CreatedBy = userId > 0 ? userId : 1, // Default fallback user
+            // [hieppm] Start: Gắn RequestId nếu đơn PO được tạo từ Yêu cầu bổ sung kho
+            RequestId = request.RequestId.HasValue && request.RequestId.Value > 0 ? request.RequestId.Value : null,
+            // [hieppm] End: Gắn RequestId
             OrderDate = DateTime.Now,
             DeliveryDate = request.DeliveryDate,
             TotalAmount = totalAmount,
@@ -158,7 +165,11 @@ public class PurchaseOrderService : IPurchaseOrderService
             throw new BadRequestException($"Purchase order '{po.Pocode}' has status '{po.Status}'. Only draft purchase orders can be edited.");
         }
 
-        // [hieppm] Start: Validate danh sách vị thuốc & trạng thái khi cập nhật PO nháp
+        // [hieppm] Start: Validate danh sách vị thuốc, ngày giao dự kiến & trạng thái khi cập nhật PO nháp
+        if (request.DeliveryDate.HasValue && request.DeliveryDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new BadRequestException("Ngày giao dự kiến không được nhỏ hơn ngày hiện tại.");
+        }
         await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);

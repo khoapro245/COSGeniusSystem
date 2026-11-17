@@ -47,6 +47,9 @@ public class CreatePORequest
     public DateOnly? DeliveryDate { get; set; }
     public string? Note { get; set; }
     public string Status { get; set; } = "Nháp";
+    // [hieppm] Start: Bổ sung liên kết RequestId khi tạo đơn mua hàng từ Yêu cầu bổ sung kho
+    public int? RequestId { get; set; }
+    // [hieppm] End: Bổ sung liên kết RequestId
     public List<CreatePOItemRequest> Items { get; set; } = new();
 }
 
