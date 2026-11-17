@@ -69,6 +69,7 @@ public sealed record PlanOverview(PlanSummary Plan, PatientResponse Patient, int
     bool CanRequest, bool CanCancel, IReadOnlyList<ServiceProgress> Services,
     [property: System.Text.Json.Serialization.JsonIgnore] string? SessionDetailsJson = null)
 {
+    public string? RequestBlockedReason { get; init; }
     private static readonly System.Text.Json.JsonSerializerOptions _jsonOpts = new() { PropertyNameCaseInsensitive = true };
     public IReadOnlyList<PlannedSessionRequest> Sessions
     {
@@ -84,7 +85,7 @@ public sealed record SessionSummary(int SessionId, int PlanId, string? PlanCode,
     int SessionNumber, int PatientId, string? PatientCode, string PatientName, string? Phone,
     int? AssignedDoctorId, string? AssignedDoctorName, int? PerformedBy, string? PerformedByName,
     int? RequestedBy, DateTime? RequestedAt, DateOnly? ScheduledDate, DateTime? StartedAt,
-    DateTime? CompletedAt, string Status, string? ResultNote, byte[] RowVersion, string? Shift = null, string? RequestCode = null, int? QueueNumber = null);
+    DateTime? CompletedAt, string Status, string? ResultNote, byte[] RowVersion, string? Shift = null, string? RequestCode = null, int? QueueNumber = null, Guid? AdmissionId = null);
 public sealed record UsageResponse(int PlanDetailId, string ServiceName, int Quantity, int PerformedBy,
     DateTime ExecutionTime, string? ResultNote);
 public sealed record SessionOverview(SessionSummary Session, PlanOverview TreatmentPlan,

@@ -634,7 +634,10 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         return await db.TreatmentSessions.AsNoTracking().Where(s => s.PlanId == planId)
             .OrderBy(s => s.SessionNumber).Select(s => new TreatmentSessionDto
             {
-                SessionId = s.SessionId, SessionNo = s.SessionNumber, ExecutionTime = s.StartedAt,
+                SessionId = s.SessionId,
+                SessionNo = s.Plan.TreatmentSessions.Count(previous => previous.SessionNumber < s.SessionNumber
+                    && previous.Status != "EXPIRED" && previous.Status != "CANCELLED") + 1,
+                ExecutionTime = s.StartedAt,
                 DoctorName = s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName
                     : s.AssignedDoctor != null ? s.AssignedDoctor.FullName : null,
                 ResultNote = s.ResultNote, Status = s.Status
