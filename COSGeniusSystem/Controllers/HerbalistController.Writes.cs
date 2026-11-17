@@ -70,9 +70,15 @@ public partial class HerbalistController
                 entity.Details = await db.HerbalPrescriptionDetails.Where(d => input.PrescriptionIds.Contains(d.PrescriptionId))
           .Select(d => new HerbRequisitionDetail { PrescriptionId = d.PrescriptionId, PrescriptionDetailId = d.PrescriptionDetailId, HerbId = d.HerbId, RequestedQuantity = d.DosagePerDose * d.Prescription.TotalDoses, UnitSnapshot = "g" }).ToListAsync(ct);
         db.HerbRequisitions.Add(entity);
-        try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            entity.RequisitionCode = Code(entity.Id);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
         catch (DbUpdateException) { return Failure(409, "A prescription has changed or another user has created its requisition. Please reload."); }
-        return Data(new { entity.Id, code = Code(entity.Id) });
+        return Data(new { entity.Id, code = entity.RequisitionCode });
     }
 
     private static bool Matches(byte[] version, string submitted)
@@ -119,7 +125,13 @@ public partial class HerbalistController
         }
         // Touch header so its rowversion also protects partial receipt operations.
         r.Note=r.Note; db.Entry(r).Property(x=>x.Note).IsModified=true;
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await db.SaveChangesAsync(ct);
+        if (report != null)
+        {
+            report.ReportCode = $"BC-{report.Id:D6}";
+            await db.SaveChangesAsync(ct);
+        }
+        await tx.CommitAsync(ct);
         return Data(new {r.Id,r.Status,outboundId=outbound.Id,reportId=report?.Id,rowVersion=Convert.ToBase64String(r.RowVersion)});
     }
 
@@ -132,7 +144,7 @@ public partial class HerbalistController
         if(link==null) return Failure(404,"There is no active request.");
         var r=link.Request;
         if(link.CompletedAt.HasValue || await db.MedicineDispenses.AnyAsync(x=>x.PrescriptionId==id,ct)) return Failure(409,"The prescription has already been dispensed.");
-        if((r.Status!="RECEIVED" && r.Status!="DISCREPANCY") || !Matches(r.RowVersion,input.RowVersion)) return Failure(409,"Reconciliation is incomplete or the version has changed.");
+        if(r.Status!="RECEIVED" || !Matches(r.RowVersion,input.RowVersion)) return Failure(409,"Reconciliation is incomplete or the version has changed.");
         if(input.Allocations.Select(x=>x.OutboundDetailId).Distinct().Count()!=input.Allocations.Length || input.Allocations.Any(x=>x.QuantityGrams<=0 || decimal.Round(x.QuantityGrams,3)!=x.QuantityGrams || !r.Allocations.Any(a=>a.Id==x.OutboundDetailId))) return Failure(400,"Invalid allocation.");
         var needs=await db.HerbRequisitionDetails.Where(x=>x.RequestId==r.Id && x.PrescriptionId==id).GroupBy(x=>x.HerbId).Select(g=>new {HerbId=g.Key,Quantity=g.Sum(x=>x.RequestedQuantity)}).ToDictionaryAsync(x=>x.HerbId,x=>x.Quantity,ct);
         var supplied=input.Allocations.GroupBy(x=>r.Allocations.Single(a=>a.Id==x.OutboundDetailId).HerbId).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.QuantityGrams));
