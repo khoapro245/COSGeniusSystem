@@ -6,9 +6,8 @@ namespace COSGeniusSystem.Services;
 
 public static class PatientRequestGuard
 {
-    // Both creation paths hold this transaction-owned lock until their insert commits.
-    // The patient, rather than the date/doctor/plan, is the unit of exclusivity.
-    public static async Task EnsureAvailableAsync(ApplicationDbContext db, int patientId, CancellationToken ct)
+    // Serialize registration against examination creation without prohibiting different treatment plans.
+    public static async Task LockAsync(ApplicationDbContext db, int patientId, CancellationToken ct)
     {
         if (db.Database.IsRelational())
         {
@@ -18,6 +17,11 @@ public static class PatientRequestGuard
                 IF @result < 0 THROW 51034, 'Cannot lock patient request. Please retry.', 1;", ct);
         }
 
+    }
+
+    public static async Task EnsureAvailableAsync(ApplicationDbContext db, int patientId, CancellationToken ct)
+    {
+        await LockAsync(db, patientId, ct);
         if (await HasActiveExaminationAsync(db, patientId, ct))
             throw new ConflictException("The patient already has a pending or ongoing examination request. Complete it or cancel the pending request before creating a new one.");
         if (await HasActiveTreatmentAsync(db, patientId, ct))

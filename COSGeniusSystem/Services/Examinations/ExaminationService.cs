@@ -90,6 +90,11 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     {
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         if (starting) await DoctorAvailability.LockAsync(db, await DoctorIdAsync(actor, ct), ct);
+        if (starting)
+        {
+            var patientId = await db.ExaminationRegistrations.Where(r => r.RegistrationId == registrationId).Select(r => r.PatientId).SingleAsync(ct);
+            await PatientWorkAvailability.LockAsync(db, patientId, ct);
+        }
         var registration = db.Database.IsRelational()
             ? await db.ExaminationRegistrations
                 .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
@@ -126,6 +131,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<RegistrationResponse> CreateAsync(ClaimsPrincipal actor, CreateRegistrationRequest request, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         Reception(actor);
         Validate(request);
         await ValidateAssignmentAsync(request.PatientId, request, ct);
@@ -137,6 +143,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             : request.Session.Trim().ToUpperInvariant();
         if (session is not ("MORNING" or "AFTERNOON"))
             session = now.AddHours(7).Hour < 12 ? "MORNING" : "AFTERNOON";
+        AppointmentTime.ValidateMorning(businessDate, session);
         var symptoms = request.Symptoms ?? request.DoctorAdvice;
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
@@ -168,6 +175,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<RegistrationResponse> UpdateAsync(ClaimsPrincipal actor, int registrationId, UpdateRegistrationRequest request, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         Reception(actor);
         Validate(request);
         await WriteAsync(actor, registrationId, false, async registration =>
@@ -195,6 +203,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 : request.Session.Trim().ToUpperInvariant();
             if (session is not ("MORNING" or "AFTERNOON"))
                 session = registration.Session;
+            AppointmentTime.ValidateMorning(date, session);
             registration.Session = session;
             registration.DoctorId = request.DoctorId;
             registration.ContactId = request.ContactId;
@@ -209,6 +218,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<RegistrationResponse> CancelAsync(ClaimsPrincipal actor, int registrationId, CancelTreatment request, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         Reception(actor);
         Validate(request);
         if (string.IsNullOrWhiteSpace(request.Reason)) throw new BadRequestException("A cancellation reason is required.");
@@ -230,6 +240,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         Validate(query);
         if (query.FromDate > query.ToDate) throw new BadRequestException("The start date must be on or before the end date.");
         var q = db.ExaminationRegistrations.AsNoTracking();
@@ -317,23 +328,14 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
         var total = await q.CountAsync(ct);
         var dbItems = await q.OrderByDescending(r => r.BusinessDate)
-            .ThenBy(r =>
-                (r.Status == "IN_PROGRESS" || r.Status == "Đang khám") ? 1 :
-                (r.Status == "WAITING" || r.Status == "Chờ khám") ? 2 :
-                (r.Status == "COMPLETED" || r.Status == "Đã hoàn tất" || r.Status == "Hoàn tất") ? 3 : 4)
-            .ThenByDescending(r => r.IsPriority)
-            .ThenBy(r => r.RegisteredAt)
             .ThenBy(r => r.QueueNumber)
+            .ThenBy(r => r.RegistrationId)
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(RegistrationProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))))
             .ToListAsync(ct);
 
-        var items = dbItems.Select((r, index) =>
-            r with { QueueNumber = ((query.PageNumber - 1) * query.PageSize) + index + 1 })
-            .ToList();
-
-        return new(items, query.PageNumber, query.PageSize, total);
+        return new(dbItems, query.PageNumber, query.PageSize, total);
     }
 
     private static string? NormalizeStatus(string? raw)
@@ -341,6 +343,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         if (string.IsNullOrWhiteSpace(raw)) return null;
         var trimmed = raw.Trim();
         var upper = trimmed.ToUpperInvariant();
+        if (upper is "EXPIRED" or "QUÁ HẠN" or "QUA HAN") return "EXPIRED";
         if (upper is "ALL" or "TẤT CẢ" or "TAT CA") return null;
 
         if (upper is "WAITING" or "CHỜ KHÁM" or "CHO KHAM" or "CHO_KHAM" or "CHỜ ĐIỀU TRỊ" or "CHO DIEU TRI")
@@ -357,6 +360,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<ExaminationResponse> GetAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         var registration = await db.ExaminationRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct)
             ?? throw new NotFoundException("Examination registration was not found.");
         await AccessAsync(actor, registration, false, ct);
@@ -383,6 +387,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     public async Task<MedicalRecordResponse> StartAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct)
     {
+        await AppointmentExpiry.RefreshAsync(db, ct);
         await WriteAsync(actor, registrationId, true, async registration =>
         {
             var existing = await db.MedicalRecords.SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct);
@@ -393,8 +398,10 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                     throw new ConflictException("The registration and examination record are inconsistent.");
                 return true;
             }
-            if (registration.Status != "WAITING" || registration.BusinessDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("Only a pending registration can be started.");
+            if (registration.Status != "WAITING" || registration.BusinessDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))
+                throw new ConflictException("Only a pending registration that has not expired can be started.");
             await DoctorAvailability.EnsureAvailableAsync(db, registration.DoctorId, ct);
+            await PatientWorkAvailability.EnsureAvailableAsync(db, registration.PatientId, ct);
             var now = DateTime.UtcNow;
             var allergy = await db.Patients.Where(p => p.PatientId == registration.PatientId).Select(p => p.AllergyNote).SingleAsync(ct);
             registration.Status = "IN_PROGRESS";

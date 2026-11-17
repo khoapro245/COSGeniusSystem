@@ -92,6 +92,7 @@ public partial class ApplicationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        ConfigureTreatmentAdmissions(modelBuilder);
         modelBuilder.Entity<AuditDetail>(entity =>
         {
             entity.HasKey(e => e.AuditDetailId).HasName("PK__AuditDet__1E1C703DAB62BCCE");

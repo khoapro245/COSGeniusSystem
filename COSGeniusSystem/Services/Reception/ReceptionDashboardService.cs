@@ -55,7 +55,8 @@ public sealed class ReceptionDashboardService(ApplicationDbContext db) : IRecept
             .Select(s => new
             {
                 s.SessionId,
-                s.SessionNumber,
+                SessionNumber = s.Plan.TreatmentSessions.Count(previous => previous.SessionNumber < s.SessionNumber
+                    && previous.Status != "EXPIRED" && previous.Status != "CANCELLED") + 1,
                 RequestedAt = s.RequestedAt ?? s.CreatedAt,
                 PlannedSessionCount = s.Plan != null ? s.Plan.PlannedSessionCount : 0,
                 PatientCode = s.Plan != null && s.Plan.Record != null && s.Plan.Record.Patient != null ? (s.Plan.Record.Patient.PatientCode ?? "") : "",
