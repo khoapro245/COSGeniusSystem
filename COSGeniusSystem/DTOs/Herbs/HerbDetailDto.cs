@@ -14,6 +14,9 @@ public class HerbDetailDto
     public string? TasteProperties { get; set; }
 
     public decimal StandardPrice { get; set; }
+    // [hieppm] Start: Bổ sung LastImportPrice
+    public decimal? LastImportPrice { get; set; }
+    // [hieppm] End
     public decimal MinThreshold { get; set; }
     public bool IsActive { get; set; }
 }

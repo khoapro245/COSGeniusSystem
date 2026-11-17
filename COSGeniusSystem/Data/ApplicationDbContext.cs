@@ -371,11 +371,14 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.TotalCost).HasColumnType("decimal(18, 2)");
             entity.Property(e => e.WarehouseId).HasColumnName("WarehouseID");
 
-            // [hieppm] Start: Mapping cột Status cho GoodsReceipt theo Warehouse_Update.sql
+            // [hieppm] Start: Mapping cột Status, DriverName, VehicleNumber, DocumentUrl cho GoodsReceipt
             entity.Property(e => e.Status)
                 .HasMaxLength(50)
                 .HasDefaultValue("PENDING_APPROVAL");
-            // [hieppm] End: Mapping cột Status cho GoodsReceipt theo Warehouse_Update.sql
+            entity.Property(e => e.DriverName).HasMaxLength(100);
+            entity.Property(e => e.VehicleNumber).HasMaxLength(50);
+            entity.Property(e => e.DocumentUrl).HasMaxLength(500);
+            // [hieppm] End: Mapping cột Status, DriverName, VehicleNumber, DocumentUrl cho GoodsReceipt
 
             entity.HasOne(d => d.Po).WithMany(p => p.GoodsReceipts)
                 .HasForeignKey(d => d.Poid)
@@ -409,6 +412,9 @@ public partial class ApplicationDbContext : DbContext
             entity.Property(e => e.MinThreshold).HasColumnType("decimal(12, 2)");
             entity.Property(e => e.ScientificName).HasMaxLength(200);
             entity.Property(e => e.StandardPrice).HasColumnType("decimal(18, 2)");
+            // [hieppm] Start: Mapping LastImportPrice
+            entity.Property(e => e.LastImportPrice).HasColumnType("decimal(18, 2)");
+            // [hieppm] End
             entity.Property(e => e.TasteProperties).HasMaxLength(255);
             entity.Property(e => e.Unit).HasMaxLength(30);
         });
