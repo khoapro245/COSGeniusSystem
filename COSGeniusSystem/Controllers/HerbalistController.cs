@@ -41,7 +41,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
         """).ToListAsync(ct);
     private async Task<bool> SchemaReady(CancellationToken ct) => (await SchemaIssues(ct)).Count == 0;
     private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier) ?? throw new InvalidOperationException("The user identifier is missing."));
-    private static string Code(int id) => $"PL{id:D5}";
+    private static string Code(int id) => $"PL-{id:D6}";
     private static object Page<T>(List<T> items, int count, HerbalistFilter f) => new
     {
         items, totalCount = count, f.PageNumber, f.PageSize,
