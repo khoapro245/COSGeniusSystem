@@ -80,13 +80,13 @@ public class UserService : IUserService
     {
         var username = request.Username.Trim();
         if (await _context.Users.AnyAsync(u => u.Username.ToLower() == username.ToLower(), ct))
-            return (null, $"Tên đăng nhập '{username}' đã được sử dụng.");
+            return (null, $"Username '{username}' is already in use.");
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = request.Email.Trim().ToLower();
             if (await _context.Users.AnyAsync(u => u.Email != null && u.Email.ToLower() == email, ct))
-                return (null, $"Email '{request.Email}' đã được đăng ký.");
+                return (null, $"Email '{request.Email}' is already registered.");
         }
 
         var roleCode = request.RoleCode.Trim().ToUpper();
@@ -155,7 +155,7 @@ public class UserService : IUserService
                 .AnyAsync(u => u.UserId != id && u.Email != null && u.Email.ToLower() == email, ct);
 
             if (emailTaken)
-                return (null, $"Email '{request.Email}' đã thuộc về một tài khoản khác.");
+                return (null, $"Email '{request.Email}' belongs to another account.");
         }
 
         user.FullName = request.FullName.Trim();
@@ -192,11 +192,11 @@ public class UserService : IUserService
     public async Task<(bool Success, bool IsActive, string? Error)> ToggleUserStatusAsync(int id, int currentUserId, CancellationToken ct = default)
     {
         if (id == currentUserId)
-            return (false, true, "Bạn không thể tự vô hiệu hóa tài khoản quản trị đang đăng nhập của chính mình.");
+            return (false, true, "You cannot disable your own currently signed-in administrator account.");
 
         var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == id, ct);
         if (user is null)
-            return (false, false, "Không tìm thấy người dùng.");
+            return (false, false, "User was not found.");
 
         user.IsActive = !user.IsActive;
         await _context.SaveChangesAsync(ct);

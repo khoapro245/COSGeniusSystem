@@ -56,12 +56,12 @@ public class NotificationService : INotificationService
 
         if (notification == null)
         {
-            throw new NotFoundException($"Không tìm thấy thông báo với ID: {notificationId}");
+            throw new NotFoundException($"Notification ID {notificationId} was not found.");
         }
 
         if (notification.UserId != userId)
         {
-            throw new ForbiddenException("Bạn không có quyền thao tác trên thông báo này.");
+            throw new ForbiddenException("You do not have permission to modify this notification.");
         }
 
         if (!notification.IsRead)

@@ -60,19 +60,19 @@ public class GoodsReceiptDto
 
 public class CreateGoodsReceiptItemRequest
 {
-    [Required(ErrorMessage = "Vị thuốc là bắt buộc.")]
+    [Required(ErrorMessage = "Herb is required.")]
     public int HerbId { get; set; }
 
-    [Required(ErrorMessage = "Mã lô nhà cung cấp là bắt buộc nhập.")]
+    [Required(ErrorMessage = "Supplier batch code is required.")]
     public string SupplierBatchCode { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Hạn sử dụng là bắt buộc.")]
+    [Required(ErrorMessage = "Expiry date is required.")]
     public DateOnly ExpiryDate { get; set; }
 
-    [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhập phải lớn hơn 0.")]
+    [Range(0.001, double.MaxValue, ErrorMessage = "Received quantity must be greater than 0.")]
     public decimal Quantity { get; set; }
 
-    [Range(0, double.MaxValue, ErrorMessage = "Đơn giá phải lớn hơn hoặc bằng 0.")]
+    [Range(0, double.MaxValue, ErrorMessage = "Unit price must be greater than or equal to 0.")]
     public decimal UnitPrice { get; set; }
 
     // [hieppm] Start: Bổ sung StorageLocationId
@@ -85,7 +85,7 @@ public class CreateGoodsReceiptRequest
 {
     public int? Poid { get; set; }
 
-    [Required(ErrorMessage = "Kho nhập là bắt buộc.")]
+    [Required(ErrorMessage = "Receiving warehouse is required.")]
     public int WarehouseId { get; set; } = 1;
 
     public string? Note { get; set; }

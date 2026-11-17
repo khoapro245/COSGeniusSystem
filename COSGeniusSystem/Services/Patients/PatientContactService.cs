@@ -11,19 +11,19 @@ public sealed class PatientContactService(ApplicationDbContext db) : IPatientCon
 {
     private async Task EnsurePatientAsync(int patientId, CancellationToken ct)
     {
-        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct)) throw new NotFoundException("Patient not found.");
+        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct)) throw new NotFoundException("Patient was not found.");
     }
 
     private async Task<PatientContact> FindAsync(int patientId, int contactId, CancellationToken ct)
     {
         await EnsurePatientAsync(patientId, ct);
-        return await db.PatientContacts.SingleOrDefaultAsync(p => p.PatientId == patientId && p.ContactId == contactId, ct) ?? throw new NotFoundException("Contact not found for this patient.");
+        return await db.PatientContacts.SingleOrDefaultAsync(p => p.PatientId == patientId && p.ContactId == contactId, ct) ?? throw new NotFoundException("The contact was not found for this patient.");
     }
 
     public async Task<PagedResult<PatientContactResponse>> GetAllAsync(int patientId, int pageNumber, int pageSize, CancellationToken ct)
     {
         if (pageNumber < 1 || pageNumber > 1000000 || pageSize < 1 || pageSize > 100)
-            throw new BadRequestException("Page number must be 1 to 1000000 and page size must be 1 to 100.");
+            throw new BadRequestException("Page number must be between 1 and 1,000,000 and page size between 1 and 100.");
         await EnsurePatientAsync(patientId, ct);
         var totalCount = await db.PatientContacts.CountAsync(p => p.PatientId == patientId, ct);
         var items = (await db.PatientContacts.AsNoTracking().Where(p => p.PatientId == patientId)

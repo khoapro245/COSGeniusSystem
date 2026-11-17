@@ -17,4 +17,9 @@ public interface IDoctorService
     /// Lấy toàn bộ dữ liệu tổng quan phòng khám & danh sách bác sĩ (tối ưu 1 endpoint duy nhất cho Tiếp tân).
     /// </summary>
     Task<DoctorClinicOverviewDto> GetDoctorClinicOverviewAsync(DoctorClinicFilterQuery query, CancellationToken ct = default);
+
+    /// <summary>
+    /// Đăng ký thông tin hồ sơ cho bác sĩ.
+    /// </summary>
+    Task<DoctorDetailDto> CreateDoctorAsync(CreateDoctorRequestDto request, CancellationToken ct = default);
 }

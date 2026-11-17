@@ -6,5 +6,5 @@ public sealed class PatientPhoneAttribute : ValidationAttribute {
   try { PatientPhone.Validate(value as string); return true; }
   catch (BadRequestException) { return false; }
  }
- public PatientPhoneAttribute() { ErrorMessage = "Số điện thoại không đúng định dạng."; }
+ public PatientPhoneAttribute() { ErrorMessage = "Invalid phone number format."; }
 }

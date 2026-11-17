@@ -96,7 +96,7 @@ public class HerbService : IHerbService
     {
         // Validation: StandardPrice phải > 0
         if (request.StandardPrice <= 0)
-            return (null, "StandardPrice must be greater than 0.");
+            return (null, "Standard price must be greater than 0.");
 
         // Kiểm tra trùng HerbCode hoặc CommonName
         var isDuplicate = await _context.Herbs.AnyAsync(h =>
@@ -104,7 +104,7 @@ public class HerbService : IHerbService
             h.CommonName == request.CommonName);
 
         if (isDuplicate)
-            return (null, "HerbCode or CommonName already exists.");
+            return (null, "The herb code or name already exists.");
 
         var entity = new Herb
         {
@@ -134,7 +134,7 @@ public class HerbService : IHerbService
 
         // Validation: StandardPrice phải > 0
         if (request.StandardPrice <= 0)
-            return (null, "StandardPrice must be greater than 0.");
+            return (null, "Standard price must be greater than 0.");
 
         // Kiểm tra trùng CommonName với vị thuốc khác (khác id hiện tại)
         var isDuplicateName = await _context.Herbs.AnyAsync(h =>
@@ -142,13 +142,13 @@ public class HerbService : IHerbService
             h.HerbId != id);
 
         if (isDuplicateName)
-            return (null, $"CommonName '{request.CommonName}' already exists in another herb.");
+            return (null, $"Name '{request.CommonName}' is already used by another herb.");
 
         entity.CommonName = request.CommonName;
         entity.ScientificName = request.ScientificName;
         // Changing this label would reinterpret existing batch balances and history.
         if (entity.Unit != request.Unit && await _context.Batches.AnyAsync(b => b.HerbId == id))
-            return (null, "Không thể đổi đơn vị khi vị thuốc đã có lô. Cần quy trình chuyển đổi dữ liệu có đối soát.");
+            return (null, "The unit cannot be changed when the herb has existing batches. A reconciled data conversion process is required.");
         entity.Unit = request.Unit;
         entity.TasteProperties = request.TasteProperties;
         entity.StandardPrice = request.StandardPrice;

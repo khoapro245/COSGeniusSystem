@@ -4,10 +4,10 @@ namespace COSGeniusSystem.DTOs;
 
 public class CreateHerbRequest
 {
-    [Required(ErrorMessage = "HerbCode is required.")]
+    [Required(ErrorMessage = "Herb code is required.")]
     public string HerbCode { get; set; } = null!;
 
-    [Required(ErrorMessage = "CommonName is required.")]
+    [Required(ErrorMessage = "Herb name is required.")]
     public string CommonName { get; set; } = null!;
 
     public string? ScientificName { get; set; }
@@ -18,7 +18,7 @@ public class CreateHerbRequest
 
     public string? TasteProperties { get; set; }
 
-    [Required(ErrorMessage = "StandardPrice is required.")]
+    [Required(ErrorMessage = "Standard price is required.")]
     public decimal StandardPrice { get; set; }
 
     public decimal MinThreshold { get; set; } = 0;

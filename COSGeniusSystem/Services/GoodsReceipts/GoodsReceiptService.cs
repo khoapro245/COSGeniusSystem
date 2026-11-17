@@ -92,7 +92,7 @@ public class GoodsReceiptService : IGoodsReceiptService
     {
         if (request.Items == null || request.Items.Count == 0)
         {
-            throw new BadRequestException("Phiếu nhập kho phải có ít nhất 1 dòng vị thuốc.");
+            throw new BadRequestException("A goods receipt must contain at least one herb line.");
         }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -102,22 +102,22 @@ public class GoodsReceiptService : IGoodsReceiptService
         {
             if (string.IsNullOrWhiteSpace(item.SupplierBatchCode))
             {
-                throw new BadRequestException("Mã lô nhà cung cấp là bắt buộc nhập cho từng dòng.");
+                throw new BadRequestException("A supplier batch code is required for each line.");
             }
 
             if (item.Quantity <= 0)
             {
-                throw new BadRequestException("Số lượng thực nhận phải lớn hơn 0.");
+                throw new BadRequestException("The actual received quantity must be greater than 0.");
             }
 
             if (item.ExpiryDate <= today)
             {
-                throw new BadRequestException($"Hạn sử dụng ({item.ExpiryDate:dd/MM/yyyy}) phải lớn hơn ngày hiện tại ({today:dd/MM/yyyy}).");
+                throw new BadRequestException($"The expiry date ({item.ExpiryDate:dd/MM/yyyy}) must be after today ({today:dd/MM/yyyy}).");
             }
 
             if (item.UnitPrice < 0)
             {
-                throw new BadRequestException("Đơn giá nhập không được nhỏ hơn 0.");
+                throw new BadRequestException("The receipt unit price must not be negative.");
             }
         }
 
@@ -182,12 +182,12 @@ public class GoodsReceiptService : IGoodsReceiptService
             // [hieppm] Start: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
             if (linkedPo == null)
             {
-                throw new NotFoundException($"Không tìm thấy đơn mua hàng ID {request.Poid.Value}.");
+                throw new NotFoundException($"Purchase order ID {request.Poid.Value} was not found.");
             }
             var poStatusLower = (linkedPo.Status ?? string.Empty).Trim().ToLower();
             if (poStatusLower == "nháp" || poStatusLower == "draft" || poStatusLower == "mới tạo")
             {
-                throw new BadRequestException($"Đơn mua hàng '{linkedPo.Pocode}' đang ở trạng thái '{linkedPo.Status}', chưa phát hành nên không thể lập phiếu nhập kho.");
+                throw new BadRequestException($"Purchase order '{linkedPo.Pocode}' has status '{linkedPo.Status}' and has not been issued, so a goods receipt cannot be created.");
             }
             // [hieppm] End: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
         }
@@ -315,7 +315,7 @@ public class GoodsReceiptService : IGoodsReceiptService
         var receipt = await _context.GoodsReceipts.FindAsync(new object[] { receiptId }, ct);
         if (receipt == null)
         {
-            throw new NotFoundException($"Không tìm thấy phiếu nhập ID {receiptId}.");
+            throw new NotFoundException($"Goods receipt ID {receiptId} was not found.");
         }
 
         receipt.Status = GoodsReceiptStatusConstants.PendingApproval;
@@ -337,13 +337,13 @@ public class GoodsReceiptService : IGoodsReceiptService
 
         if (receipt == null)
         {
-            throw new NotFoundException($"Không tìm thấy phiếu nhập kho ID {receiptId}.");
+            throw new NotFoundException($"Goods receipt ID {receiptId} was not found.");
         }
 
         if (receipt.Status.Equals(GoodsReceiptStatusConstants.Approved, StringComparison.OrdinalIgnoreCase) ||
             receipt.Status.Equals("Đã duyệt", StringComparison.OrdinalIgnoreCase))
         {
-            throw new BadRequestException($"Phiếu nhập '{receipt.ReceiptCode}' đã được phê duyệt trước đó.");
+            throw new BadRequestException($"Goods receipt '{receipt.ReceiptCode}' has already been approved.");
         }
 
         if (request.IsApproved)

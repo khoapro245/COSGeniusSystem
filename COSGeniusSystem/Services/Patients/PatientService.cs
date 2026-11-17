@@ -13,7 +13,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     private async Task<Patient> FindAsync(int patientId, CancellationToken ct)
     {
         return await db.Patients.SingleOrDefaultAsync(p => p.PatientId == patientId, ct)
-               ?? throw new NotFoundException($"Patient with id {patientId} was not found.");
+               ?? throw new NotFoundException($"Patient {patientId} was not found.");
     }
 
     public async Task<List<PatientResponse>> CheckDuplicatePhoneAsync(string? phone, int? excludePatientId, CancellationToken ct) {
@@ -38,7 +38,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         int? doctorUserId = null)
     {
         if (pageNumber < 1 || pageNumber > 1000000 || pageSize < 1 || pageSize > 100)
-            throw new BadRequestException("Page number must be 1 to 1000000 and page size must be 1 to 100.");
+            throw new BadRequestException("Page number must be between 1 and 1,000,000 and page size between 1 and 100.");
         var query = db.Patients.AsNoTracking();
 
         if (doctorUserId.HasValue)
@@ -104,7 +104,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         {
             var clean = NormalizeContactPhone(request.ContactPhone);
             if (clean != null && !System.Text.RegularExpressions.Regex.IsMatch(clean, @"^0\d{9,10}$"))
-                throw new BadRequestException("Số điện thoại người liên hệ phải gồm 10 hoặc 11 chữ số bắt đầu bằng 0.");
+                throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
             request.ContactPhone = clean;
         }
         else
@@ -135,7 +135,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         var entity = await db.Patients
             .Include(p => p.PatientContacts)
             .SingleOrDefaultAsync(p => p.PatientId == patientId, ct)
-            ?? throw new NotFoundException($"Patient with id {patientId} was not found.");
+            ?? throw new NotFoundException($"Patient {patientId} was not found.");
 
         await WarnDuplicateAsync(request, patientId, ct);
         PatientMapping.Apply(request, entity);
@@ -194,16 +194,16 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     private async Task ValidatePatientUpdateAsync(int patientId, PatientRequest request, CancellationToken ct)
     {
         if (patientId <= 0)
-            throw new BadRequestException("Mã bệnh nhân không hợp lệ.");
+            throw new BadRequestException("Invalid patient identifier.");
 
         if (string.IsNullOrWhiteSpace(request.FullName))
-            throw new BadRequestException("Họ và tên bệnh nhân là bắt buộc và không được để trống.");
+            throw new BadRequestException("Patient full name is required and must not be blank.");
 
         if (request.FullName.Trim().Length > 100)
-            throw new BadRequestException("Họ và tên không được vượt quá 100 ký tự.");
+            throw new BadRequestException("Full name must not exceed 100 characters.");
 
         if (string.IsNullOrWhiteSpace(request.Phone))
-            throw new BadRequestException("Số điện thoại là bắt buộc.");
+            throw new BadRequestException("Phone number is required.");
 
         request.Phone = PatientPhone.Validate(request.Phone, required: true);
 
@@ -211,48 +211,48 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         if (request.DateOfBirth.HasValue)
         {
             if (request.DateOfBirth.Value > today)
-                throw new BadRequestException("Ngày sinh không được lớn hơn ngày hiện tại.");
+                throw new BadRequestException("Date of birth must not be in the future.");
             if (request.DateOfBirth.Value < today.AddYears(-150))
-                throw new BadRequestException("Ngày sinh không hợp lệ (tuổi không được vượt quá 150 tuổi).");
+                throw new BadRequestException("Invalid date of birth; age must not exceed 150 years.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.IdentityCard))
         {
             var idCard = request.IdentityCard.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(idCard, @"^(\d{9}|\d{12})$"))
-                throw new BadRequestException("Số CCCD/CMND phải gồm 9 hoặc 12 chữ số.");
+                throw new BadRequestException("Identity card number must contain 9 or 12 digits.");
 
             var duplicate = await db.Patients.AnyAsync(p => p.PatientId != patientId && p.IdentityCard == idCard, ct);
             if (duplicate)
-                throw new BadRequestException("Số CCCD/CMND này đã được sử dụng bởi bệnh nhân khác trong hệ thống.");
+                throw new BadRequestException("This identity card number is already used by another patient in the system.");
         }
 
         if (request.IdentityCardIssuedDate.HasValue)
         {
             if (request.IdentityCardIssuedDate.Value > today)
-                throw new BadRequestException("Ngày cấp CCCD không được lớn hơn ngày hiện tại.");
+                throw new BadRequestException("Identity card issue date must not be in the future.");
             if (request.DateOfBirth.HasValue && request.IdentityCardIssuedDate.Value < request.DateOfBirth.Value)
-                throw new BadRequestException("Ngày cấp CCCD không thể trước ngày sinh.");
+                throw new BadRequestException("Identity card issue date must not be before the date of birth.");
             if (request.DateOfBirth.HasValue && request.IdentityCardIssuedDate.Value < request.DateOfBirth.Value.AddYears(14))
-                throw new BadRequestException("Bệnh nhân phải đủ từ 14 tuổi trở lên tại thời điểm được cấp CCCD/CMND.");
+                throw new BadRequestException("The patient must be at least 14 years old when the identity card is issued.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = request.Email.Trim();
             if (email.Length > 100)
-                throw new BadRequestException("Email không được vượt quá 100 ký tự.");
+                throw new BadRequestException("Email must not exceed 100 characters.");
             if (!new EmailAddressAttribute().IsValid(email))
-                throw new BadRequestException("Địa chỉ email không đúng định dạng.");
+                throw new BadRequestException("Invalid email address format.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Gender))
         {
             var g = request.Gender.Trim().ToLowerInvariant();
             if (g.Length > 20)
-                throw new BadRequestException("Giới tính không được vượt quá 20 ký tự.");
+                throw new BadRequestException("Gender must not exceed 20 characters.");
             if (g is not ("nam" or "nữ" or "nu" or "khác" or "khac" or "male" or "female" or "other"))
-                throw new BadRequestException("Giới tính phải là 'Nam', 'Nữ' hoặc 'Khác'.");
+            throw new BadRequestException("Invalid gender. Select male, female, or other.");
         }
 
         if (request is UpdatePatientRequest updateReq)
@@ -262,7 +262,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
                 var cleanContactPhone = NormalizeContactPhone(updateReq.ContactPhone);
                 if (cleanContactPhone == null || !System.Text.RegularExpressions.Regex.IsMatch(cleanContactPhone, @"^0\d{9,10}$"))
                 {
-                    throw new BadRequestException("Số điện thoại người liên hệ phải gồm 10 hoặc 11 chữ số bắt đầu bằng 0.");
+                    throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
                 }
                 updateReq.ContactPhone = cleanContactPhone;
             }
@@ -276,13 +276,13 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
                 foreach (var c in updateReq.Contacts)
                 {
                     if (string.IsNullOrWhiteSpace(c.FullName))
-                        throw new BadRequestException("Họ tên người liên hệ không được để trống.");
+                        throw new BadRequestException("Contact full name must not be blank.");
                     if (!string.IsNullOrWhiteSpace(c.Phone))
                     {
                         var cleanP = NormalizeContactPhone(c.Phone);
                         if (cleanP == null || !System.Text.RegularExpressions.Regex.IsMatch(cleanP, @"^0\d{9,10}$"))
                         {
-                            throw new BadRequestException("Số điện thoại người liên hệ phải gồm 10 hoặc 11 chữ số bắt đầu bằng 0.");
+                            throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
                         }
                         c.Phone = cleanP;
                     }
@@ -303,7 +303,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         if (await db.PatientContacts.AnyAsync(p => p.PatientId == patientId, ct)
             || await db.MedicalRecords.AnyAsync(p => p.PatientId == patientId, ct)
             || await db.ExaminationRegistrations.AnyAsync(p => p.PatientId == patientId, ct))
-            throw new ConflictException("Patient has contacts or medical records. Remove related records before deleting the patient.");
+            throw new ConflictException("The patient has contacts or examination records. Delete the related data before deleting the patient.");
 
         db.Patients.Remove(entity);
         await db.SaveChangesAsync(ct);
@@ -313,9 +313,9 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         if (request.DateOfBirth > today || request.IdentityCardIssuedDate > today)
-            throw new BadRequestException("Birth date and identity card issue date cannot be in the future.");
+            throw new BadRequestException("Date of birth and identity card issue date must not be in the future.");
         if (request.IdentityCardIssuedDate < request.DateOfBirth)
-            throw new BadRequestException("Identity card issue date cannot precede birth date.");
+            throw new BadRequestException("Identity card issue date must not be before the date of birth.");
     }
     #endregion
 
@@ -357,7 +357,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
             .SingleOrDefaultAsync(p => p.PatientId == id, ct);
 
         if (p is null)
-            throw new NotFoundException($"Patient with id {id} was not found.");
+            throw new NotFoundException($"Patient {id} was not found.");
 
         return new PatientDetailDto
         {
@@ -394,37 +394,37 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     {
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         if (request.DateOfBirth > today || request.IdentityCardIssuedDate > today)
-            throw new BadRequestException("Ngày sinh và ngày cấp CCCD không được lớn hơn ngày hiện tại.");
+            throw new BadRequestException("Date of birth and identity card issue date must not be in the future.");
         if (request.IdentityCardIssuedDate < request.DateOfBirth)
-            throw new BadRequestException("Ngày cấp CCCD không thể trước ngày sinh.");
+            throw new BadRequestException("Identity card issue date must not be before the date of birth.");
         if (request.DateOfBirth.HasValue && request.IdentityCardIssuedDate.HasValue && request.IdentityCardIssuedDate.Value < request.DateOfBirth.Value.AddYears(14))
-            throw new BadRequestException("Bệnh nhân phải đủ từ 14 tuổi trở lên tại thời điểm được cấp CCCD/CMND.");
+            throw new BadRequestException("The patient must be at least 14 years old when the identity card is issued.");
 
         if (!string.IsNullOrWhiteSpace(request.Phone))
         {
             var phone = request.Phone.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^(0[35789]\d{8}|0\d{9})$"))
-                throw new BadRequestException("Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0.");
+                throw new BadRequestException("Phone number must contain 10 digits and start with 0.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.IdentityCard))
         {
             var idCard = request.IdentityCard.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(idCard, @"^(\d{9}|\d{12})$"))
-                throw new BadRequestException("Số CCCD/CMND phải gồm 9 hoặc 12 chữ số.");
+                throw new BadRequestException("Identity card number must contain 9 or 12 digits.");
 
             var duplicate = await db.Patients.AnyAsync(p => p.IdentityCard == idCard, ct);
             if (duplicate)
-                throw new BadRequestException("Số CCCD/CMND này đã được sử dụng bởi bệnh nhân khác trong hệ thống.");
+                throw new BadRequestException("This identity card number is already used by another patient in the system.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = request.Email.Trim();
             if (email.Length > 100)
-                throw new BadRequestException("Email không được vượt quá 100 ký tự.");
+                throw new BadRequestException("Email must not exceed 100 characters.");
             if (!new EmailAddressAttribute().IsValid(email))
-                throw new BadRequestException("Địa chỉ email không đúng định dạng.");
+                throw new BadRequestException("Invalid email address format.");
         }
 
         string? normGender = null;
@@ -480,41 +480,41 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
             .SingleOrDefaultAsync(p => p.PatientId == id, ct);
 
         if (patient is null)
-            throw new NotFoundException($"Patient with id {id} was not found.");
+            throw new NotFoundException($"Patient {id} was not found.");
 
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         if (request.DateOfBirth > today || request.IdentityCardIssuedDate > today)
-            throw new BadRequestException("Ngày sinh và ngày cấp CCCD không được lớn hơn ngày hiện tại.");
+            throw new BadRequestException("Date of birth and identity card issue date must not be in the future.");
         if (request.IdentityCardIssuedDate < request.DateOfBirth)
-            throw new BadRequestException("Ngày cấp CCCD không thể trước ngày sinh.");
+            throw new BadRequestException("Identity card issue date must not be before the date of birth.");
         if (request.DateOfBirth.HasValue && request.IdentityCardIssuedDate.HasValue && request.IdentityCardIssuedDate.Value < request.DateOfBirth.Value.AddYears(14))
-            throw new BadRequestException("Bệnh nhân phải đủ từ 14 tuổi trở lên tại thời điểm được cấp CCCD/CMND.");
+            throw new BadRequestException("The patient must be at least 14 years old when the identity card is issued.");
 
         if (!string.IsNullOrWhiteSpace(request.Phone))
         {
             var phone = request.Phone.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(phone, @"^(0[35789]\d{8}|0\d{9})$"))
-                throw new BadRequestException("Số điện thoại phải gồm 10 chữ số bắt đầu bằng 0.");
+                throw new BadRequestException("Phone number must contain 10 digits and start with 0.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.IdentityCard))
         {
             var idCard = request.IdentityCard.Trim();
             if (!System.Text.RegularExpressions.Regex.IsMatch(idCard, @"^(\d{9}|\d{12})$"))
-                throw new BadRequestException("Số CCCD/CMND phải gồm 9 hoặc 12 chữ số.");
+                throw new BadRequestException("Identity card number must contain 9 or 12 digits.");
 
             var duplicate = await db.Patients.AnyAsync(p => p.PatientId != id && p.IdentityCard == idCard, ct);
             if (duplicate)
-                throw new BadRequestException("Số CCCD/CMND này đã được sử dụng bởi bệnh nhân khác trong hệ thống.");
+                throw new BadRequestException("This identity card number is already used by another patient in the system.");
         }
 
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = request.Email.Trim();
             if (email.Length > 100)
-                throw new BadRequestException("Email không được vượt quá 100 ký tự.");
+                throw new BadRequestException("Email must not exceed 100 characters.");
             if (!new EmailAddressAttribute().IsValid(email))
-                throw new BadRequestException("Địa chỉ email không đúng định dạng.");
+                throw new BadRequestException("Invalid email address format.");
         }
 
         patient.FullName = request.FullName.Trim();
@@ -568,7 +568,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<List<PatientVisitHistoryDto>> GetVisitHistoryAsync(int patientId, CancellationToken ct = default)
     {
         if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct))
-            throw new NotFoundException($"Patient with id {patientId} was not found.");
+            throw new NotFoundException($"Patient {patientId} was not found.");
         return await db.MedicalRecords.AsNoTracking().Where(r => r.PatientId == patientId)
             .OrderByDescending(r => r.ExamDate).Select(r => new PatientVisitHistoryDto
             {
@@ -583,7 +583,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
         var record = await db.MedicalRecords.AsNoTracking().Include(r => r.Doctor).Include(r => r.Registration)
             .Include(r => r.HerbalPrescriptions).ThenInclude(p => p.HerbalPrescriptionDetails)
             .SingleOrDefaultAsync(r => r.RecordId == recordId, ct)
-            ?? throw new NotFoundException($"Medical record with id {recordId} was not found.");
+            ?? throw new NotFoundException($"Examination record {recordId} was not found.");
         var services = await db.UsageHistories.AsNoTracking().Where(u => u.Session.Plan.RecordId == recordId)
             .OrderBy(u => u.ExecutionTime).Select(u => new UsageHistoryItemDto
             {
@@ -617,7 +617,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<List<TreatmentProtocolDto>> GetTreatmentProtocolsAsync(int patientId, CancellationToken ct = default)
     {
         if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct))
-            throw new NotFoundException($"Patient with id {patientId} was not found.");
+            throw new NotFoundException($"Patient {patientId} was not found.");
         return await db.TreatmentPlans.AsNoTracking().Where(p => p.Record.PatientId == patientId)
             .OrderByDescending(p => p.CreatedAt).Select(p => new TreatmentProtocolDto
             {
@@ -630,7 +630,7 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     public async Task<List<TreatmentSessionDto>> GetTreatmentSessionsAsync(int planId, CancellationToken ct = default)
     {
         if (!await db.TreatmentPlans.AnyAsync(p => p.PlanId == planId, ct))
-            throw new NotFoundException($"Treatment plan with id {planId} was not found.");
+            throw new NotFoundException($"Treatment plan {planId} was not found.");
         return await db.TreatmentSessions.AsNoTracking().Where(s => s.PlanId == planId)
             .OrderBy(s => s.SessionNumber).Select(s => new TreatmentSessionDto
             {

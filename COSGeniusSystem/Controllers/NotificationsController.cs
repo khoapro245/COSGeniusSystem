@@ -43,7 +43,7 @@ public class NotificationsController : ControllerBase
         var resolvedUserId = GetCurrentUserId(userId, headerUserId);
         if (resolvedUserId == null)
         {
-            return BadRequest(ApiResponse.Fail("Vui lòng nhập 'userId' (qua ô query param 'userId' hoặc header 'X-User-Id')."));
+            return BadRequest(ApiResponse.Fail("Provide 'userId' in the 'userId' query parameter or the 'X-User-Id' header."));
         }
 
         var result = await _notificationService.GetNotificationsAsync(resolvedUserId.Value, queryParams);
@@ -62,7 +62,7 @@ public class NotificationsController : ControllerBase
         var resolvedUserId = GetCurrentUserId(userId, headerUserId);
         if (resolvedUserId == null)
         {
-            return BadRequest(ApiResponse.Fail("Vui lòng nhập 'userId' (qua ô query param 'userId' hoặc header 'X-User-Id')."));
+            return BadRequest(ApiResponse.Fail("Provide 'userId' in the 'userId' query parameter or the 'X-User-Id' header."));
         }
 
         await _notificationService.MarkAsReadAsync(resolvedUserId.Value, id);
@@ -80,7 +80,7 @@ public class NotificationsController : ControllerBase
         var resolvedUserId = GetCurrentUserId(userId, headerUserId);
         if (resolvedUserId == null)
         {
-            return BadRequest(ApiResponse.Fail("Vui lòng nhập 'userId' (qua ô query param 'userId' hoặc header 'X-User-Id')."));
+            return BadRequest(ApiResponse.Fail("Provide 'userId' in the 'userId' query parameter or the 'X-User-Id' header."));
         }
 
         await _notificationService.MarkAllAsReadAsync(resolvedUserId.Value);

@@ -40,7 +40,7 @@ public class SuppliersController : BaseApiController
     {
         var supplier = await _supplierService.GetSupplierByIdAsync(id, ct);
         if (supplier is null)
-            throw new NotFoundException($"Supplier with id {id} was not found.");
+            throw new NotFoundException($"Supplier {id} was not found.");
 
         return SuccessResponse(SystemMessages.SupplierRetrieved, supplier);
     }
@@ -55,7 +55,7 @@ public class SuppliersController : BaseApiController
     {
         var supplier = await _supplierService.GetSupplierByCodeAsync(code, ct);
         if (supplier is null)
-            throw new NotFoundException($"Supplier with code '{code}' was not found.");
+            throw new NotFoundException($"Supplier '{code}' was not found.");
 
         return SuccessResponse(SystemMessages.SupplierRetrieved, supplier);
     }
@@ -95,7 +95,7 @@ public class SuppliersController : BaseApiController
         var (dto, error) = await _supplierService.UpdateSupplierAsync(id, request, ct);
 
         if (dto is null && error is null)
-            throw new NotFoundException($"Supplier with id {id} was not found.");
+            throw new NotFoundException($"Supplier {id} was not found.");
 
         if (error is not null)
             throw new BadRequestException(error);
@@ -114,7 +114,7 @@ public class SuppliersController : BaseApiController
         var (success, isDeactivated, error) = await _supplierService.DeleteSupplierAsync(id, ct);
 
         if (!success)
-            throw new NotFoundException(error ?? $"Supplier with id {id} was not found.");
+            throw new NotFoundException(error ?? $"Supplier {id} was not found.");
 
         var message = isDeactivated
             ? new SystemMessage(200, "Nhà cung cấp đã có lịch sử đơn mua hàng, đã chuyển sang trạng thái ngưng hoạt động.", true)
