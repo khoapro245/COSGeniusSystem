@@ -53,7 +53,7 @@ public class DispensingController : BaseApiController
     }
 
     /// <summary>
-    /// [HB-05] Danh sách phiếu lĩnh thuốc
+    /// [HB-05, WH-11] Danh sách phiếu lĩnh thuốc
     /// </summary>
     [HttpGet]
     public async Task<ActionResult<ApiResponseModel<List<DispensingSlipItemDto>>>> GetSlips(
@@ -64,7 +64,7 @@ public class DispensingController : BaseApiController
     }
 
     /// <summary>
-    /// [HB-06, HB-07] Chi tiết phiếu lĩnh thuốc & danh mục đối chiếu
+    /// [HB-06, HB-07, WH-12] Chi tiết phiếu lĩnh thuốc & danh mục đối chiếu
     /// </summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<ApiResponseModel<DispensingSlipDetailDto>>> GetSlipDetail(
@@ -72,6 +72,41 @@ public class DispensingController : BaseApiController
     {
         var result = await _dispensingService.GetDispensingSlipDetailAsync(id, ct);
         return SuccessResponse(new SystemMessage(200, "Lấy chi tiết phiếu lĩnh thành công.", true), result);
+    }
+
+    /// <summary>
+    /// [WH-12, WH-13] Gợi ý phân bổ lô theo nguyên tắc FEFO cho phiếu xuất kho
+    /// </summary>
+    [HttpGet("{id:int}/fefo")]
+    public async Task<ActionResult<ApiResponseModel<List<FefoHerbSuggestionDto>>>> GetFefoSuggestions(
+        int id, CancellationToken ct = default)
+    {
+        var result = await _dispensingService.GetFefoSuggestionsAsync(id, ct);
+        return SuccessResponse(new SystemMessage(200, "Lấy gợi ý phân bổ lô FEFO thành công.", true), result);
+    }
+
+    /// <summary>
+    /// [WH-13] Thủ kho duyệt và xuất kho (trừ tồn kho theo lô FEFO và chuyển sang WAREHOUSE_CONFIRMED)
+    /// </summary>
+    [HttpPost("{id:int}/issue")]
+    [HttpPut("{id:int}/issue")]
+    public async Task<ActionResult<ApiResponseModel<bool>>> ApproveAndIssue(
+        int id, [FromBody] WarehouseIssueRequest request, CancellationToken ct = default)
+    {
+        var result = await _dispensingService.ApproveAndIssueWarehouseAsync(id, request, User, ct);
+        return SuccessResponse(new SystemMessage(200, "Duyệt và xuất kho phiếu lĩnh thành công.", true), result);
+    }
+
+    /// <summary>
+    /// [WH-13] Thủ kho từ chối toàn bộ phiếu lĩnh
+    /// </summary>
+    [HttpPost("{id:int}/reject")]
+    [HttpPut("{id:int}/reject")]
+    public async Task<ActionResult<ApiResponseModel<bool>>> RejectWarehouseSlip(
+        int id, [FromBody] WarehouseRejectRequest request, CancellationToken ct = default)
+    {
+        var result = await _dispensingService.RejectWarehouseSlipAsync(id, request, User, ct);
+        return SuccessResponse(new SystemMessage(200, "Từ chối phiếu lĩnh thành công.", true), result);
     }
 
     /// <summary>
@@ -87,17 +122,19 @@ public class DispensingController : BaseApiController
     }
 
     /// <summary>
-    /// [HB-07] Xác nhận đã bốc xong từng đơn thuốc (Hỗ trợ cả PUT/POST: orders/{orderId}/complete và {id}/orders/{orderId}/dispense)
+    /// [HB-07] Xác nhận đã bốc xong từng đơn thuốc — trừ lô tồn kho ngay khi bốc xong.
+    /// Body (tùy chọn): { "batchLines": [{ "batchId": 1, "quantityGrams": 60 }] }
+    /// Nếu không gửi body, server tự động phân bổ theo FEFO.
     /// </summary>
     [HttpPost("orders/{orderId:int}/complete")]
     [HttpPut("orders/{orderId:int}/complete")]
     [HttpPost("{id:int}/orders/{orderId:int}/dispense")]
     [HttpPut("{id:int}/orders/{orderId:int}/dispense")]
     public async Task<ActionResult<ApiResponseModel<bool>>> CompleteDispenseOrder(
-        int orderId, [FromRoute] int? id = null, CancellationToken ct = default)
+        int orderId, [FromRoute] int? id = null, [FromBody] CompleteDispenseOrderRequest? request = null, CancellationToken ct = default)
     {
-        var result = await _dispensingService.CompleteDispenseOrderAsync(orderId, User, ct);
-        return SuccessResponse(new SystemMessage(200, "Xác nhận bốc đơn thuốc thành công.", true), result);
+        var result = await _dispensingService.CompleteDispenseOrderAsync(orderId, request, User, ct);
+        return SuccessResponse(new SystemMessage(200, "Xác nhận bốc đơn thuốc thành công. Tồn kho lô thuốc đã được cập nhật.", true), result);
     }
 
     /// <summary>
