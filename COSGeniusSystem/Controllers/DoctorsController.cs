@@ -38,7 +38,7 @@ public class DoctorsController : BaseApiController
     /// GET /api/v1/doctors
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor + "," + RoleConstants.Manager + "," + RoleConstants.Admin)]
     public async Task<ActionResult<ApiResponseModel<List<DoctorResponseDto>>>> GetDoctors([FromQuery] DoctorFilterQuery query, CancellationToken ct = default)
     {
         var result = await _doctorService.GetDoctorsAsync(query, ct);
@@ -50,12 +50,31 @@ public class DoctorsController : BaseApiController
     /// GET /api/v1/doctors/{id}
     /// </summary>
     [HttpGet("{id:int}")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor + "," + RoleConstants.Manager + "," + RoleConstants.Admin)]
     public async Task<ActionResult<ApiResponseModel<DoctorDetailDto>>> GetDoctorById(int id)
     {
         var doctor = await _doctorService.GetDoctorByIdAsync(id);
         if (doctor is null)
-            throw new NotFoundException($"Doctor with id {id} was not found.");
+            throw new NotFoundException($"Doctor {id} was not found.");
 
         return SuccessResponse(SystemMessages.DoctorRetrieved, doctor);
+    }
+
+    /// <summary>
+    /// API-DOCTOR-03: Đăng ký thông tin hồ sơ cho bác sĩ (Dành cho Quản lý / Admin).
+    /// POST /api/v1/doctors
+    /// </summary>
+    [HttpPost]
+    [Authorize(Roles = RoleConstants.Admin + "," + RoleConstants.Manager)]
+    public async Task<ActionResult<ApiResponseModel<DoctorDetailDto>>> CreateDoctor(
+        [FromBody] CreateDoctorRequestDto request,
+        CancellationToken ct = default)
+    {
+        var result = await _doctorService.CreateDoctorAsync(request, ct);
+        return CreatedResponse(
+            nameof(GetDoctorById),
+            new { id = result.DoctorId },
+            new SystemMessage(201, "Hồ sơ bác sĩ đã được đăng ký thành công.", true),
+            result);
     }
 }

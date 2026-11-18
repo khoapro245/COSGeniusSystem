@@ -25,7 +25,11 @@ public class ReceiptDetailDto
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public decimal LineTotal { get; set; }
+    // [hieppm] Start: Bổ sung StorageLocationId & StorageLocationCode
+    public int? StorageLocationId { get; set; }
+    public string? StorageLocationCode { get; set; }
     public string? Location { get; set; }
+    // [hieppm] End
 }
 
 public class GoodsReceiptDto
@@ -46,45 +50,91 @@ public class GoodsReceiptDto
     public string StatusLabel { get; set; } = "Chờ quản lý duyệt";
     public string? Note { get; set; }
     public string? ProcessLog { get; set; }
+    // [hieppm] Start: Bổ sung DriverName, VehicleNumber, DocumentUrl
+    public string? DriverName { get; set; }
+    public string? VehicleNumber { get; set; }
+    public string? DocumentUrl { get; set; }
+    // [hieppm] End
     public List<ReceiptDetailDto> Details { get; set; } = new();
 }
 
 public class CreateGoodsReceiptItemRequest
 {
-    [Required(ErrorMessage = "Vị thuốc là bắt buộc.")]
+    [Required(ErrorMessage = "Herb is required.")]
     public int HerbId { get; set; }
 
-    [Required(ErrorMessage = "Mã lô nhà cung cấp là bắt buộc nhập.")]
+    [Required(ErrorMessage = "Supplier batch code is required.")]
     public string SupplierBatchCode { get; set; } = string.Empty;
 
-    [Required(ErrorMessage = "Hạn sử dụng là bắt buộc.")]
+    [Required(ErrorMessage = "Expiry date is required.")]
     public DateOnly ExpiryDate { get; set; }
 
-    [Range(0.001, double.MaxValue, ErrorMessage = "Số lượng nhập phải lớn hơn 0.")]
+    [Range(0.001, double.MaxValue, ErrorMessage = "Received quantity must be greater than 0.")]
     public decimal Quantity { get; set; }
 
-    [Range(0, double.MaxValue, ErrorMessage = "Đơn giá phải lớn hơn hoặc bằng 0.")]
+    [Range(0, double.MaxValue, ErrorMessage = "Unit price must be greater than or equal to 0.")]
     public decimal UnitPrice { get; set; }
 
+    // [hieppm] Start: Bổ sung StorageLocationId
+    public int? StorageLocationId { get; set; }
     public string? Location { get; set; }
+    // [hieppm] End
 }
 
 public class CreateGoodsReceiptRequest
 {
     public int? Poid { get; set; }
 
-    [Required(ErrorMessage = "Kho nhập là bắt buộc.")]
+    [Required(ErrorMessage = "Receiving warehouse is required.")]
     public int WarehouseId { get; set; } = 1;
 
     public string? Note { get; set; }
 
+    // [hieppm] Start: Bổ sung DriverName, VehicleNumber, DocumentUrl
+    public string? DriverName { get; set; }
+    public string? VehicleNumber { get; set; }
+    public string? DocumentUrl { get; set; }
+    // [hieppm] End
+
     [MinLength(1, ErrorMessage = "Phiếu nhập kho phải có ít nhất 1 dòng vị thuốc.")]
     public List<CreateGoodsReceiptItemRequest> Items { get; set; } = new();
+}
+
+public class ApproveGoodsReceiptItemRequest
+{
+    public int? BatchId { get; set; }
+    public int? HerbId { get; set; }
+    public string? SupplierBatchCode { get; set; }
+    public decimal? UnitPrice { get; set; }
+    public string? Location { get; set; }
+    public int? StorageLocationId { get; set; }
 }
 
 public class ApproveGoodsReceiptRequest
 {
     public bool IsApproved { get; set; } = true;
     public string? ManagerNote { get; set; }
+    // [hieppm] Start: Bổ sung danh sách vị thuốc/lô hàng kèm đơn giá và vị trí lưu kho khi Manager duyệt
+    public List<ApproveGoodsReceiptItemRequest>? Items { get; set; }
+    // [hieppm] End
 }
+
+// [hieppm] Start: DTO gợi ý vị trí kệ kho và upload chứng từ
+public class StorageLocationSuggestionDto
+{
+    public int Id { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string StorageType { get; set; } = "STANDARD"; // STANDARD | COLD
+    public decimal MaxCapacityGrams { get; set; }
+    public decimal CurrentUsedGrams { get; set; }
+    public decimal RemainingCapacityGrams { get; set; }
+    public bool IsSuitable { get; set; } = true;
+}
+
+public class DocumentUploadResponseDto
+{
+    public string FileUrl { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+}
+// [hieppm] End
 

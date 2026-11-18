@@ -91,13 +91,17 @@ public class PurchaseOrderService : IPurchaseOrderService
 
     public async Task<PurchaseOrderDto> CreatePOAsync(int userId, CreatePORequest request, CancellationToken ct = default)
     {
-        // [hieppm] Start: Validate chặt chẽ vị thuốc, trùng dòng, trạng thái và sinh mã POCode không trùng
+        // [hieppm] Start: Validate chặt chẽ vị thuốc, ngày giao dự kiến, trạng thái và sinh mã POCode không trùng
+        if (request.DeliveryDate.HasValue && request.DeliveryDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new BadRequestException("Ngày giao dự kiến không được nhỏ hơn ngày hiện tại.");
+        }
         await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);
         if (supplier == null)
         {
-            throw new NotFoundException($"Nhà cung cấp ID {request.SupplierId} không tồn tại.");
+            throw new NotFoundException($"Supplier ID {request.SupplierId} does not exist.");
         }
 
         var normalizedStatus = NormalizeAllowedPOStatus(request.Status, defaultStatus: "Nháp");
@@ -118,6 +122,9 @@ public class PurchaseOrderService : IPurchaseOrderService
             Pocode = poCode,
             SupplierId = request.SupplierId,
             CreatedBy = userId > 0 ? userId : 1, // Default fallback user
+            // [hieppm] Start: Gắn RequestId nếu đơn PO được tạo từ Yêu cầu bổ sung kho
+            RequestId = request.RequestId.HasValue && request.RequestId.Value > 0 ? request.RequestId.Value : null,
+            // [hieppm] End: Gắn RequestId
             OrderDate = DateTime.Now,
             DeliveryDate = request.DeliveryDate,
             TotalAmount = totalAmount,
@@ -149,22 +156,26 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         if (po == null)
         {
-            throw new NotFoundException($"Không tìm thấy đơn mua hàng ID {id}.");
+            throw new NotFoundException($"Purchase order ID {id} was not found.");
         }
 
         // Strict Constraint: Chỉ được sửa khi PO đang ở trạng thái Nháp
         if (!IsDraftStatus(po.Status))
         {
-            throw new BadRequestException($"Đơn mua hàng '{po.Pocode}' đang ở trạng thái '{po.Status}'. Chỉ được phép chỉnh sửa đơn mua hàng ở trạng thái 'Nháp'.");
+            throw new BadRequestException($"Purchase order '{po.Pocode}' has status '{po.Status}'. Only draft purchase orders can be edited.");
         }
 
-        // [hieppm] Start: Validate danh sách vị thuốc & trạng thái khi cập nhật PO nháp
+        // [hieppm] Start: Validate danh sách vị thuốc, ngày giao dự kiến & trạng thái khi cập nhật PO nháp
+        if (request.DeliveryDate.HasValue && request.DeliveryDate.Value < DateOnly.FromDateTime(DateTime.Today))
+        {
+            throw new BadRequestException("Ngày giao dự kiến không được nhỏ hơn ngày hiện tại.");
+        }
         await ValidatePOItemsAsync(request.Items, ct);
 
         var supplier = await _context.Suppliers.FindAsync(new object[] { request.SupplierId }, ct);
         if (supplier == null)
         {
-            throw new NotFoundException($"Nhà cung cấp ID {request.SupplierId} không tồn tại.");
+            throw new NotFoundException($"Supplier ID {request.SupplierId} does not exist.");
         }
 
         po.SupplierId = request.SupplierId;
@@ -205,13 +216,13 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         if (po == null)
         {
-            throw new NotFoundException($"Không tìm thấy đơn mua hàng ID {id}.");
+            throw new NotFoundException($"Purchase order ID {id} was not found.");
         }
 
         // Strict Constraint: Chỉ được xóa khi PO đang ở trạng thái Nháp
         if (!IsDraftStatus(po.Status))
         {
-            throw new BadRequestException($"Đơn mua hàng '{po.Pocode}' đang ở trạng thái '{po.Status}'. Chỉ được phép xóa đơn mua hàng ở trạng thái 'Nháp'.");
+            throw new BadRequestException($"Purchase order '{po.Pocode}' has status '{po.Status}'. Only draft purchase orders can be deleted.");
         }
 
         _context.Podetails.RemoveRange(po.Podetails);
@@ -224,7 +235,7 @@ public class PurchaseOrderService : IPurchaseOrderService
     {
         if (items == null || items.Count == 0)
         {
-            throw new BadRequestException("Đơn mua hàng phải có ít nhất một mặt hàng vị thuốc.");
+            throw new BadRequestException("A purchase order must contain at least one herb item.");
         }
 
         var seenHerbIds = new HashSet<int>();
@@ -232,19 +243,19 @@ public class PurchaseOrderService : IPurchaseOrderService
         {
             if (item.HerbId <= 0)
             {
-                throw new BadRequestException("Vị thuốc được chọn không hợp lệ.");
+                throw new BadRequestException("The selected herb is invalid.");
             }
             if (item.OrderQuantity <= 0)
             {
-                throw new BadRequestException("Số lượng đặt phải lớn hơn 0.");
+                throw new BadRequestException("Order quantity must be greater than 0.");
             }
             if (item.UnitPrice < 0)
             {
-                throw new BadRequestException("Đơn giá không được âm.");
+                throw new BadRequestException("Unit price must not be negative.");
             }
             if (!seenHerbIds.Add(item.HerbId))
             {
-                throw new BadRequestException($"Vị thuốc ID {item.HerbId} bị trùng lặp trong đơn mua hàng.");
+                throw new BadRequestException($"Herb ID {item.HerbId} appears more than once in the purchase order.");
             }
         }
 
@@ -257,7 +268,7 @@ public class PurchaseOrderService : IPurchaseOrderService
         var missingHerbId = requestedHerbIds.FirstOrDefault(id => !existingHerbIds.Contains(id));
         if (missingHerbId > 0)
         {
-            throw new NotFoundException($"Vị thuốc ID {missingHerbId} không tồn tại.");
+            throw new NotFoundException($"Herb ID {missingHerbId} does not exist.");
         }
     }
 
@@ -278,7 +289,7 @@ public class PurchaseOrderService : IPurchaseOrderService
             return "Chờ nhận";
         }
 
-        throw new BadRequestException($"Trạng thái '{status}' không hợp lệ khi lập hoặc cập nhật đơn mua hàng.");
+        throw new BadRequestException($"Status '{status}' is invalid when creating or updating a purchase order.");
     }
     // [hieppm] End: Helper kiểm tra danh sách vị thuốc và trạng thái PO hợp lệ
 

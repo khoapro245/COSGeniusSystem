@@ -26,6 +26,11 @@ public class GoodsReceiptService : IGoodsReceiptService
             .Include(g => g.ReceiptDetails)
                 .ThenInclude(d => d.Batch)
                     .ThenInclude(b => b.Herb)
+            // [hieppm] Start: Nạp thông tin kệ lưu trữ StorageLocation
+            .Include(g => g.ReceiptDetails)
+                .ThenInclude(d => d.Batch)
+                    .ThenInclude(b => b.StorageLocation)
+            // [hieppm] End: Nạp thông tin kệ lưu trữ StorageLocation
             .OrderByDescending(g => g.ReceiptDate)
             .ThenByDescending(g => g.ReceiptId)
             .AsQueryable();
@@ -63,6 +68,11 @@ public class GoodsReceiptService : IGoodsReceiptService
             .Include(g => g.ReceiptDetails)
                 .ThenInclude(d => d.Batch)
                     .ThenInclude(b => b.Herb)
+            // [hieppm] Start: Nạp thông tin kệ lưu trữ StorageLocation
+            .Include(g => g.ReceiptDetails)
+                .ThenInclude(d => d.Batch)
+                    .ThenInclude(b => b.StorageLocation)
+            // [hieppm] End: Nạp thông tin kệ lưu trữ StorageLocation
             .AsQueryable();
 
         GoodsReceipt? receipt;
@@ -82,7 +92,7 @@ public class GoodsReceiptService : IGoodsReceiptService
     {
         if (request.Items == null || request.Items.Count == 0)
         {
-            throw new BadRequestException("Phiếu nhập kho phải có ít nhất 1 dòng vị thuốc.");
+            throw new BadRequestException("A goods receipt must contain at least one herb line.");
         }
 
         var today = DateOnly.FromDateTime(DateTime.Today);
@@ -92,22 +102,22 @@ public class GoodsReceiptService : IGoodsReceiptService
         {
             if (string.IsNullOrWhiteSpace(item.SupplierBatchCode))
             {
-                throw new BadRequestException("Mã lô nhà cung cấp là bắt buộc nhập cho từng dòng.");
+                throw new BadRequestException("A supplier batch code is required for each line.");
             }
 
             if (item.Quantity <= 0)
             {
-                throw new BadRequestException("Số lượng thực nhận phải lớn hơn 0.");
+                throw new BadRequestException("The actual received quantity must be greater than 0.");
             }
 
             if (item.ExpiryDate <= today)
             {
-                throw new BadRequestException($"Hạn sử dụng ({item.ExpiryDate:dd/MM/yyyy}) phải lớn hơn ngày hiện tại ({today:dd/MM/yyyy}).");
+                throw new BadRequestException($"The expiry date ({item.ExpiryDate:dd/MM/yyyy}) must be after today ({today:dd/MM/yyyy}).");
             }
 
             if (item.UnitPrice < 0)
             {
-                throw new BadRequestException("Đơn giá nhập không được nhỏ hơn 0.");
+                throw new BadRequestException("The receipt unit price must not be negative.");
             }
         }
 
@@ -135,9 +145,31 @@ public class GoodsReceiptService : IGoodsReceiptService
             }
         }
 
-        // Generate next receipt code e.g. PN00090
-        var maxId = await _context.GoodsReceipts.MaxAsync(g => (int?)g.ReceiptId, ct) ?? 0;
-        var receiptCode = $"PN{(maxId + 1):D5}";
+        // [hieppm] Start: Sinh ReceiptCode duy nhất an toàn, không trùng lặp
+        var existingCodes = await _context.GoodsReceipts
+            .Where(g => g.ReceiptCode.StartsWith("PN"))
+            .Select(g => g.ReceiptCode)
+            .ToListAsync(ct);
+
+        int nextSeq = 1;
+        foreach (var code in existingCodes)
+        {
+            if (code.Length > 2)
+            {
+                var numPart = code.Substring(2);
+                if (int.TryParse(numPart, out int parsedSeq) && parsedSeq >= nextSeq)
+                {
+                    nextSeq = parsedSeq + 1;
+                }
+            }
+        }
+        var receiptCode = $"PN{nextSeq:D5}";
+        while (await _context.GoodsReceipts.AnyAsync(g => g.ReceiptCode == receiptCode, ct))
+        {
+            nextSeq++;
+            receiptCode = $"PN{nextSeq:D5}";
+        }
+        // [hieppm] End: Sinh ReceiptCode duy nhất an toàn
 
         // Lookup PO info if provided
         PurchaseOrder? linkedPo = null;
@@ -150,12 +182,12 @@ public class GoodsReceiptService : IGoodsReceiptService
             // [hieppm] Start: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
             if (linkedPo == null)
             {
-                throw new NotFoundException($"Không tìm thấy đơn mua hàng ID {request.Poid.Value}.");
+                throw new NotFoundException($"Purchase order ID {request.Poid.Value} was not found.");
             }
             var poStatusLower = (linkedPo.Status ?? string.Empty).Trim().ToLower();
             if (poStatusLower == "nháp" || poStatusLower == "draft" || poStatusLower == "mới tạo")
             {
-                throw new BadRequestException($"Đơn mua hàng '{linkedPo.Pocode}' đang ở trạng thái '{linkedPo.Status}', chưa phát hành nên không thể lập phiếu nhập kho.");
+                throw new BadRequestException($"Purchase order '{linkedPo.Pocode}' has status '{linkedPo.Status}' and has not been issued, so a goods receipt cannot be created.");
             }
             // [hieppm] End: Không cho phép lập phiếu nhập từ đơn PO chưa phát hành (Nháp)
         }
@@ -173,7 +205,12 @@ public class GoodsReceiptService : IGoodsReceiptService
             // [hieppm] Start: Khởi tạo trạng thái mặc định của phiếu nhập kho theo Database Constraint DF_GoodsReceipt_Status
             Status = GoodsReceiptStatusConstants.PendingApproval,
             // [hieppm] End: Khởi tạo trạng thái mặc định của phiếu nhập kho theo Database Constraint DF_GoodsReceipt_Status
-            Note = request.Note
+            Note = request.Note,
+            // [hieppm] Start: Bổ sung DriverName, VehicleNumber, DocumentUrl
+            DriverName = request.DriverName,
+            VehicleNumber = request.VehicleNumber,
+            DocumentUrl = request.DocumentUrl
+            // [hieppm] End
         };
 
         // [hieppm] Start: Lấy vị trí kho từ database nếu không nhập vị trí cụ thể
@@ -183,12 +220,43 @@ public class GoodsReceiptService : IGoodsReceiptService
             : (targetWarehouse?.WarehouseName ?? "Chưa phân vị trí");
         // [hieppm] End: Lấy vị trí kho từ database
 
+        // [hieppm] Start: Sinh mã BatchNumber duy nhất, chống xung đột khóa UNIQUE constraint khi nhập lại PO bị từ chối
+        var usedBatchNumbers = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         int batchCounter = 1;
         foreach (var item in request.Items)
         {
             var poPrefix = linkedPo != null ? linkedPo.Pocode : "NH";
-            var cleanSupplierBatch = item.SupplierBatchCode.Trim().Replace(" ", "");
-            var autoBatchNumber = $"LO-{poPrefix}-{cleanSupplierBatch}-{DateTime.Now:yyMMdd}{batchCounter++}";
+            var cleanSupplierBatch = string.IsNullOrWhiteSpace(item.SupplierBatchCode) ? "BATCH" : item.SupplierBatchCode.Trim().Replace(" ", "");
+            if (cleanSupplierBatch.Length > 16)
+            {
+                cleanSupplierBatch = cleanSupplierBatch.Substring(0, 16);
+            }
+
+            var timeTag = DateTime.Now.ToString("yyMMddHHmm");
+            var baseBatch = $"LO-{poPrefix}-{cleanSupplierBatch}-{timeTag}";
+            if (baseBatch.Length > 44)
+            {
+                baseBatch = baseBatch.Substring(0, 44);
+            }
+
+            int subIndex = batchCounter++;
+            string autoBatchNumber = $"{baseBatch}{subIndex}";
+            if (autoBatchNumber.Length > 50)
+            {
+                autoBatchNumber = autoBatchNumber.Substring(0, 50);
+            }
+
+            while (usedBatchNumbers.Contains(autoBatchNumber) || await _context.Batches.AnyAsync(b => b.BatchNumber == autoBatchNumber, ct))
+            {
+                subIndex++;
+                autoBatchNumber = $"{baseBatch}{subIndex}";
+                if (autoBatchNumber.Length > 50)
+                {
+                    autoBatchNumber = autoBatchNumber.Substring(0, 50);
+                }
+            }
+            usedBatchNumbers.Add(autoBatchNumber);
+            // [hieppm] End: Sinh mã BatchNumber duy nhất
 
             // Tạo bản ghi Lô (Batch) ở trạng thái Chờ duyệt; CHƯA tăng tồn (CurrentQuantity = 0)
             var batch = new Batch
@@ -202,7 +270,10 @@ public class GoodsReceiptService : IGoodsReceiptService
                 CurrentQuantity = 0, // Putaway logic: chỉ tăng tồn khi Manager duyệt
                 UnitCost = item.UnitPrice,
                 Status = "Chờ duyệt",
+                // [hieppm] Start: Gắn StorageLocationId cho Lô hàng
+                StorageLocationId = item.StorageLocationId,
                 Location = !string.IsNullOrWhiteSpace(item.Location) ? item.Location.Trim() : defaultWarehouseLocation,
+                // [hieppm] End: Gắn StorageLocationId cho Lô hàng
                 SupplierBatchCode = item.SupplierBatchCode.Trim()
             };
 
@@ -244,7 +315,7 @@ public class GoodsReceiptService : IGoodsReceiptService
         var receipt = await _context.GoodsReceipts.FindAsync(new object[] { receiptId }, ct);
         if (receipt == null)
         {
-            throw new NotFoundException($"Không tìm thấy phiếu nhập ID {receiptId}.");
+            throw new NotFoundException($"Goods receipt ID {receiptId} was not found.");
         }
 
         receipt.Status = GoodsReceiptStatusConstants.PendingApproval;
@@ -266,13 +337,13 @@ public class GoodsReceiptService : IGoodsReceiptService
 
         if (receipt == null)
         {
-            throw new NotFoundException($"Không tìm thấy phiếu nhập kho ID {receiptId}.");
+            throw new NotFoundException($"Goods receipt ID {receiptId} was not found.");
         }
 
         if (receipt.Status.Equals(GoodsReceiptStatusConstants.Approved, StringComparison.OrdinalIgnoreCase) ||
             receipt.Status.Equals("Đã duyệt", StringComparison.OrdinalIgnoreCase))
         {
-            throw new BadRequestException($"Phiếu nhập '{receipt.ReceiptCode}' đã được phê duyệt trước đó.");
+            throw new BadRequestException($"Goods receipt '{receipt.ReceiptCode}' has already been approved.");
         }
 
         if (request.IsApproved)
@@ -290,10 +361,75 @@ public class GoodsReceiptService : IGoodsReceiptService
             {
                 if (detail.Batch != null)
                 {
-                    // Tăng tồn kho thực tế cho lô hàng
-                    detail.Batch.CurrentQuantity = detail.Quantity;
-                    detail.Batch.OriginalQuantity = detail.Quantity;
+                    // [hieppm] Start: Logic cộng dồn số lượng vào kho (Số lượng hiện có trong kho + Số lượng nhập từ PO, tuyệt đối KHÔNG thay thế)
+                    var previousBatchQuantity = detail.Batch.CurrentQuantity;
+                    var previousOriginalQuantity = detail.Batch.OriginalQuantity;
+
+                    // Tăng tồn kho thực tế cho lô hàng: Cộng dồn số lượng nhập từ PO vào số lượng hiện có trong kho
+                    detail.Batch.CurrentQuantity = previousBatchQuantity + detail.Quantity;
+                    detail.Batch.OriginalQuantity = previousOriginalQuantity > 0 
+                        ? previousOriginalQuantity + detail.Quantity 
+                        : detail.Quantity;
                     detail.Batch.Status = "Đạt chuẩn";
+
+                    // Tự động cập nhật vị trí và đơn giá nếu Quản lý điều chỉnh lúc duyệt
+                    if (request.Items != null && request.Items.Count > 0)
+                    {
+                        var updateItem = request.Items.FirstOrDefault(i =>
+                            (i.BatchId.HasValue && i.BatchId.Value == detail.Batch.BatchId) ||
+                            (!string.IsNullOrWhiteSpace(i.SupplierBatchCode) && i.SupplierBatchCode.Equals(detail.Batch.SupplierBatchCode, StringComparison.OrdinalIgnoreCase)) ||
+                            (i.HerbId.HasValue && i.HerbId.Value == detail.Batch.HerbId)
+                        );
+
+                        if (updateItem != null)
+                        {
+                            if (updateItem.UnitPrice.HasValue && updateItem.UnitPrice.Value >= 0)
+                            {
+                                detail.UnitPrice = updateItem.UnitPrice.Value;
+                                detail.Batch.UnitCost = updateItem.UnitPrice.Value;
+                            }
+                            if (!string.IsNullOrWhiteSpace(updateItem.Location))
+                            {
+                                detail.Batch.Location = updateItem.Location.Trim();
+                            }
+                            if (updateItem.StorageLocationId.HasValue && updateItem.StorageLocationId.Value > 0)
+                            {
+                                detail.Batch.StorageLocationId = updateItem.StorageLocationId.Value;
+                            }
+                        }
+                    }
+
+                    // Đảm bảo vị trí lưu kho của lô hàng không bị rỗng
+                    if (string.IsNullOrWhiteSpace(detail.Batch.Location))
+                    {
+                        detail.Batch.Location = "Kho Dược liệu trung tâm";
+                    }
+
+                    // Tính số dư tồn kho sau khi cộng dồn (Số lượng đang có trong kho + Số lượng nhập từ PO)
+                    var otherBatchesTotal = await _context.Batches
+                        .Where(b => b.HerbId == detail.Batch.HerbId && b.Status == "Đạt chuẩn" && b.BatchId != detail.Batch.BatchId)
+                        .SumAsync(b => (decimal?)b.CurrentQuantity, ct) ?? 0m;
+                    var totalHerbStockAfter = otherBatchesTotal + detail.Batch.CurrentQuantity;
+
+                    // Ghi nhận biến động tồn kho vào bảng ReceiptHistory:
+                    // QuantityChanged: Số lượng nhập từ PO
+                    // BalanceAfter: Tổng số lượng trong kho sau khi cộng dồn (= Số lượng cũ trong kho + Số lượng nhập từ PO)
+                    _context.ReceiptHistories.Add(new ReceiptHistory
+                    {
+                        BatchId = detail.Batch.BatchId,
+                        ReceiptId = receipt.ReceiptId,
+                        QuantityChanged = detail.Quantity,
+                        BalanceAfter = totalHerbStockAfter,
+                        ChangeDate = DateTime.Now
+                    });
+
+                    // Cập nhật giá nhập gần nhất (LastImportPrice) cho vị thuốc tương ứng khi hoàn tất nhập kho
+                    var herb = await _context.Herbs.FindAsync(new object[] { detail.Batch.HerbId }, ct);
+                    if (herb != null && detail.UnitPrice > 0)
+                    {
+                        herb.LastImportPrice = detail.UnitPrice;
+                    }
+                    // [hieppm] End: Logic cộng dồn số lượng vào kho
                 }
             }
 
@@ -361,6 +497,20 @@ public class GoodsReceiptService : IGoodsReceiptService
                     detail.Batch.Status = "Từ chối";
                 }
             }
+
+            // [hieppm] Start: Đồng bộ trạng thái PO khi phiếu nhập bị từ chối, giúp nhân viên kho có thể nhập lại
+            if (receipt.Po != null)
+            {
+                var hasAnyApprovedReceipt = await _context.GoodsReceipts
+                    .AnyAsync(g => g.Poid == receipt.Po.Poid &&
+                                   g.ReceiptId != receipt.ReceiptId &&
+                                   (g.Status == GoodsReceiptStatusConstants.Approved ||
+                                    g.Status == "Đã duyệt" ||
+                                    g.Status == "Đã duyệt nhập"), ct);
+
+                receipt.Po.Status = hasAnyApprovedReceipt ? "Nhận 1 phần" : "Chờ nhận";
+            }
+            // [hieppm] End: Đồng bộ trạng thái PO khi phiếu nhập bị từ chối
         }
 
         // [hieppm] Start: Notify to Manager (Ghi nhận thông báo hoàn tất Putaway)
@@ -380,6 +530,24 @@ public class GoodsReceiptService : IGoodsReceiptService
             });
         }
         // [hieppm] End: Notify to Manager
+
+        // [hieppm] Start: Thông báo cho Thủ kho khi phiếu bị Quản lý từ chối
+        if (!request.IsApproved && receipt.ReceivedBy > 0)
+        {
+            var staffToNotify = await _context.Users.FindAsync(new object[] { receipt.ReceivedBy }, ct);
+            if (staffToNotify != null)
+            {
+                _context.Notifications.Add(new Notification
+                {
+                    UserId = staffToNotify.UserId,
+                    Title = $"Phiếu nhập kho {receipt.ReceiptCode} bị từ chối",
+                    Message = $"Phiếu nhập {receipt.ReceiptCode} (Đơn {receipt.Po?.Pocode ?? "PO"}) đã bị Quản lý từ chối. Lý do: {request.ManagerNote ?? "Không đạt chuẩn"}. Bạn có thể kiểm tra và tiến hành nhập lại cho đơn mua hàng này.",
+                    IsRead = false,
+                    CreatedAt = DateTime.Now
+                });
+            }
+        }
+        // [hieppm] End: Thông báo cho Thủ kho
 
         await _context.SaveChangesAsync(ct);
         await transaction.CommitAsync(ct);
@@ -412,9 +580,13 @@ public class GoodsReceiptService : IGoodsReceiptService
             Quantity = d.Quantity,
             UnitPrice = d.UnitPrice,
             LineTotal = d.Quantity * d.UnitPrice,
-            Location = !string.IsNullOrWhiteSpace(d.Batch?.Location)
+            // [hieppm] Start: Trả về StorageLocationId và Code
+            StorageLocationId = d.Batch?.StorageLocationId,
+            StorageLocationCode = d.Batch?.StorageLocation?.Code,
+            Location = d.Batch?.StorageLocation?.Code ?? (!string.IsNullOrWhiteSpace(d.Batch?.Location)
                 ? d.Batch.Location
-                : (receipt.Warehouse?.Location ?? receipt.Warehouse?.WarehouseName ?? "Chưa phân vị trí")
+                : (receipt.Warehouse?.Location ?? receipt.Warehouse?.WarehouseName ?? "Chưa phân vị trí"))
+            // [hieppm] End
         }).ToList();
         // [hieppm] End: Lấy batchCode và location từ Database
 
@@ -437,11 +609,76 @@ public class GoodsReceiptService : IGoodsReceiptService
             Status = receipt.Status,
             StatusLabel = statusLabel,
             Note = receipt.Note,
+            // [hieppm] Start: Map DriverName, VehicleNumber, DocumentUrl
+            DriverName = receipt.DriverName,
+            VehicleNumber = receipt.VehicleNumber,
+            DocumentUrl = receipt.DocumentUrl,
+            // [hieppm] End
             ProcessLog = rawStatus == GoodsReceiptStatusConstants.Approved || rawStatus == "ĐÃ DUYỆT"
                 ? $"{receipt.ReceiptDate:dd/MM/yyyy HH:mm} · Quản lý đã duyệt nhập kho và tăng tồn theo lô."
                 : $"{receipt.ReceiptDate:dd/MM/yyyy HH:mm} · {receipt.ReceivedByNavigation?.FullName ?? "Nhân viên kho"} gửi phiếu chờ quản lý duyệt.\nChưa tăng tồn. Sau duyệt xem lô hàng và giao dịch nhập.",
             Details = details
         };
     }
+
+    // [hieppm] Start: Triển khai gợi ý kệ kho theo vị thuốc và khối lượng
+    public async Task<List<StorageLocationSuggestionDto>> GetSuggestedStorageLocationsAsync(
+        int? herbId, decimal? requiredGrams, int warehouseId = 1, CancellationToken ct = default)
+    {
+        // 1. Xác định điều kiện bảo quản của dược liệu nếu có herbId
+        bool isColdRequired = false;
+        if (herbId.HasValue && herbId.Value > 0)
+        {
+            var herb = await _context.Herbs.FindAsync(new object[] { herbId.Value }, ct);
+            if (herb != null)
+            {
+                isColdRequired = herb.IsColdStorageRequired;
+            }
+        }
+
+        string targetStorageType = isColdRequired ? "COLD" : "STANDARD";
+
+        // 2. Lấy danh sách kệ đang active thuộc kho
+        var locations = await _context.WarehouseStorageLocations
+            .AsNoTracking()
+            .Where(l => l.WarehouseId == warehouseId && l.IsActive)
+            .ToListAsync(ct);
+
+        // 3. Tính toán dung tích đã sử dụng cho từng kệ từ các Batch đang tồn tại (CurrentQuantity > 0)
+        var usedCapacities = await _context.Batches
+            .AsNoTracking()
+            .Where(b => b.WarehouseId == warehouseId && b.StorageLocationId != null && b.CurrentQuantity > 0)
+            .GroupBy(b => b.StorageLocationId!.Value)
+            .Select(g => new { LocationId = g.Key, Used = g.Sum(b => b.CurrentQuantity) })
+            .ToDictionaryAsync(x => x.LocationId, x => x.Used, ct);
+
+        var result = new List<StorageLocationSuggestionDto>();
+        foreach (var loc in locations)
+        {
+            decimal used = usedCapacities.TryGetValue(loc.Id, out var u) ? u : 0;
+            decimal remaining = Math.Max(0, loc.MaxCapacityGrams - used);
+            bool typeMatches = string.Equals(loc.StorageType, targetStorageType, StringComparison.OrdinalIgnoreCase);
+            bool hasEnoughCapacity = !requiredGrams.HasValue || remaining >= requiredGrams.Value;
+
+            result.Add(new StorageLocationSuggestionDto
+            {
+                Id = loc.Id,
+                Code = loc.Code,
+                StorageType = loc.StorageType,
+                MaxCapacityGrams = loc.MaxCapacityGrams,
+                CurrentUsedGrams = used,
+                RemainingCapacityGrams = remaining,
+                IsSuitable = typeMatches && hasEnoughCapacity
+            });
+        }
+
+        // Ưu tiên kệ phù hợp nhất lên đầu: đúng loại bảo quản và còn đủ chỗ
+        return result
+            .OrderByDescending(x => x.IsSuitable)
+            .ThenBy(x => x.StorageType == targetStorageType ? 0 : 1)
+            .ThenByDescending(x => x.RemainingCapacityGrams)
+            .ToList();
+    }
+    // [hieppm] End: Triển khai gợi ý kệ kho theo vị thuốc và khối lượng
 }
 

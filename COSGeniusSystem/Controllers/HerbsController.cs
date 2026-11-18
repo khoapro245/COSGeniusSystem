@@ -23,7 +23,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs
     /// </summary>
     [HttpGet]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<HerbResponseDto>>>> GetHerbs([FromQuery] HerbFilterQuery query, CancellationToken ct = default)
     {
         var result = await _herbService.GetHerbsAsync(query, ct);
@@ -35,7 +35,7 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/inventory
     /// </summary>
     [HttpGet("inventory")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<HerbInventoryItemDto>>>> GetHerbInventory(CancellationToken ct = default)
     {
         var result = await _herbService.GetHerbInventorySummaryAsync(ct);
@@ -47,12 +47,12 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/{id}
     /// </summary>
     [HttpGet("{id:int}")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<HerbDetailDto>>> GetHerbById(int id)
     {
         var herb = await _herbService.GetHerbByIdAsync(id);
         if (herb is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         return SuccessResponse(SystemMessages.HerbRetrieved, herb);
     }
@@ -92,7 +92,7 @@ public class HerbsController : BaseApiController
 
         // dto == null && error == null → không tìm thấy → 404
         if (dto is null && error is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         // dto == null && error != null → lỗi validation → 400
         if (error is not null)
@@ -106,12 +106,12 @@ public class HerbsController : BaseApiController
     /// GET /api/v1/herbs/{id}/batches
     /// </summary>
     [HttpGet("{id:int}/batches")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<HerbBatchesResponseDto>>> GetHerbBatches(int id)
     {
         var result = await _herbService.GetHerbBatchesAsync(id);
         if (result is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         return SuccessResponse(SystemMessages.HerbsRetrieved, result);
     }
@@ -126,7 +126,7 @@ public class HerbsController : BaseApiController
     {
         var (success, error) = await _herbService.DeleteHerbAsync(id, ct);
         if (!success && error is null)
-            throw new NotFoundException($"Herb with id {id} was not found.");
+            throw new NotFoundException($"Herb {id} was not found.");
 
         if (!success)
             throw new BadRequestException(error!);

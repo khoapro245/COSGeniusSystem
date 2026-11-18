@@ -13,8 +13,15 @@ public class BatchResponseDto
 
     public decimal OriginalQuantity { get; set; }
     public decimal CurrentQuantity { get; set; }
+    public decimal SystemQuantity { get; set; }
+    public decimal UsableQuantity { get; set; }
+    public decimal DestroyQuantity { get; set; }
     public decimal UnitCost { get; set; }
     public string Status { get; set; } = null!;
+    // [hieppm] Start: Bổ sung Location và SupplierBatchCode
+    public string? Location { get; set; }
+    public string? SupplierBatchCode { get; set; }
+    // [hieppm] End
 }
 
 /// <summary>Wrapper trả về danh sách lô kèm tổng tồn kho.</summary>
@@ -24,6 +31,9 @@ public class HerbBatchesResponseDto
     public string HerbCode { get; set; } = null!;
     public string CommonName { get; set; } = null!;
     public string Unit { get; set; } = null!;
+
+    /// <summary>Tổng SystemQuantity (sổ sách) của tất cả các lô.</summary>
+    public decimal TotalSystemQuantity { get; set; }
 
     /// <summary>Tổng CurrentQuantity của tất cả các lô đang Active.</summary>
     public decimal TotalCurrentQuantity { get; set; }

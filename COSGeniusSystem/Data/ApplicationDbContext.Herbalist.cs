@@ -28,7 +28,15 @@ public partial class ApplicationDbContext
   // Completion inserts must support the enabled MedicineDispense triggers.
   modelBuilder.Entity<MedicineDispense>().ToTable("MedicineDispense",t=>t.UseSqlOutputClause(false));
   modelBuilder.Entity<MedicineDispense>().Property(x=>x.HerbOutboundId).HasColumnName("HerbOutboundID");
-  modelBuilder.Entity<WarehouseStorageLocation>(e=>{e.ToTable("WarehouseStorageLocation");e.HasKey(x=>x.Id); e.Property(x=>x.Code).HasMaxLength(100);});
+  modelBuilder.Entity<WarehouseStorageLocation>(e=>{
+      e.ToTable("WarehouseStorageLocation");
+      e.HasKey(x=>x.Id);
+      e.Property(x=>x.Code).HasMaxLength(100);
+      // [hieppm] Start: Cấu hình MaxCapacityGrams và StorageType
+      e.Property(x=>x.MaxCapacityGrams).HasPrecision(18,3);
+      e.Property(x=>x.StorageType).HasMaxLength(20);
+      // [hieppm] End
+  });
   modelBuilder.Entity<HerbRequisition>(e=>{
    e.ToTable("HerbRequisition");e.HasKey(x=>x.Id);e.Property(x=>x.Id).HasColumnName("HerbRequisitionID");
    e.Property(x=>x.CreatedBy).HasColumnName("RequestedBy"); e.Property(x=>x.CreatedAt).HasColumnName("RequestedAt");

@@ -8,15 +8,15 @@ public class HerbFilterQuery
     /// <summary>Lọc theo TasteProperties (tính chất / quy kinh) – contains.</summary>
     public string? TasteProperties { get; set; }
 
-    /// <summary>Mặc định lấy true. Client truyền null hoặc false để lọc tương ứng.</summary>
-    public bool? IsActive { get; set; } = true;
+    /// <summary>Lọc theo trạng thái IsActive. Để trống để lấy tất cả.</summary>
+    public bool? IsActive { get; set; }
 
     // ---------- Phân trang ----------
     /// <summary>Trang hiện tại (bắt đầu từ 1).</summary>
-    [System.ComponentModel.DataAnnotations.Range(1, 1000000)]
+    [System.ComponentModel.DataAnnotations.Range(1, 1000000, ErrorMessage = "The value is outside the allowed range.")]
     public int Page { get; set; } = 1;
 
     /// <summary>Số bản ghi mỗi trang.</summary>
-    [System.ComponentModel.DataAnnotations.Range(1, 100)]
+    [System.ComponentModel.DataAnnotations.Range(1, 100, ErrorMessage = "The value is outside the allowed range.")]
     public int PageSize { get; set; } = 10;
 }

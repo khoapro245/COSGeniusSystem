@@ -20,11 +20,11 @@ public class UsersController : BaseApiController
     }
 
     /// <summary>
-    /// API-USER-01: Lấy danh sách tài khoản người dùng kèm vai trò (chỉ dành cho ADMIN).
+    /// API-USER-01: Lấy danh sách tài khoản người dùng kèm vai trò (chỉ dành cho ADMIN/MANAGER/Nhân viên nội bộ).
     /// GET /api/v1/users
     /// </summary>
     [HttpGet]
-    [Authorize(Roles = RoleConstants.Admin)]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<UserResponseDto>>>> GetUsers(
         [FromQuery] UserFilterQuery query, CancellationToken ct = default)
     {
@@ -42,7 +42,7 @@ public class UsersController : BaseApiController
     {
         var user = await _userService.GetUserByIdAsync(id, ct);
         if (user is null)
-            throw new NotFoundException($"User with id {id} was not found.");
+            throw new NotFoundException($"User {id} was not found.");
 
         return SuccessResponse(SystemMessages.UserRetrieved, user);
     }
@@ -82,7 +82,7 @@ public class UsersController : BaseApiController
         var (dto, error) = await _userService.UpdateUserAsync(id, request, ct);
 
         if (dto is null && error is null)
-            throw new NotFoundException($"User with id {id} was not found.");
+            throw new NotFoundException($"User {id} was not found.");
 
         if (error is not null)
             throw new BadRequestException(error);
@@ -104,7 +104,7 @@ public class UsersController : BaseApiController
         var (success, isActive, error) = await _userService.ToggleUserStatusAsync(id, currentUserId, ct);
 
         if (!success)
-            throw new BadRequestException(error ?? "Không thể cập nhật trạng thái tài khoản.");
+            throw new BadRequestException(error ?? "The account status could not be updated.");
 
         var msg = isActive
             ? new SystemMessage(200, "Đã kích hoạt lại tài khoản thành công.", true)

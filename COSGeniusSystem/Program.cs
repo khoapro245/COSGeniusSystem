@@ -45,10 +45,12 @@ builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService
 builder.Services.AddScoped<IFormulaService, FormulaService>();
 // Grouped Herbalist requisitions replace the legacy DispensingService.
 builder.Services.AddScoped<IAuditService, AuditService>();
-// [hieppm] Start: Đăng ký DI cho module Purchase Orders & Goods Receipts
+builder.Services.AddScoped<IDisposalService, DisposalService>();
+// [hieppm] Start: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
-// [hieppm] End: Đăng ký DI cho module Purchase Orders & Goods Receipts
+builder.Services.AddScoped<IImportRequestService, ImportRequestService>();
+// [hieppm] End: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
@@ -84,7 +86,7 @@ builder.Services.AddCors(options =>
 
 // Configure JWT Authentication
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"]
-    ?? throw new InvalidOperationException("Jwt:SecretKey is not configured.");
+    ?? throw new InvalidOperationException("The system authentication key is not configured.");
 
 var jwtIssuer = builder.Configuration["Jwt:Issuer"] ?? "COSGeniusSystem";
 var jwtAudience = builder.Configuration["Jwt:Audience"] ?? "COSGeniusClient";
@@ -126,7 +128,7 @@ builder.Services.AddAuthentication(options =>
             await context.Response.WriteAsJsonAsync(
                 new ApiResponseModel<object?>(
                     401,
-                    "Authentication is required.",
+                    "Please sign in to continue.",
                     false,
                     null),
                 context.HttpContext.RequestAborted);
@@ -139,7 +141,7 @@ builder.Services.AddAuthentication(options =>
             await context.Response.WriteAsJsonAsync(
                 new ApiResponseModel<object?>(
                     403,
-                    "Access is forbidden.",
+                    "You do not have permission to perform this action.",
                     false,
                     null),
                 context.HttpContext.RequestAborted);
@@ -162,7 +164,7 @@ builder.Services.AddAuthentication(options =>
 
             if (blacklistService.IsTokenBlacklisted(token))
             {
-                context.Fail("This token has been revoked.");
+                context.Fail("Your session has been revoked. Please sign in again.");
             }
 
             return Task.CompletedTask;
@@ -268,6 +270,10 @@ app.UseStatusCodePages(async statusContext =>
 });
 
 app.UseHttpsRedirection();
+
+// [hieppm] Start: Phục vụ file tĩnh trong wwwroot cho file upload chứng từ
+app.UseStaticFiles();
+// [hieppm] End
 
 app.UseCors("AllowFrontend");
 

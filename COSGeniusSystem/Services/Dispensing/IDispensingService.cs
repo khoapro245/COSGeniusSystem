@@ -23,9 +23,14 @@ public interface IDispensingService
     // HB-06: Xác nhận nhận đủ từ kho
     Task<bool> ConfirmReceivedAsync(int slipId, ClaimsPrincipal user, CancellationToken ct = default);
 
-    // HB-07: Bốc xong đơn thuốc
-    Task<bool> CompleteDispenseOrderAsync(int orderId, ClaimsPrincipal user, CancellationToken ct = default);
+    // HB-07: Bốc xong đơn thuốc (trừ lô tồn kho ngay khi bốc xong)
+    Task<bool> CompleteDispenseOrderAsync(int orderId, CompleteDispenseOrderRequest? request, ClaimsPrincipal user, CancellationToken ct = default);
 
     // HB-09: Lịch sử bốc thuốc
     Task<List<DispensedHistoryRecordDto>> GetDispenseHistoryAsync(DispenseHistoryFilterQuery query, CancellationToken ct = default);
+
+    // ─── Nghiệp vụ Phân hệ Kho (WH-11 -> WH-14) ───
+    Task<List<FefoHerbSuggestionDto>> GetFefoSuggestionsAsync(int slipId, CancellationToken ct = default);
+    Task<bool> ApproveAndIssueWarehouseAsync(int slipId, WarehouseIssueRequest request, ClaimsPrincipal user, CancellationToken ct = default);
+    Task<bool> RejectWarehouseSlipAsync(int slipId, WarehouseRejectRequest request, ClaimsPrincipal user, CancellationToken ct = default);
 }

@@ -14,7 +14,7 @@ public static class InvoiceAccrual
     public static async Task GenerateAsync(ApplicationDbContext db, int recordId, CancellationToken ct = default)
     {
         if (db.Database.IsRelational() && db.Database.CurrentTransaction == null)
-            throw new InvalidOperationException("Invoice accrual requires a business transaction.");
+            throw new InvalidOperationException("Charge accrual must be performed within a business transaction.");
         var record = db.Database.IsSqlServer()
             ? await db.MedicalRecords.FromSqlInterpolated($"SELECT * FROM dbo.MedicalRecord WITH (UPDLOCK,HOLDLOCK) WHERE RecordID={recordId}").SingleAsync(ct)
             : await db.MedicalRecords.SingleAsync(x => x.RecordId == recordId, ct);
@@ -33,7 +33,7 @@ public static class InvoiceAccrual
             // Canonical dispensing quantities are grams. Reject ambiguous catalog units rather than misprice them.
             if (rx.TotalDoses <= 0 || ingredients.Count == 0 || rx.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0
                 || d.Herb.StandardPrice < 0 || !Herbalist.HerbalistWorkflowRules.SupportsStockUnit(d.Herb.Unit)))
-                throw new ConflictException("Cần chuẩn hóa giá bán theo gram và thành phần đơn thuốc trước khi lập hóa đơn.");
+                throw new ConflictException("The selling price per gram and prescription ingredients must be standardized before invoicing.");
             lines.Add(new InvoiceDetail { ItemType = "HERB_REMEDY", PrescriptionId = rx.PrescriptionId,
                 SourceKey = $"RX:{rx.PrescriptionId}", ItemName = rx.PrescriptionName ?? rx.PrescriptionCode ?? "Đơn thuốc",
                 Quantity = 1, UnitPrice = ingredients.Sum(i => i.SubTotal), UnitSnapshot = "đơn",
@@ -50,7 +50,7 @@ public static class InvoiceAccrual
             var covered = existing.Where(i => i.PlanDetailId == d.PlanDetailId).Sum(i => i.Quantity);
             var quantity = eligible - covered;
             if (quantity <= 0) continue;
-            if (d.UnitPrice < 0) throw new ConflictException("Giá dịch vụ không hợp lệ.");
+            if (d.UnitPrice < 0) throw new ConflictException("Invalid service price.");
             lines.Add(new InvoiceDetail { ItemType = "SERVICE", PlanDetailId = d.PlanDetailId,
                 SourceKey = $"SERVICE:{d.PlanDetailId}:{eligible}", ItemName = d.ServiceNameSnapshot,
                 Quantity = quantity, UnitPrice = d.UnitPrice, UnitSnapshot = d.UnitSnapshot, TreatmentTypeSnapshot = d.Plan.TreatmentType });

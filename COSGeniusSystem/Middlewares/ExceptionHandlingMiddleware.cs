@@ -62,7 +62,7 @@ public class ExceptionHandlingMiddleware
         }
 
         var message = statusCode == (int)HttpStatusCode.InternalServerError && !_env.IsDevelopment()
-            ? "Đã xảy ra lỗi trên hệ thống. Vui lòng thử lại sau."
+            ? "A system error occurred. Please try again later."
             : exception.Message;
 
         var apiResponse = ApiResponse.Fail(message);

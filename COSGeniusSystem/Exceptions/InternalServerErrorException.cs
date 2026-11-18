@@ -4,6 +4,6 @@ namespace COSGeniusSystem.Exceptions;
 
 public sealed class InternalServerErrorException : ApiException
 {
-    public InternalServerErrorException(string message = "An unexpected error occurred.") : base(500, message) { }
+    public InternalServerErrorException(string message = "A system error occurred. Please try again later.") : base(500, message) { }
     public InternalServerErrorException(SystemMessage message) : base(500, message) { }
 }

@@ -1,4 +1,4 @@
-﻿using COSGeniusSystem.DTOs;
+using COSGeniusSystem.DTOs;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -29,7 +29,7 @@ public partial class HerbalistController
             id = p.PatientId, p.PatientCode, p.FullName, p.DateOfBirth, p.Gender, p.Phone, p.Address, p.AllergyNote,
             contacts = p.PatientContacts.Select(c => new { c.FullName, c.Phone }).ToList()
         }).SingleOrDefaultAsync(ct);
-        return patient == null ? Failure(404, "Không tìm thấy bệnh nhân.") : Data(patient);
+        return patient == null ? Failure(404, "Patient was not found.") : Data(patient);
     }
 
     [HttpGet("herbs")]
@@ -53,7 +53,7 @@ public partial class HerbalistController
     public async Task<IActionResult> HerbDetail(int id, CancellationToken ct)
     {
         var herb = await db.Herbs.AsNoTracking().Where(h => h.HerbId == id).Select(h => new { id = h.HerbId, h.HerbCode, h.CommonName, h.ScientificName, h.Unit, h.IsActive, h.TasteProperties }).SingleOrDefaultAsync(ct);
-        if (herb == null) return Failure(404, "Không tìm thấy vị thuốc.");
+        if (herb == null) return Failure(404, "Herb was not found.");
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var batches = await db.Batches.AsNoTracking().Where(b => b.HerbId == id).OrderBy(b => b.ExpiryDate).ThenBy(b => b.BatchId).Select(b => new
         {
@@ -85,7 +85,7 @@ public partial class HerbalistController
             id = h.HerbalFormulaId, h.FormulaCode, h.FormulaName, h.ReviewedAt, h.IntendedUse, h.UsageInstructions,
             ingredients = h.HerbalFormulaDetails.Select(d => new { d.HerbId, d.Herb.HerbCode, name = d.Herb.CommonName, d.DosagePerDose, d.RoleInFormula, d.Note }).ToList()
         }).SingleOrDefaultAsync(ct);
-        return result == null ? Failure(404, "Không tìm thấy công thức đang hoạt động đã duyệt.") : Data(result);
+        return result == null ? Failure(404, "No approved active formula was found.") : Data(result);
     }
 }
 

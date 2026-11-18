@@ -22,7 +22,7 @@ public class FormulaService : IFormulaService
         var claim = actor.FindFirst(ClaimTypes.NameIdentifier) ?? actor.FindFirst("sub");
         return int.TryParse(claim?.Value, out var id) && id > 0
             ? id
-            : throw new UnauthorizedException("User identity not found in token.");
+            : throw new UnauthorizedException("The user identifier was not found in the session.");
     }
 
     public async Task<List<HerbalFormulaDto>> GetFormulasAsync(FormulaFilterQuery query, CancellationToken ct = default)
@@ -80,7 +80,7 @@ public class FormulaService : IFormulaService
             .FirstOrDefaultAsync(f => f.HerbalFormulaId == id, ct);
 
         if (formula == null)
-            throw new NotFoundException($"Herbal formula with ID {id} not found.");
+            throw new NotFoundException($"Formula {id} was not found.");
 
         var allApproved = await _db.HerbalFormulas
             .Include(f => f.HerbalFormulaDetails)
@@ -100,23 +100,23 @@ public class FormulaService : IFormulaService
                      ?? (isManager ? await _db.Doctors.FirstOrDefaultAsync(d => d.IsActive, ct) : null);
 
         if (doctor == null)
-            throw new BadRequestException("Tài khoản chưa có hồ sơ bác sĩ đang hoạt động.");
-        if (!doctor.IsActive) throw new BadRequestException("Hồ sơ bác sĩ đã ngừng hoạt động.");
+            throw new BadRequestException("The account does not have an active doctor profile.");
+        if (!doctor.IsActive) throw new BadRequestException("The doctor profile is inactive.");
         if (string.IsNullOrWhiteSpace(request.FormulaName) || request.FormulaName.Trim().Length > 150)
-            throw new BadRequestException("Tên công thức bắt buộc và không quá 150 ký tự.");
+            throw new BadRequestException("Formula name is required and must not exceed 150 characters.");
         if (request.Items == null || request.Items.Count == 0 || request.Items.Any(i => i.DosagePerDose <= 0 || i.RoleInFormula?.Length > 50 || i.Note?.Length > 255) || request.Items.Select(i => i.HerbId).Distinct().Count() != request.Items.Count)
-            throw new BadRequestException("Cần ít nhất một vị thuốc, không trùng lặp, liều lượng dương và ghi chú hợp lệ.");
+            throw new BadRequestException("At least one herb is required, with no duplicates, positive doses, and valid notes.");
         if (request.ProposalType != null && request.ProposalType != "CREATE" && request.ProposalType != "UPDATE")
-            throw new BadRequestException("Loại đề xuất không hợp lệ.");
+            throw new BadRequestException("Invalid proposal type.");
         if (request.ProposalType == "UPDATE")
         {
             var baseFormula = await _db.HerbalFormulas.FirstOrDefaultAsync(f => f.FormulaCode == request.BaseFormulaCode && f.Status == "APPROVED" && f.IsActive, ct);
-            if (baseFormula == null) throw new BadRequestException("Công thức gốc không tồn tại hoặc không còn được sử dụng.");
+            if (baseFormula == null) throw new BadRequestException("The original formula does not exist or is no longer available.");
             request.BaseFormulaCode = baseFormula.FormulaCode;
         }
 
         if (request.ProposalReason?.Trim().Length > 1000)
-            throw new BadRequestException("Lý do đề xuất không quá 1000 ký tự.");
+            throw new BadRequestException("The proposal reason must not exceed 1000 characters.");
 
         // Generate FormulaCode if not provided
         string formulaCode;
@@ -153,6 +153,7 @@ public class FormulaService : IFormulaService
 
         var formula = new HerbalFormula
         {
+            FormulaCode = formulaCode,
             FormulaName = request.FormulaName.Trim(),
             UsageInstructions = request.UsageInstructions,
             IntendedUse = request.IntendedUse,
@@ -172,7 +173,7 @@ public class FormulaService : IFormulaService
             {
                 var herb = await _db.Herbs.FindAsync([item.HerbId], ct);
                 if (herb == null || !herb.IsActive)
-                    throw new BadRequestException($"Herb with ID {item.HerbId} does not exist.");
+                    throw new BadRequestException($"Herb {item.HerbId} was not found.");
 
                 formula.HerbalFormulaDetails.Add(new HerbalFormulaDetail
                 {
@@ -197,7 +198,7 @@ public class FormulaService : IFormulaService
             .FirstOrDefaultAsync(f => f.HerbalFormulaId == id, ct);
 
         if (formula == null)
-            throw new NotFoundException($"Herbal formula with ID {id} not found.");
+            throw new NotFoundException($"Formula {id} was not found.");
 
         formula.FormulaName = request.FormulaName.Trim();
         formula.UsageInstructions = request.UsageInstructions;
@@ -222,7 +223,7 @@ public class FormulaService : IFormulaService
             {
                 var herb = await _db.Herbs.FindAsync([item.HerbId], ct);
                 if (herb == null)
-                    throw new BadRequestException($"Herb with ID {item.HerbId} does not exist.");
+                    throw new BadRequestException($"Herb {item.HerbId} was not found.");
 
                 formula.HerbalFormulaDetails.Add(new HerbalFormulaDetail
                 {
@@ -246,7 +247,7 @@ public class FormulaService : IFormulaService
             .FirstOrDefaultAsync(f => f.HerbalFormulaId == id, ct);
 
         if (formula == null)
-            throw new NotFoundException($"Herbal formula with ID {id} not found.");
+            throw new NotFoundException($"Formula {id} was not found.");
 
         // Rule: Không được xóa đơn thuốc, chỉ vô hiệu hóa
         formula.IsActive = !formula.IsActive;
@@ -263,10 +264,10 @@ public class FormulaService : IFormulaService
             .FirstOrDefaultAsync(f => f.HerbalFormulaId == id, ct);
 
         if (formula == null)
-            throw new NotFoundException($"Herbal formula proposal with ID {id} not found.");
+            throw new NotFoundException($"Formula proposal {id} was not found.");
 
         if (formula.Status != "PENDING")
-            throw new BadRequestException($"Formula proposal status is '{formula.Status}' and cannot be reviewed again.");
+            throw new BadRequestException($"The formula proposal has status '{formula.Status}' and cannot be approved again.");
 
         var userId = GetUserId(actor);
         formula.ReviewedBy = userId;

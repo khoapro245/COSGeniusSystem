@@ -27,9 +27,39 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     {
         if (!actor.IsInRole(RoleConstants.Doctor)) throw new ForbiddenException();
         var userId = UserId(actor);
-        return await db.Doctors.Where(d => d.UserId == userId && d.IsActive && d.User != null && d.User.IsActive)
-            .Select(d => (int?)d.DoctorId).SingleOrDefaultAsync(ct)
-            ?? throw new ForbiddenException("The user has no active doctor account.");
+        var doctorId = await db.Doctors.Where(d => d.UserId == userId && d.IsActive && (d.User == null || d.User.IsActive))
+            .Select(d => (int?)d.DoctorId).FirstOrDefaultAsync(ct);
+
+        if (doctorId.HasValue) return doctorId.Value;
+
+        // Tự động kiểm tra và đồng bộ hoặc tạo bản ghi Doctor cho user có role Doctor
+        var user = await db.Users.FirstOrDefaultAsync(u => u.UserId == userId && u.IsActive, ct);
+        if (user != null)
+        {
+            var existingDoctor = await db.Doctors.FirstOrDefaultAsync(d => d.UserId == null && d.FullName == user.FullName, ct);
+            if (existingDoctor != null)
+            {
+                existingDoctor.UserId = user.UserId;
+                existingDoctor.IsActive = true;
+                await db.SaveChangesAsync(ct);
+                return existingDoctor.DoctorId;
+            }
+
+            var newDoctor = new Doctor
+            {
+                UserId = user.UserId,
+                FullName = string.IsNullOrWhiteSpace(user.FullName) ? user.Username : user.FullName,
+                Specialization = "Bác sĩ Y học cổ truyền",
+                LicenseNumber = "CCHN-" + user.UserId.ToString("D4"),
+                Phone = user.Phone,
+                IsActive = true
+            };
+            db.Doctors.Add(newDoctor);
+            await db.SaveChangesAsync(ct);
+            return newDoctor.DoctorId;
+        }
+
+        throw new ForbiddenException("The user has no active doctor account.");
     }
 
     private async Task AccessAsync(ClaimsPrincipal actor, ExaminationRegistration registration, bool clinical, CancellationToken ct)
@@ -41,7 +71,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     private static void Validate(object request)
     {
-        if (request is null) throw new BadRequestException("Request and list items cannot be null.");
+        if (request is null) throw new BadRequestException("The request and list elements must not be null.");
         var errors = new List<ValidationResult>();
         if (!Validator.TryValidateObject(request, new ValidationContext(request), errors, true))
             throw new BadRequestException(string.Join(" ", errors.Select(e => e.ErrorMessage)));
@@ -49,8 +79,8 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
     private static void Version(byte[] actual, byte[] expected)
     {
-        if (expected is null || expected.Length != 8) throw new BadRequestException("An 8-byte RowVersion is required.");
-        if (!actual.SequenceEqual(expected)) throw new ConflictException("Data changed. Reload the examination and retry with the latest RowVersion.");
+        if (expected is null || expected.Length != 8) throw new BadRequestException("An 8-byte row version is required.");
+        if (!actual.SequenceEqual(expected)) throw new ConflictException("The data has changed. Please reload the examination before trying again.");
     }
 
     // Every write to an examination, including its child drafts, takes this same lock.
@@ -65,7 +95,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 .FromSqlInterpolated($"SELECT * FROM dbo.ExaminationRegistration WITH (UPDLOCK, HOLDLOCK) WHERE RegistrationID = {registrationId}")
                 .SingleOrDefaultAsync(ct)
             : await db.ExaminationRegistrations.SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct);
-        if (registration == null) throw new NotFoundException("Registration not found.");
+        if (registration == null) throw new NotFoundException("Examination registration was not found.");
         await AccessAsync(actor, registration, clinical, ct);
         var result = await action(registration);
         await db.SaveChangesAsync(ct);
@@ -76,22 +106,22 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     private async Task<MedicalRecord> RecordAsync(ExaminationRegistration registration, bool editable, CancellationToken ct)
     {
         var record = await db.MedicalRecords.SingleOrDefaultAsync(r => r.RegistrationId == registration.RegistrationId, ct)
-            ?? throw new ConflictException("Start the examination first.");
+            ?? throw new ConflictException("Please start the examination first.");
         if (record.PatientId != registration.PatientId || record.DoctorId != registration.DoctorId)
-            throw new ConflictException("Registration and medical record are inconsistent.");
+            throw new ConflictException("The registration and examination record are inconsistent.");
         if (editable && (registration.Status != "IN_PROGRESS" || record.Status != "IN_PROGRESS"))
-            throw new ConflictException("Clinical content is editable only while the examination is IN_PROGRESS.");
+            throw new ConflictException("Content can only be edited while the examination is in progress.");
         return record;
     }
 
     private async Task ValidateAssignmentAsync(int patientId, RegistrationInput request, CancellationToken ct)
     {
-        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct)) throw new NotFoundException("Patient not found.");
+        if (!await db.Patients.AnyAsync(p => p.PatientId == patientId, ct)) throw new NotFoundException("Patient was not found.");
         if (!await db.Doctors.AnyAsync(d => d.DoctorId == request.DoctorId && d.IsActive && d.User != null && d.User.IsActive
             && d.User.UserRoles.Any(r => r.Role.RoleCode == RoleConstants.Doctor), ct))
-            throw new BadRequestException("The assigned doctor must have an active linked user account.");
+            throw new BadRequestException("The assigned doctor must have an active linked account.");
         if (request.ContactId.HasValue && !await db.PatientContacts.AnyAsync(c => c.ContactId == request.ContactId && c.PatientId == patientId, ct))
-            throw new BadRequestException("Contact does not belong to this patient.");
+            throw new BadRequestException("The contact does not belong to this patient.");
     }
 
     public async Task<RegistrationResponse> CreateAsync(ClaimsPrincipal actor, CreateRegistrationRequest request, CancellationToken ct)
@@ -110,6 +140,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         var symptoms = request.Symptoms ?? request.DoctorAdvice;
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
+        await PatientRequestGuard.EnsureAvailableAsync(db, request.PatientId, ct);
         // HOLDLOCK protects the missing-key range on the first registration of the day.
         var counter = db.Database.IsRelational()
             ? await db.ExaminationQueueCounters
@@ -141,7 +172,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         Validate(request);
         await WriteAsync(actor, registrationId, false, async registration =>
         {
-            if (registration.Status != "WAITING") throw new ConflictException("Only WAITING registrations can be updated.");
+            if (registration.Status != "WAITING") throw new ConflictException("Only a pending registration can be updated.");
             Version(registration.RowVersion, request.RowVersion);
             await ValidateAssignmentAsync(registration.PatientId, request, ct);
             var date = request.BusinessDate ?? registration.BusinessDate;
@@ -180,13 +211,13 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     {
         Reception(actor);
         Validate(request);
-        if (string.IsNullOrWhiteSpace(request.Reason)) throw new BadRequestException("Cancellation reason is required.");
+        if (string.IsNullOrWhiteSpace(request.Reason)) throw new BadRequestException("A cancellation reason is required.");
         await WriteAsync(actor, registrationId, false, async registration =>
         {
             Version(registration.RowVersion, request.RowVersion);
             if (registration.Status != "WAITING" || registration.StartedAt != null || registration.CompletedAt != null
                 || await db.MedicalRecords.AnyAsync(r => r.RegistrationId == registrationId, ct))
-                throw new ConflictException("Only unstarted WAITING registrations can be cancelled.");
+                throw new ConflictException("Only a pending registration whose examination has not started can be cancelled.");
             var now = DateTime.UtcNow;
             registration.Status = "CANCELLED";
             registration.CancelledAt = now;
@@ -200,7 +231,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     public async Task<PagedResult<RegistrationResponse>> ListAsync(ClaimsPrincipal actor, RegistrationQuery query, bool mine, CancellationToken ct)
     {
         Validate(query);
-        if (query.FromDate > query.ToDate) throw new BadRequestException("FromDate cannot exceed ToDate.");
+        if (query.FromDate > query.ToDate) throw new BadRequestException("The start date must be on or before the end date.");
         var q = db.ExaminationRegistrations.AsNoTracking();
         if (mine || !actor.IsInRole(RoleConstants.ReceptionStaff))
         {
@@ -326,7 +357,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     public async Task<ExaminationResponse> GetAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct)
     {
         var registration = await db.ExaminationRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct)
-            ?? throw new NotFoundException("Registration not found.");
+            ?? throw new NotFoundException("Examination registration was not found.");
         await AccessAsync(actor, registration, false, ct);
         var record = await db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleOrDefaultAsync(ct);
         // Patient API mapping and validation remain the single source of patient information.
@@ -340,7 +371,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     {
         Validate(query);
         var registration = await db.ExaminationRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct)
-            ?? throw new NotFoundException("Registration not found.");
+            ?? throw new NotFoundException("Examination registration was not found.");
         await AccessAsync(actor, registration, true, ct);
         var q = db.MedicalRecords.AsNoTracking().Where(r => r.PatientId == registration.PatientId);
         var total = await q.CountAsync(ct);
@@ -358,10 +389,10 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             {
                 if (registration.Status is not ("IN_PROGRESS" or "COMPLETED") || existing.Status != registration.Status
                     || existing.PatientId != registration.PatientId || existing.DoctorId != registration.DoctorId)
-                    throw new ConflictException("Registration and medical record are inconsistent.");
+                    throw new ConflictException("The registration and examination record are inconsistent.");
                 return true;
             }
-            if (registration.Status != "WAITING") throw new ConflictException("Only WAITING registrations can be started.");
+            if (registration.Status != "WAITING") throw new ConflictException("Only a pending registration can be started.");
             await DoctorAvailability.EnsureAvailableAsync(db, registration.DoctorId, ct);
             var now = DateTime.UtcNow;
             var allergy = await db.Patients.Where(p => p.PatientId == registration.PatientId).Select(p => p.AllergyNote).SingleAsync(ct);
@@ -383,11 +414,11 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     public async Task<ExaminationResponse> HistoryDetailAsync(ClaimsPrincipal actor, int registrationId, int recordId, CancellationToken ct)
     {
         var current = await db.ExaminationRegistrations.AsNoTracking().SingleOrDefaultAsync(r => r.RegistrationId == registrationId, ct)
-            ?? throw new NotFoundException("Registration not found.");
+            ?? throw new NotFoundException("Examination registration was not found.");
         await AccessAsync(actor, current, true, ct);
         var record = await db.MedicalRecords.AsNoTracking().Where(r => r.RecordId == recordId && r.PatientId == current.PatientId)
             .Select(RecordProjection).SingleOrDefaultAsync(ct)
-            ?? throw new NotFoundException("Historical record does not belong to this patient.");
+            ?? throw new NotFoundException("The historical record does not belong to this patient.");
         return new(await RegistrationResponseAsync(record.RegistrationId, ct), await patients.GetByIdAsync(current.PatientId, ct),
             record, await PrescriptionsQuery(record.RecordId).ToListAsync(ct), await PlansQuery(record.RecordId).ToListAsync(ct));
     }
@@ -413,10 +444,10 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         {
             var record = await RecordAsync(registration, false, ct);
             if (record.Status == "COMPLETED" && registration.Status == "COMPLETED") return true;
-            if (record.Status != "IN_PROGRESS" || registration.Status != "IN_PROGRESS") throw new ConflictException("The examination is not IN_PROGRESS.");
+            if (record.Status != "IN_PROGRESS" || registration.Status != "IN_PROGRESS") throw new ConflictException("The examination is not currently in progress.");
             Version(record.RowVersion, request.RowVersion);
             if (string.IsNullOrWhiteSpace(record.Symptoms) || string.IsNullOrWhiteSpace(record.FinalDiagnosis))
-                throw new BadRequestException("Symptoms and FinalDiagnosis are required to complete an examination.");
+                throw new BadRequestException("Symptoms and a final diagnosis are required to complete the examination.");
             // Publish saved drafts atomically with completion.
             var prescriptions = await db.HerbalPrescriptions.Include(p => p.HerbalPrescriptionDetails)
                 .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "SENT")).ToListAsync(ct);
