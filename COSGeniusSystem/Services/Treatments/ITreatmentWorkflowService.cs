@@ -13,6 +13,7 @@ public interface ITreatmentWorkflowService
     Task<SessionOverview> SessionAsync(ClaimsPrincipal actor, int id, CancellationToken ct);
     Task<IReadOnlyList<TreatmentWorkload>> WorkloadAsync(ClaimsPrincipal actor, TreatmentWorkloadQuery query, CancellationToken ct);
     Task<SessionOverview> RequestAsync(ClaimsPrincipal actor, int planId, RequestTreatment request, CancellationToken ct);
+    Task<IReadOnlyList<SessionOverview>> RequestBatchAsync(ClaimsPrincipal actor, BatchTreatmentRequest request, CancellationToken ct);
     Task<SessionOverview> StartAsync(ClaimsPrincipal actor, int id, VersionRequest request, CancellationToken ct);
     Task<SessionOverview> CompleteAsync(ClaimsPrincipal actor, int id, CompleteTreatment request, CancellationToken ct);
     Task<SessionOverview> CancelAsync(ClaimsPrincipal actor, int id, CancelTreatment request, CancellationToken ct);

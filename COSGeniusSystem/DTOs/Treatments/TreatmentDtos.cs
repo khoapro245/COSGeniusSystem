@@ -14,6 +14,7 @@ public sealed class PlanQuery : PageQuery
 public class SessionQuery : PageQuery
 {
     public bool ExcludePlanned { get; set; }
+    [Range(1, int.MaxValue)] public int? PatientId { get; set; }
     [Range(1, int.MaxValue, ErrorMessage = "The value is outside the allowed range.")] public int? PlanId { get; set; }
     [Range(1, int.MaxValue, ErrorMessage = "The value is outside the allowed range.")] public int? DoctorId { get; set; }
     public string? Status { get; set; }
@@ -42,6 +43,19 @@ public sealed class RequestTreatment : VersionRequest
     [Required(ErrorMessage = "This field is required.")] public DateOnly? ScheduledDate { get; set; }
     [StringLength(1000, ErrorMessage = "Notes must not exceed 1000 characters.")]
     public string? Note { get; set; }
+}
+public sealed class BatchTreatmentRequest
+{
+    [Range(1, int.MaxValue)] public int PatientId { get; set; }
+    [Required] public DateOnly? ScheduledDate { get; set; }
+    [Required, RegularExpression("^(MORNING|AFTERNOON)$")] public string Shift { get; set; } = "";
+    [StringLength(1000)] public string? Note { get; set; }
+    [Required] public List<BatchTreatmentItem> Items { get; set; } = new();
+}
+public sealed class BatchTreatmentItem : VersionRequest
+{
+    public int PlanId { get; set; }
+    public int AssignedDoctorId { get; set; }
 }
 public sealed class CancelTreatment : VersionRequest
 {

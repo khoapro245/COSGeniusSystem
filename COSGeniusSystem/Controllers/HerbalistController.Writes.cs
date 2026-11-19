@@ -132,7 +132,7 @@ public partial class HerbalistController
         if(link==null) return Failure(404,"There is no active request.");
         var r=link.Request;
         if(link.CompletedAt.HasValue || await db.MedicineDispenses.AnyAsync(x=>x.PrescriptionId==id,ct)) return Failure(409,"The prescription has already been dispensed.");
-        if((r.Status!="RECEIVED" && r.Status!="DISCREPANCY") || !Matches(r.RowVersion,input.RowVersion)) return Failure(409,"Reconciliation is incomplete or the version has changed.");
+        if(r.Status!="RECEIVED" || !Matches(r.RowVersion,input.RowVersion)) return Failure(409,"Reconciliation is incomplete or the version has changed.");
         if(input.Allocations.Select(x=>x.OutboundDetailId).Distinct().Count()!=input.Allocations.Length || input.Allocations.Any(x=>x.QuantityGrams<=0 || decimal.Round(x.QuantityGrams,3)!=x.QuantityGrams || !r.Allocations.Any(a=>a.Id==x.OutboundDetailId))) return Failure(400,"Invalid allocation.");
         var needs=await db.HerbRequisitionDetails.Where(x=>x.RequestId==r.Id && x.PrescriptionId==id).GroupBy(x=>x.HerbId).Select(g=>new {HerbId=g.Key,Quantity=g.Sum(x=>x.RequestedQuantity)}).ToDictionaryAsync(x=>x.HerbId,x=>x.Quantity,ct);
         var supplied=input.Allocations.GroupBy(x=>r.Allocations.Single(a=>a.Id==x.OutboundDetailId).HerbId).ToDictionary(g=>g.Key,g=>g.Sum(x=>x.QuantityGrams));
