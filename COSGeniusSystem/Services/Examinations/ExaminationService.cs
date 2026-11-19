@@ -172,7 +172,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         Validate(request);
         await WriteAsync(actor, registrationId, false, async registration =>
         {
-            if (registration.Status != "WAITING") throw new ConflictException("Only a pending registration can be updated.");
+            if (registration.Status != "WAITING" || registration.BusinessDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("Only a pending registration can be updated.");
             Version(registration.RowVersion, request.RowVersion);
             await ValidateAssignmentAsync(registration.PatientId, request, ct);
             var date = request.BusinessDate ?? registration.BusinessDate;
@@ -215,7 +215,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         await WriteAsync(actor, registrationId, false, async registration =>
         {
             Version(registration.RowVersion, request.RowVersion);
-            if (registration.Status != "WAITING" || registration.StartedAt != null || registration.CompletedAt != null
+            if (registration.Status != "WAITING" || registration.BusinessDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) || registration.StartedAt != null || registration.CompletedAt != null
                 || await db.MedicalRecords.AnyAsync(r => r.RegistrationId == registrationId, ct))
                 throw new ConflictException("Only a pending registration whose examination has not started can be cancelled.");
             var now = DateTime.UtcNow;
@@ -243,10 +243,11 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         if (query.FromDate.HasValue) q = q.Where(r => r.BusinessDate >= query.FromDate);
         if (query.ToDate.HasValue) q = q.Where(r => r.BusinessDate <= query.ToDate);
 
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
         var normalizedStatus = NormalizeStatus(query.Status);
         if (!string.IsNullOrWhiteSpace(normalizedStatus))
         {
-            q = q.Where(r => r.Status == normalizedStatus);
+            if (normalizedStatus == "EXPIRED") q = q.Where(r => r.Status == "WAITING" && r.BusinessDate < today && r.StartedAt == null && r.CompletedAt == null && r.MedicalRecord == null); else if (normalizedStatus == "WAITING") q = q.Where(r => r.Status == "WAITING" && !(r.BusinessDate < today && r.StartedAt == null && r.CompletedAt == null && r.MedicalRecord == null)); else q = q.Where(r => r.Status == normalizedStatus);
         }
 
         if (!string.IsNullOrWhiteSpace(query.Session))
@@ -325,7 +326,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             .ThenBy(r => r.QueueNumber)
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Take(query.PageSize)
-            .Select(RegistrationProjection)
+            .Select(RegistrationProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))))
             .ToListAsync(ct);
 
         var items = dbItems.Select((r, index) =>
@@ -392,7 +393,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                     throw new ConflictException("The registration and examination record are inconsistent.");
                 return true;
             }
-            if (registration.Status != "WAITING") throw new ConflictException("Only a pending registration can be started.");
+            if (registration.Status != "WAITING" || registration.BusinessDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("Only a pending registration can be started.");
             await DoctorAvailability.EnsureAvailableAsync(db, registration.DoctorId, ct);
             var now = DateTime.UtcNow;
             var allergy = await db.Patients.Where(p => p.PatientId == registration.PatientId).Select(p => p.AllergyNote).SingleAsync(ct);
@@ -470,12 +471,12 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
     }
 
     private Task<RegistrationResponse> RegistrationResponseAsync(int id, CancellationToken ct) =>
-        db.ExaminationRegistrations.AsNoTracking().Where(r => r.RegistrationId == id).Select(RegistrationProjection).SingleAsync(ct);
+        db.ExaminationRegistrations.AsNoTracking().Where(r => r.RegistrationId == id).Select(RegistrationProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).SingleAsync(ct);
 
     private Task<MedicalRecordResponse> RecordResponseAsync(int registrationId, CancellationToken ct) =>
         db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleAsync(ct);
 
-    private static readonly Expression<Func<ExaminationRegistration, RegistrationResponse>> RegistrationProjection = r =>
+    private static Expression<Func<ExaminationRegistration, RegistrationResponse>> RegistrationProjection(DateOnly today) => r =>
         new(r.RegistrationId, r.RegistrationCode, r.PatientId,
             r.Patient != null ? r.Patient.PatientCode : null,
             r.Patient != null ? r.Patient.FullName : "Không xác định",
@@ -483,7 +484,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             r.DoctorId,
             r.Doctor != null ? r.Doctor.FullName : "Chưa phân công",
             r.RegisteredBy, r.RegisteredAt, r.BusinessDate, r.QueueNumber, r.IsPriority,
-            r.ContactId, r.Contact == null ? null : r.Contact.FullName, r.Symptoms, r.Note, r.Status,
+            r.ContactId, r.Contact == null ? null : r.Contact.FullName, r.Symptoms, r.Note, r.Status == "WAITING" && r.BusinessDate < today && r.StartedAt == null && r.CompletedAt == null && r.MedicalRecord == null ? "EXPIRED" : r.Status,
             r.StartedAt, r.CompletedAt, r.MedicalRecord == null ? null : r.MedicalRecord.RecordId, r.RowVersion, r.Session);
 
     private static readonly Expression<Func<MedicalRecord, MedicalRecordResponse>> RecordProjection = r => new()

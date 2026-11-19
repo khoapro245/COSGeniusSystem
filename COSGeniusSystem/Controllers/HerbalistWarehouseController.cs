@@ -21,6 +21,7 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
     public record AllocationInput([param: Range(1, int.MaxValue)] int BatchId, [param: Range(typeof(decimal), "0.001", "9999999999")] decimal QuantityGrams);
     public record IssueInput([param: Required] string RowVersion, [param: Required, MinLength(1), MaxLength(1000)] AllocationInput[] Allocations);
     public record RejectInput([param: Required] string RowVersion, [param: Required, StringLength(1000, MinimumLength = 1)] string Reason);
+    public record ResolveInput([param: Required] string RowVersion, [param: Required, StringLength(2000, MinimumLength = 1)] string Resolution, bool PhysicalCorrectionConfirmed);
     private IActionResult Result(int status, string message, object? data = null) => StatusCode(status, new ApiResponseModel<object>(status, message, status < 300, data));
     private int Actor => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
     private static bool Version(byte[] bytes, string value)
@@ -60,10 +61,12 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
         var outbounds = await db.HerbOutbounds.AsNoTracking().Where(o => o.RequestId == id)
             .Select(o => new { o.Id, o.OutboundCode, o.IssuedAt, o.IssuedBy, o.ReceiptStatus }).ToListAsync(ct);
         var allocations = await db.HerbOutboundDetails.AsNoTracking().Where(a => a.RequestId == id)
-            .Select(a => new { a.Id, a.OutboundId, a.HerbId, a.BatchId, a.Batch.BatchNumber, a.Batch.ExpiryDate, a.QuantityGrams, a.StorageLocationId, a.LocationSnapshot }).ToListAsync(ct);
+            .Select(a => new { a.Id, a.OutboundId, a.HerbId, a.BatchId, a.Batch.BatchNumber, a.Batch.ExpiryDate, a.QuantityGrams, a.ReceivedQuantity, a.StorageLocationId, a.LocationSnapshot }).ToListAsync(ct);
         var demandLinks = await db.Set<HerbOutboundDemand>().AsNoTracking().Where(x => x.OutboundDetail.RequestId == id)
             .Select(x => new { x.OutboundDetailId, x.RequisitionDetailId, x.QuantityGrams }).ToListAsync(ct);
-        return Result(200, "Thành công.", new { r.Id, r.RequisitionCode, r.WarehouseId, warehouse, r.CreatedBy, r.CreatedAt, r.Status, r.Note, r.RejectionReason, r.ClosedBy, r.ClosedAt, rowVersion = Convert.ToBase64String(r.RowVersion), requirements, outbounds, allocations, demandLinks });
+        var discrepancies = await db.HerbReceiptDiscrepancies.AsNoTracking().Where(x => db.HerbOutbounds.Any(o => o.Id == x.OutboundId && o.RequestId == id))
+            .Select(x => new { x.Id, x.ReportCode, x.Content, x.Status, x.Resolution, x.OutboundId, x.ReportedBy, x.ReportedAt, x.ResolvedBy, x.ResolvedAt, details = x.Details.Select(d => new { d.Id, d.OutboundDetailId, d.ExpectedQuantity, d.ReceivedQuantity, d.DifferenceQuantity, d.Reason }).ToList() }).ToListAsync(ct);
+        return Result(200, "Thành công.", new { r.Id, r.RequisitionCode, r.WarehouseId, warehouse, r.CreatedBy, r.CreatedAt, r.Status, r.Note, r.RejectionReason, r.ClosedBy, r.ClosedAt, rowVersion = Convert.ToBase64String(r.RowVersion), requirements, outbounds, allocations, demandLinks, discrepancies });
     }
 
     [HttpGet("{id:int}/batches")]
@@ -133,6 +136,28 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
         r.Status = "ISSUED"; r.IssuedAt = DateTime.UtcNow; r.IssuedBy = Actor;
         await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
         return Result(200, "Kho đã xuất thuốc, chờ Herbalist xác nhận nhận.", new { r.Id, r.Status, outboundId=outbound.Id });
+    }
+
+    [HttpPost("{id:int}/resolve-discrepancy")]
+    public async Task<IActionResult> ResolveDiscrepancy(int id, ResolveInput input, CancellationToken ct)
+    {
+        if (!await Ready(ct)) return Result(503, "The herbalist schema is required.");
+        if (!input.PhysicalCorrectionConfirmed || string.IsNullOrWhiteSpace(input.Resolution)) return Result(400, "Xác nhận đã đối chiếu thực tế và nhập nội dung xử lý.");
+        await using var tx = await db.Database.BeginTransactionAsync(IsolationLevel.Serializable, ct);
+        var r = await db.HerbRequisitions.Include(x => x.Allocations).Include(x => x.Prescriptions).SingleOrDefaultAsync(x => x.Id == id, ct);
+        if (r == null) return Result(404, "Requisition was not found.");
+        if (r.Status != "DISCREPANCY" || !Version(r.RowVersion, input.RowVersion) || r.Allocations.Count == 0 || r.Allocations.Any(x => !x.ReceivedQuantity.HasValue) || r.Prescriptions.Any(x => x.CompletedAt.HasValue)) return Result(409, "Phiếu đã thay đổi hoặc không thể xử lý; vui lòng tải lại.");
+        var outbounds = await db.HerbOutbounds.Where(x => x.RequestId == id).ToListAsync(ct);
+        var outboundIds = outbounds.Select(x => x.Id).ToArray();
+        var reports = await db.HerbReceiptDiscrepancies.Where(x => outboundIds.Contains(x.OutboundId) && x.Status == "OPEN").ToListAsync(ct);
+        if (reports.Count == 0) return Result(409, "Không có báo cáo chênh lệch đang chờ xử lý.");
+        var now = DateTime.UtcNow;
+        foreach (var report in reports) { report.Status = "RESOLVED"; report.Resolution = input.Resolution.Trim(); report.ResolvedBy = Actor; report.ResolvedAt = now; }
+        foreach (var line in r.Allocations) { line.ReceivedQuantity = null; line.ReceivedBy = null; line.ReceivedAt = null; }
+        foreach (var outbound in outbounds) { outbound.ReceivedBy = null; outbound.ReceivedAt = null; outbound.ReceiptStatus = "PENDING"; }
+        r.ReceivedBy = null; r.ReceivedAt = null; r.Status = "ISSUED";
+        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        return Result(200, "Đã xử lý chênh lệch; chờ kiểm nhận lại.", new { r.Id, r.Status });
     }
 
     [HttpPost("{id:int}/reject")]

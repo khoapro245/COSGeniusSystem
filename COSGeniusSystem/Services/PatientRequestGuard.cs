@@ -24,11 +24,19 @@ public static class PatientRequestGuard
             throw new ConflictException("The patient already has a pending or ongoing treatment request. Complete it or cancel the pending request before creating a new one.");
     }
 
-    public static Task<bool> HasActiveExaminationAsync(ApplicationDbContext db, int patientId, CancellationToken ct) =>
+    public static Task<bool> HasActiveExaminationAsync(ApplicationDbContext db, int patientId, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        return
         db.ExaminationRegistrations.AnyAsync(r => r.PatientId == patientId
-            && (r.Status == "WAITING" || r.Status == "IN_PROGRESS"), ct);
+            && (r.Status == "IN_PROGRESS" || (r.Status == "WAITING" && (r.BusinessDate >= today || r.StartedAt != null || r.CompletedAt != null || r.MedicalRecord != null))), ct);
+    }
 
-    public static Task<bool> HasActiveTreatmentAsync(ApplicationDbContext db, int patientId, CancellationToken ct) =>
+    public static Task<bool> HasActiveTreatmentAsync(ApplicationDbContext db, int patientId, CancellationToken ct)
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
+        return
         db.TreatmentSessions.AnyAsync(s => s.Plan.Record.PatientId == patientId
-            && (s.Status == "REQUESTED" || s.Status == "IN_PROGRESS"), ct);
+            && (s.Status == "IN_PROGRESS" || (s.Status == "REQUESTED" && (s.ScheduledDate == null || s.ScheduledDate >= today || s.StartedAt != null || s.CompletedAt != null))), ct);
+    }
 }

@@ -98,7 +98,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     {
         if (plan.Status is not ("CONFIRMED" or "IN_PROGRESS")) throw new ConflictException("The treatment plan is not active or has ended.");
     }
-    private static readonly Expression<Func<TreatmentPlan, PlanSummary>> PlanProjection = p => new(
+    private static Expression<Func<TreatmentPlan, PlanSummary>> PlanProjection(DateOnly today) => p => new(
         p.PlanId, p.PlanCode, p.PlanName, p.RecordId,
         p.Record != null ? p.Record.PatientId : 0,
         p.Record != null && p.Record.Patient != null ? p.Record.Patient.PatientCode : null,
@@ -108,8 +108,8 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         p.Doctor != null ? p.Doctor.FullName : "Chưa phân công",
         p.Status, p.CreatedAt,
         p.PlannedSessionCount, p.TreatmentSessions.Count(s => s.Status == "COMPLETED"),
-        p.TreatmentSessions.Count(s => s.Status == "REQUESTED" || s.Status == "IN_PROGRESS"), p.RowVersion);
-    private static readonly Expression<Func<TreatmentSession, SessionSummary>> SessionProjection = s => new(
+        p.TreatmentSessions.Count(s => s.Status == "IN_PROGRESS" || (s.Status == "REQUESTED" && (s.ScheduledDate == null || s.ScheduledDate >= today || s.StartedAt != null || s.CompletedAt != null))), p.RowVersion);
+    private static Expression<Func<TreatmentSession, SessionSummary>> SessionProjection(DateOnly today) => s => new(
         s.SessionId, s.PlanId,
         s.Plan != null ? s.Plan.PlanCode : null,
         s.Plan != null ? s.Plan.PlanName : "",
@@ -123,7 +123,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         s.PerformedBy,
         s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName : null,
         s.RequestedBy,
-        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion, s.Shift, s.RequestCode, s.QueueNumber);
+        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status == "REQUESTED" && s.ScheduledDate < today && s.StartedAt == null && s.CompletedAt == null ? "EXPIRED" : s.Status, s.ResultNote, s.RowVersion, s.Shift, s.RequestCode, s.QueueNumber);
 
     public async Task<PagedResult<PlanSummary>> PlansAsync(ClaimsPrincipal actor, PlanQuery query, CancellationToken ct)
     {
@@ -145,7 +145,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         }
         var count = await q.CountAsync(ct);
         var items = await q.OrderByDescending(p => p.CreatedAt).ThenByDescending(p => p.PlanId)
-            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(PlanProjection).ToListAsync(ct);
+            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(PlanProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }
 
@@ -170,7 +170,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var plan = await db.TreatmentPlans.AsNoTracking().SingleOrDefaultAsync(p => p.PlanId == id, ct)
             ?? throw new NotFoundException("Treatment plan was not found.");
         await AccessPlanAsync(actor, plan, ct);
-        var summary = await db.TreatmentPlans.AsNoTracking().Where(p => p.PlanId == id).Select(PlanProjection).SingleAsync(ct);
+        var summary = await db.TreatmentPlans.AsNoTracking().Where(p => p.PlanId == id).Select(PlanProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).SingleAsync(ct);
         var record = await db.MedicalRecords.AsNoTracking().Where(r => r.RecordId == plan.RecordId)
             .Select(r => new { r.PatientId, r.RegistrationId, r.ExamDate, r.FinalDiagnosis, r.AllergyNoteSnapshot }).SingleAsync(ct);
         var services = await db.TreatmentPlanDetails.AsNoTracking().Where(d => d.PlanId == id).OrderBy(d => d.PlanDetailId)
@@ -202,6 +202,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var doctor = mine ? await DoctorAsync(actor, ct) : (int?)null;
         var q = db.TreatmentSessions.AsNoTracking();
         if (query.ExcludePlanned) q = q.Where(s => s.Status != "PLANNED");
+        if (query.PatientId.HasValue) q = q.Where(s => s.Plan.Record.PatientId == query.PatientId);
         if (mine && doctor.HasValue)
         {
             q = q.Where(s => s.AssignedDoctorId == doctor || s.PerformedBy == doctor);
@@ -220,7 +221,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
                 "PLANNED" => "PLANNED",
                 _ => query.Status.Trim()
             };
-            q = q.Where(s => s.Status == norm);
+            var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)); if (norm == "EXPIRED") q = q.Where(s => s.Status == "REQUESTED" && s.ScheduledDate < today && s.StartedAt == null && s.CompletedAt == null); else if (norm == "REQUESTED") q = q.Where(s => s.Status == "REQUESTED" && !(s.ScheduledDate < today && s.StartedAt == null && s.CompletedAt == null)); else q = q.Where(s => s.Status == norm);
         }
 
         if (query.FromDate.HasValue) q = q.Where(s => s.ScheduledDate >= query.FromDate.Value);
@@ -273,12 +274,12 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         var items = await q.OrderByDescending(s => s.ScheduledDate)
             .ThenByDescending(s => s.RequestedAt ?? s.CreatedAt)
             .ThenByDescending(s => s.SessionId)
-            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection).ToListAsync(ct);
+            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }
     public async Task<SessionOverview> SessionAsync(ClaimsPrincipal actor, int id, CancellationToken ct)
     {
-        var session = await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(SessionProjection).SingleOrDefaultAsync(ct)
+        var session = await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("Treatment session was not found.");
         var plan = await PlanAsync(actor, session.PlanId, ct);
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
@@ -291,7 +292,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     // All writers acquire locks in this order: plan -> session.
     private async Task<T> WriteAsync<T>(int planId, Func<TreatmentPlan, Task<T>> action, CancellationToken ct, int? startingDoctorId = null)
     {
-        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
+        await using var tx = db.Database.IsRelational() && db.Database.CurrentTransaction == null ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
         if (startingDoctorId.HasValue) await DoctorAvailability.LockAsync(db, startingDoctorId.Value, ct);
         var plan = db.Database.IsRelational()
             ? (await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, ROWLOCK) WHERE PlanID = {planId}")
@@ -326,6 +327,29 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
     }
 
     public async Task<SessionOverview> RequestAsync(ClaimsPrincipal actor, int planId, RequestTreatment request, CancellationToken ct)
+        => await RequestCoreAsync(actor, planId, request, null, null, ct);
+
+    public async Task<IReadOnlyList<SessionOverview>> RequestBatchAsync(ClaimsPrincipal actor, BatchTreatmentRequest request, CancellationToken ct)
+    {
+        Reception(actor); Validate(request);
+        if (request.Items == null || request.Items.Count == 0 || request.Items.Any(i => i == null || i.PlanId <= 0)
+            || request.Items.Select(i => i.PlanId).Distinct().Count() != request.Items.Count)
+            throw new BadRequestException("Select at least one distinct treatment plan.");
+        await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
+        if (db.Database.IsRelational())
+            foreach (var item in request.Items.OrderBy(i => i.PlanId))
+                _ = await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, ROWLOCK) WHERE PlanID = {item.PlanId}").SingleOrDefaultAsync(ct)
+                    ?? throw new NotFoundException("Treatment plan was not found.");
+        await PatientRequestGuard.EnsureAvailableAsync(db, request.PatientId, ct);
+        var results = new List<SessionOverview>();
+        var requestedAt = DateTime.UtcNow;
+        foreach (var item in request.Items.OrderBy(i => i.PlanId))
+            results.Add(await RequestCoreAsync(actor, item.PlanId, new RequestTreatment { AssignedDoctorId = item.AssignedDoctorId, RowVersion = item.RowVersion, ScheduledDate = request.ScheduledDate, Shift = request.Shift, Note = request.Note }, request.PatientId, requestedAt, ct));
+        if (tx != null) await tx.CommitAsync(ct);
+        return results;
+    }
+
+    private async Task<SessionOverview> RequestCoreAsync(ClaimsPrincipal actor, int planId, RequestTreatment request, int? batchPatientId, DateTime? batchRequestedAt, CancellationToken ct)
     {
         Reception(actor); Validate(request);
         var today = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));
@@ -334,7 +358,8 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
         {
             var patientId = await db.MedicalRecords.Where(r => r.RecordId == plan.RecordId)
                 .Select(r => r.PatientId).SingleAsync(ct);
-            await PatientRequestGuard.EnsureAvailableAsync(db, patientId, ct);
+            if (batchPatientId.HasValue && patientId != batchPatientId.Value) throw new BadRequestException("Treatment plan does not belong to the selected patient.");
+            if (!batchPatientId.HasValue) await PatientRequestGuard.EnsureAvailableAsync(db, patientId, ct);
             Effective(plan);
             Version(plan.RowVersion, request.RowVersion);
             if (!await db.Doctors.AnyAsync(d => d.DoctorId == request.AssignedDoctorId && d.IsActive && d.User != null && d.User.IsActive
@@ -373,7 +398,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             session.RequestCode = $"YCDT-{request.ScheduledDate:yyyyMMdd}-{session.QueueNumber:D4}";
             session.Shift = request.Shift;
             session.Status = "REQUESTED"; session.AssignedDoctorId = request.AssignedDoctorId;
-            session.RequestedBy = UserId(actor); session.RequestedAt = DateTime.UtcNow; session.ScheduledDate = request.ScheduledDate;
+            session.RequestedBy = UserId(actor); session.RequestedAt = batchRequestedAt ?? DateTime.UtcNow; session.ScheduledDate = request.ScheduledDate;
             if (!string.IsNullOrWhiteSpace(request.Note)) session.ResultNote = request.Note.Trim();
             plan.UpdatedAt = DateTime.UtcNow; // invalidates stale plan versions, including cancel/recreate races
             await db.SaveChangesAsync(ct);
@@ -391,6 +416,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             if (session.Status == "IN_PROGRESS") return true;
             Effective(plan); Version(session.RowVersion, request.RowVersion);
             if (session.Status != "REQUESTED") throw new ConflictException("Only a pending treatment session can be started.");
+            if (session.ScheduledDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("Yêu cầu điều trị đã quá hạn.");
             if (session.ScheduledDate > DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))) throw new ConflictException("The treatment date has not been reached.");
             await DoctorAvailability.EnsureAvailableAsync(db, doctorId, ct);
             await PaymentAsync(plan.PlanId, ct);
@@ -499,7 +525,7 @@ public sealed class TreatmentWorkflowService(ApplicationDbContext db, IPatientSe
             if (actor.IsInRole(RoleConstants.ReceptionStaff)) Reception(actor); else await AssignedAsync(actor, session, ct);
             if (session.Status == "CANCELLED") return true;
             Version(session.RowVersion, request.RowVersion);
-            if (session.Status != "REQUESTED" || session.StartedAt != null
+            if (session.Status != "REQUESTED" || session.ScheduledDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) || session.StartedAt != null
                 || await db.UsageHistories.AnyAsync(u => u.SessionId == id, ct)) throw new ConflictException("Only a request that has not started can be cancelled.");
             session.Status = "CANCELLED";
             session.ResultNote = $"[Cancelled {DateTime.UtcNow:O}, user {UserId(actor)}] {request.Reason.Trim()}";
