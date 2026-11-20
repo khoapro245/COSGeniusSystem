@@ -126,7 +126,7 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         s.PerformedBy,
         s.PerformedByNavigation != null ? s.PerformedByNavigation.FullName : null,
         s.RequestedBy,
-        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion, s.Shift, s.RequestCode, s.QueueNumber, s.AdmissionId);
+        s.RequestedAt, s.ScheduledDate, s.StartedAt, s.CompletedAt, s.Status, s.ResultNote, s.RowVersion, s.Shift, s.RequestCode, s.QueueNumber);
 
     public async Task<PagedResult<PlanSummary>> PlansAsync(ClaimsPrincipal actor, PlanQuery query, CancellationToken ct)
     {
@@ -293,14 +293,13 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         await AppointmentExpiry.RefreshAsync(db, ct);
         var session = await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(SessionProjection).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("Treatment session was not found.");
-        if (session.AdmissionId.HasValue && actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId != await DoctorAsync(actor, ct))
+        if (actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId != await DoctorAsync(actor, ct) && session.PerformedBy != await DoctorAsync(actor, ct))
             throw new ForbiddenException();
         var plan = await PlanAsync(actor, session.PlanId, ct);
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
             .Select(u => new UsageResponse(u.PlanDetailId, u.PlanDetail.ServiceNameSnapshot, u.Quantity, u.PerformedBy, u.ExecutionTime, u.ResultNote)).ToListAsync(ct);
         var assigned = actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId == await DoctorAsync(actor, ct);
-        var admissionReady = !await db.TreatmentSessions.AnyAsync(s => s.SessionId == id && s.AdmissionId != null && s.Admission!.AcceptedAt == null, ct);
-        return new(session, plan, usage, assigned && admissionReady && session.Status == "REQUESTED" && (!plan.RequiresFullPayment || plan.FullyPaid),
+        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && (!plan.RequiresFullPayment || plan.FullyPaid),
             assigned && session.Status == "IN_PROGRESS", session.Status == "REQUESTED" && (assigned || actor.IsInRole(RoleConstants.ReceptionStaff)));
     }
 
@@ -442,8 +441,6 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
             var session = await LockedSessionAsync(id, ct); await AssignedAsync(actor, session, ct);
             if (session.Status == "IN_PROGRESS") return true;
             if (session.Status == "COMPLETED") return true;
-            if (session.AdmissionId.HasValue && !await db.TreatmentAdmissions.AnyAsync(g => g.AdmissionId == session.AdmissionId && g.AcceptedAt != null, ct))
-                throw new ConflictException("Vui lòng tiếp nhận nhóm trước khi bắt đầu yêu cầu.");
             Effective(plan); Version(session.RowVersion, request.RowVersion);
             if (session.Status != "REQUESTED" || session.ScheduledDate < DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))
                 throw new ConflictException("Only a pending treatment session that has not expired can be started.");

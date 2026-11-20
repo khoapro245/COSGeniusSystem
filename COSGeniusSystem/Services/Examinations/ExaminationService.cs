@@ -328,6 +328,9 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
         var total = await q.CountAsync(ct);
         var dbItems = await q.OrderByDescending(r => r.BusinessDate)
+            .ThenBy(r => r.Status == "IN_PROGRESS" ? 0 : r.Status == "WAITING" ? 1 : 2)
+            .ThenByDescending(r => r.Status == "WAITING" && r.IsPriority)
+            .ThenBy(r => r.Status == "WAITING" ? r.RegisteredAt : DateTime.MinValue)
             .ThenBy(r => r.QueueNumber)
             .ThenBy(r => r.RegistrationId)
             .Skip((query.PageNumber - 1) * query.PageSize)
