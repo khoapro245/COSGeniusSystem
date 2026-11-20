@@ -116,6 +116,21 @@ BEGIN
 END
 GO
 
+-- Seed dữ liệu mẫu Giá nhập gần nhất (LastImportPrice) cho các vị thuốc
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 160.00 WHERE [HerbCode] = 'G79DEMO_H01' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 170.00 WHERE [HerbCode] = 'G79DEMO_H02' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 180.00 WHERE [HerbCode] = 'G79DEMO_H03' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 190.00 WHERE [HerbCode] = 'G79DEMO_H04' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 200.00 WHERE [HerbCode] = 'G79DEMO_H05' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 210.00 WHERE [HerbCode] = 'G79DEMO_H06' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 220.00 WHERE [HerbCode] = 'G79DEMO_H07' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 230.00 WHERE [HerbCode] = 'G79DEMO_H08' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 240.00 WHERE [HerbCode] = 'G79DEMO_H09' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 250.00 WHERE [HerbCode] = 'G79DEMO_H10' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+UPDATE [dbo].[Herb] SET [LastImportPrice] = 800.00 WHERE [HerbCode] = 'VT1326' AND ([LastImportPrice] IS NULL OR [LastImportPrice] = 0);
+PRINT N'[hieppm] Đã cập nhật giá nhập gần nhất mẫu cho các vị thuốc trong Herb.';
+GO
+
 -- 7. Seed dữ liệu mẫu cho luồng Yêu cầu bổ sung kho (ImportRequest) ở trạng thái 'Chờ duyệt' để kiểm thử
 IF NOT EXISTS (SELECT 1 FROM [dbo].[ImportRequest] WHERE [RequestCode] = 'YC00011')
 BEGIN
