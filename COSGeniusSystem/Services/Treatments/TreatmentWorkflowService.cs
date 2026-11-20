@@ -285,13 +285,13 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
             .ThenBy(s => s.QueueNumber == null)
             .ThenBy(s => s.QueueNumber)
             .ThenBy(s => s.SessionId)
-            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection).ToListAsync(ct);
+            .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }
     public async Task<SessionOverview> SessionAsync(ClaimsPrincipal actor, int id, CancellationToken ct)
     {
         await AppointmentExpiry.RefreshAsync(db, ct);
-        var session = await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(SessionProjection).SingleOrDefaultAsync(ct)
+        var session = await db.TreatmentSessions.AsNoTracking().Where(s => s.SessionId == id).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("Treatment session was not found.");
         if (actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId != await DoctorAsync(actor, ct) && session.PerformedBy != await DoctorAsync(actor, ct))
             throw new ForbiddenException();
