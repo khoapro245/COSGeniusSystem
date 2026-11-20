@@ -142,10 +142,6 @@ public class HerbalistWarehouseController(ApplicationDbContext db) : ControllerB
         return Result(200, "Kho đã xuất thuốc, chờ Herbalist xác nhận nhận.", new { r.Id, r.Status, outboundId=outbound.Id });
     }
 
-    public record ResolveInput([param: Required] string RowVersion,
-        [param: Required, StringLength(2000, MinimumLength = 1)] string Resolution,
-        bool PhysicalCorrectionConfirmed);
-
     [HttpPost("{id:int}/resolve-discrepancy")]
     public async Task<IActionResult> ResolveDiscrepancy(int id, ResolveInput input, CancellationToken ct)
     {
