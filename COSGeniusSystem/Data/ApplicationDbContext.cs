@@ -92,6 +92,8 @@ public partial class ApplicationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        modelBuilder.Ignore<TreatmentAdmission>();
+        modelBuilder.Entity<TreatmentSession>().Ignore(s => s.AdmissionId).Ignore(s => s.Admission);
         modelBuilder.Entity<AuditDetail>(entity =>
         {
             entity.HasKey(e => e.AuditDetailId).HasName("PK__AuditDet__1E1C703DAB62BCCE");

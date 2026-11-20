@@ -13,7 +13,7 @@ public sealed class TreatmentSessionsController(ITreatmentWorkflowService servic
 {
     [HttpPost("batch")]
     [Authorize(Roles = RoleConstants.ReceptionStaff)]
-    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<SessionOverview>>>> CreateBatch(BatchTreatmentRequest request, CancellationToken ct) =>
+    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<SessionOverview>>>> CreateBatch(CreateTreatmentAdmission request, CancellationToken ct) =>
         SuccessResponse(SystemMessages.TreatmentSaved, await service.RequestBatchAsync(User, request, ct));
 
     [HttpGet]

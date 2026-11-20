@@ -70,9 +70,15 @@ public partial class HerbalistController
                 entity.Details = await db.HerbalPrescriptionDetails.Where(d => input.PrescriptionIds.Contains(d.PrescriptionId))
           .Select(d => new HerbRequisitionDetail { PrescriptionId = d.PrescriptionId, PrescriptionDetailId = d.PrescriptionDetailId, HerbId = d.HerbId, RequestedQuantity = d.DosagePerDose * d.Prescription.TotalDoses, UnitSnapshot = "g" }).ToListAsync(ct);
         db.HerbRequisitions.Add(entity);
-        try { await db.SaveChangesAsync(ct); await tx.CommitAsync(ct); }
+        try
+        {
+            await db.SaveChangesAsync(ct);
+            entity.RequisitionCode = Code(entity.Id);
+            await db.SaveChangesAsync(ct);
+            await tx.CommitAsync(ct);
+        }
         catch (DbUpdateException) { return Failure(409, "A prescription has changed or another user has created its requisition. Please reload."); }
-        return Data(new { entity.Id, code = Code(entity.Id) });
+        return Data(new { entity.Id, code = entity.RequisitionCode });
     }
 
     private static bool Matches(byte[] version, string submitted)
@@ -119,7 +125,13 @@ public partial class HerbalistController
         }
         // Touch header so its rowversion also protects partial receipt operations.
         r.Note=r.Note; db.Entry(r).Property(x=>x.Note).IsModified=true;
-        await db.SaveChangesAsync(ct); await tx.CommitAsync(ct);
+        await db.SaveChangesAsync(ct);
+        if (report != null)
+        {
+            report.ReportCode = $"BC-{report.Id:D6}";
+            await db.SaveChangesAsync(ct);
+        }
+        await tx.CommitAsync(ct);
         return Data(new {r.Id,r.Status,outboundId=outbound.Id,reportId=report?.Id,rowVersion=Convert.ToBase64String(r.RowVersion)});
     }
 

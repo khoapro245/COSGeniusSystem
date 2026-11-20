@@ -21,6 +21,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register MemoryCache
 builder.Services.AddMemoryCache();
+builder.Services.AddHostedService<AppointmentExpiryWorker>();
 
 // Register repositories and services by business domain.
 builder.Services.AddScoped<IUserRepository, UserRepository>();
