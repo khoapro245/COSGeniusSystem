@@ -11,6 +11,11 @@ namespace COSGeniusSystem.Controllers;
 [Authorize(Roles = RoleConstants.ReceptionStaff + "," + RoleConstants.Doctor)]
 public sealed class TreatmentSessionsController(ITreatmentWorkflowService service) : BaseApiController
 {
+    [HttpPost("batch")]
+    [Authorize(Roles = RoleConstants.ReceptionStaff)]
+    public async Task<ActionResult<ApiResponseModel<IReadOnlyList<SessionOverview>>>> CreateBatch(CreateTreatmentAdmission request, CancellationToken ct) =>
+        SuccessResponse(SystemMessages.TreatmentSaved, await service.RequestBatchAsync(User, request, ct));
+
     [HttpGet]
     public async Task<ActionResult<ApiResponseModel<PagedResult<SessionSummary>>>> List([FromQuery] SessionQuery query, CancellationToken ct) =>
         SuccessResponse(SystemMessages.TreatmentsRetrieved, await service.SessionsAsync(User, query, false, ct));

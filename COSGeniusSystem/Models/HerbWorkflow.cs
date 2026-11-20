@@ -95,6 +95,9 @@ public class HerbReceiptDiscrepancy
  public DateTime ReportedAt { get; set; }
  public string Content { get; set; } = "";
  public string Status { get; set; } = "OPEN";
+ public int? ResolvedBy { get; set; }
+ public DateTime? ResolvedAt { get; set; }
+ public string? Resolution { get; set; }
  public List<HerbReceiptDiscrepancyDetail> Details { get; set; } = [];
 }
 public class HerbReceiptDiscrepancyDetail

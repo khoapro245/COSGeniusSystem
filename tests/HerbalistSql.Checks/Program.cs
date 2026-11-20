@@ -139,6 +139,27 @@ await using (var budgetTx = await db.Database.BeginTransactionAsync())
     catch (DbUpdateException ex) when (ex.GetBaseException() is SqlException sql && sql.Number == 51012) { checks++; }
     await budgetTx.RollbackAsync();
 }
+// Warehouse resolution must not authorize dispensing on behalf of the herbalist.
+db.ChangeTracker.Clear(); stockDb.ChangeTracker.Clear();
+raceHeader = await stockDb.HerbRequisitions.AsNoTracking().SingleAsync(r => r.Id == raceId);
+var stockBeforeResolution = await db.Batches.SumAsync(b => b.CurrentQuantity);
+Result(await stock.ResolveDiscrepancy(raceId, new(Convert.ToBase64String(raceHeader.RowVersion), "Đã giao bù đúng lô", true), default));
+db.ChangeTracker.Clear();
+raceHeader = await db.HerbRequisitions.AsNoTracking().SingleAsync(r => r.Id == raceId);
+Check(raceHeader.Status == "ISSUED" && raceHeader.ReceivedBy == null && raceHeader.ReceivedAt == null, "Resolution waits for herbalist receipt.");
+Check(!await db.HerbOutboundDetails.AnyAsync(l => l.RequestId == raceId && (l.ReceivedQuantity != null || l.ReceivedBy != null || l.ReceivedAt != null)), "Every lot needs a fresh receipt check.");
+Check(await db.HerbOutbounds.AnyAsync(o => o.RequestId == raceId && o.ReceiptStatus == "PENDING" && o.ReceivedBy == null && o.ReceivedAt == null), "Outbound receipt is pending.");
+Check(await db.HerbReceiptDiscrepancies.AnyAsync(r => r.OutboundId == discrepancyLines[0].OutboundId && r.Status == "RESOLVED" && r.Details.Any(d => d.ReceivedQuantity == 0 && d.ExpectedQuantity > 0)), "Original shortage remains in the resolved report.");
+var physicalAfterResolution = raceNeed.Select(n => new DispenseAllocation(discrepancyLines.First(l => l.HerbId == n.HerbId).Id, n.Quantity)).ToArray();
+Result(await herbalist.Complete(raceIds[0], new(Convert.ToBase64String(raceHeader.RowVersion), physicalAfterResolution), default), 409);
+Check(!await db.MedicineDispenses.AnyAsync(m => m.PrescriptionId == raceIds[0]), "Pending reconfirmation cannot create a dispense.");
+db.ChangeTracker.Clear();
+Result(await herbalist.Receive(raceId, new(Convert.ToBase64String(raceHeader.RowVersion), discrepancyLines.Select(l => new ReceiptLine(l.Id, null, true)).ToArray(), null), default));
+db.ChangeTracker.Clear();
+raceHeader = await db.HerbRequisitions.AsNoTracking().SingleAsync(r => r.Id == raceId);
+Check(raceHeader.Status == "RECEIVED" && raceHeader.ReceivedBy == actor, "Herbalist confirms full receipt.");
+Result(await herbalist.Complete(raceIds[0], new(Convert.ToBase64String(raceHeader.RowVersion), physicalAfterResolution), default));
+Check(await db.Batches.SumAsync(b => b.CurrentQuantity) == stockBeforeResolution, "Resolution and reconfirmation do not deduct stock again.");
 Console.WriteLine($"PASS: {checks} SQL Server controller, EF query, transaction and stale-version checks; database {cs.InitialCatalog}.");
 
 }

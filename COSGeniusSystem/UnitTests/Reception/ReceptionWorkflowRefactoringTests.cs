@@ -125,11 +125,11 @@ public class ReceptionWorkflowRefactoringTests
         // 4th: COMPLETED (r1)
         Assert.Equal(101, result.Items[3].RegistrationId);
 
-        // Continuous STT
-        Assert.Equal(1, result.Items[0].QueueNumber);
-        Assert.Equal(2, result.Items[1].QueueNumber);
-        Assert.Equal(3, result.Items[2].QueueNumber);
-        Assert.Equal(4, result.Items[3].QueueNumber);
+        // Queue numbers are assigned at registration and remain stable when the list is reordered.
+        Assert.Equal(2, result.Items[0].QueueNumber);
+        Assert.Equal(3, result.Items[1].QueueNumber);
+        Assert.Equal(4, result.Items[2].QueueNumber);
+        Assert.Equal(1, result.Items[3].QueueNumber);
     }
 
     [Fact]

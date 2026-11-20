@@ -239,7 +239,8 @@ public class HerbService : IHerbService
             .Where(dd => (dd.Disposal.Status == "Chờ quản lý duyệt" || dd.Disposal.Status == "Đã duyệt / Chờ hủy" || dd.Disposal.Status == "Đã duyệt")
                       && dd.Batch.HerbId == herbId)
             .GroupBy(dd => dd.BatchId)
-            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
+            .Select(g => new { BatchId = g.Key, Quantity = g.Sum(x => x.DisposalQuantity) })
+            .ToDictionaryAsync(g => g.BatchId, g => g.Quantity);
 
         var batches = batchEntities.Select(b =>
         {

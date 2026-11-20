@@ -9,6 +9,9 @@ public partial class TreatmentSession
 
     public int PlanId { get; set; }
 
+    public Guid? AdmissionId { get; set; }
+    public TreatmentAdmission? Admission { get; set; }
+
     public int SessionNumber { get; set; }
 
     public int? AssignedDoctorId { get; set; }
