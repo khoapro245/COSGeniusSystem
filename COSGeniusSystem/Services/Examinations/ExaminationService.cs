@@ -370,7 +370,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         var record = await db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleOrDefaultAsync(ct);
         // Patient API mapping and validation remain the single source of patient information.
         var patient = await patients.GetByIdAsync(registration.PatientId, ct);
-        IReadOnlyList<PrescriptionResponse> prescriptions = record == null ? [] : await PrescriptionsQuery(record.RecordId).ToListAsync(ct);
+        IReadOnlyList<PrescriptionResponse> prescriptions = record == null ? [] : await PrescriptionsForRecordAsync(record.RecordId, ct);
         IReadOnlyList<TreatmentPlanResponse> plans = record == null ? [] : await PlansQuery(record.RecordId).ToListAsync(ct);
         return new(await RegistrationResponseAsync(registrationId, ct), patient, record, prescriptions, plans);
     }
@@ -431,7 +431,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             .Select(RecordProjection).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("The historical record does not belong to this patient.");
         return new(await RegistrationResponseAsync(record.RegistrationId, ct), await patients.GetByIdAsync(current.PatientId, ct),
-            record, await PrescriptionsQuery(record.RecordId).ToListAsync(ct), await PlansQuery(record.RecordId).ToListAsync(ct));
+            record, await PrescriptionsForRecordAsync(record.RecordId, ct), await PlansQuery(record.RecordId).ToListAsync(ct));
     }
 
     public async Task<MedicalRecordResponse> SaveAsync(ClaimsPrincipal actor, int registrationId, SaveMedicalRecordRequest request, CancellationToken ct)

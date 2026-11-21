@@ -17,6 +17,8 @@ public class HerbDetailDto
     // [hieppm] Start: Bổ sung LastImportPrice
     public decimal? LastImportPrice { get; set; }
     // [hieppm] End
+    public decimal CurrentStock { get; set; }
+    public decimal AvailableStock { get; set; }
     public decimal MinThreshold { get; set; }
     public bool IsActive { get; set; }
 }
