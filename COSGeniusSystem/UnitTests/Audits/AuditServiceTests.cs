@@ -131,5 +131,59 @@ public class AuditServiceTests
         Assert.NotNull(dbBatch);
         Assert.Equal(14.8m, dbBatch.CurrentQuantity); // Batch is updated to actual count!
     }
+
+    [Fact]
+    public async Task UpdateAuditCountAsync_WithDestruction_CalculatesUsableDiscrepancyCorrectly()
+    {
+        // Arrange: Batch system stock = 8790g, counted = 9000g, destroy = 200g => usable = 8800g, diff = +10g
+        using var context = CreateInMemoryDbContext();
+        var wh = new Warehouse { WarehouseId = 1, WarehouseCode = "KHO-01", WarehouseName = "Kho Trung Tâm", Location = "Tầng 1" };
+        var user = new User { UserId = 1006, Username = "inventory", PasswordHash = "hash", FullName = "Trần Văn Bình", IsActive = true, CreatedAt = DateTime.UtcNow };
+        var herb = new Herb { HerbId = 1, HerbCode = "G79DEMO_H01", CommonName = "Cam thảo", Unit = "g", StandardPrice = 210m, MinThreshold = 500m, IsActive = true };
+        var batch = new Batch { BatchId = 101, BatchNumber = "G79DEMO_BATCH01", HerbId = 1, WarehouseId = 1, CurrentQuantity = 8790m, OriginalQuantity = 10000m, ImportDate = DateTime.UtcNow, ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)), UnitCost = 210m, Status = "Đạt chuẩn" };
+
+        context.Warehouses.Add(wh);
+        context.Users.Add(user);
+        context.Herbs.Add(herb);
+        context.Batches.Add(batch);
+        await context.SaveChangesAsync();
+
+        var service = new AuditService(context);
+        var created = await service.CreateAuditAsync(new CreateAuditRequest { WarehouseId = 1, AuditedBy = 1006 });
+
+        // Act: Count 9000g with 200g destroy
+        var updated = await service.UpdateAuditCountAsync(created.AuditCode, new UpdateAuditCountRequest
+        {
+            IsComplete = true,
+            Items = new List<UpdateAuditCountItem>
+            {
+                new UpdateAuditCountItem
+                {
+                    BatchId = 101,
+                    ActualQuantity = 9000m,
+                    Reason = "Giảm tồn [Tiêu hủy: 200 g]"
+                }
+            }
+        });
+
+        // Assert:
+        // System = 8790, Count = 9000, Destroy = 200 => Usable = 8800
+        // Discrepancy = Usable - System = 8800 - 8790 = +10
+        Assert.Single(updated.Details);
+        var detail = updated.Details[0];
+        Assert.Equal(8790m, detail.SystemQuantity);
+        Assert.Equal(9000m, detail.ActualQuantity);
+        Assert.Equal(10m, detail.Discrepancy);
+        Assert.Equal("Điều chỉnh tăng", detail.ResolutionStatus);
+
+        // Approve and verify batch stock is set to usable 8800g
+        var approved = await service.ApproveAuditAdjustmentAsync(created.AuditCode, new ApproveAuditRequest
+        {
+            ManagerOpinion = "Đã duyệt cân bằng kiểm kê"
+        });
+        var dbBatch = await context.Batches.FindAsync(101);
+        Assert.NotNull(dbBatch);
+        Assert.Equal(8800m, dbBatch.CurrentQuantity);
+    }
 }
 

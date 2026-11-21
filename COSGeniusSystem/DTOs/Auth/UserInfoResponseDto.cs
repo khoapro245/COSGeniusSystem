@@ -10,4 +10,6 @@ public class UserInfoResponseDto
     public bool IsActive { get; set; }
     public DateTime CreatedAt { get; set; }
     public List<string> Roles { get; set; } = new();
+    public string? Specialization { get; set; }
+    public string? LicenseNumber { get; set; }
 }

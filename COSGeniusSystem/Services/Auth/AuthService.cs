@@ -154,6 +154,70 @@ public class AuthService : IAuthService
         return MapToUserInfoResponseDto(user, roles);
     }
 
+    public async Task<UserInfoResponseDto> UpdateProfileAsync(int userId, UpdateProfileRequestDto request, CancellationToken ct = default)
+    {
+        var user = await _userRepository.GetByIdAsync(userId);
+        if (user == null)
+        {
+            throw new NotFoundException($"User {userId} was not found.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var email = request.Email.Trim().ToLower();
+            var existingByEmail = await _userRepository.GetByEmailAsync(email);
+            if (existingByEmail != null && existingByEmail.UserId != userId)
+            {
+                throw new ConflictException($"Email '{request.Email}' đã được sử dụng bởi tài khoản khác.");
+            }
+            user.Email = email;
+        }
+        else
+        {
+            user.Email = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.Phone))
+        {
+            user.Phone = request.Phone.Trim();
+        }
+        else
+        {
+            user.Phone = null;
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.FullName))
+        {
+            user.FullName = request.FullName.Trim();
+            if (user.Doctor != null)
+            {
+                user.Doctor.FullName = user.FullName;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.NewPassword))
+        {
+            if (string.IsNullOrWhiteSpace(request.CurrentPassword))
+            {
+                throw new BadRequestException("Vui lòng nhập mật khẩu hiện tại để đổi mật khẩu.");
+            }
+
+            if (!_passwordHasher.VerifyPassword(request.CurrentPassword, user.PasswordHash))
+            {
+                throw new BadRequestException("Mật khẩu hiện tại không chính xác.");
+            }
+
+            user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword.Trim());
+        }
+
+        await _userRepository.SaveChangesAsync();
+
+        _logger.LogInformation("Profile updated successfully for userId: {UserId}", user.UserId);
+
+        var roles = user.UserRoles.Select(ur => ur.Role.RoleCode).ToList();
+        return MapToUserInfoResponseDto(user, roles);
+    }
+
     private static UserInfoResponseDto MapToUserInfoResponseDto(User user, List<string> roles)
     {
         return new UserInfoResponseDto
@@ -165,7 +229,9 @@ public class AuthService : IAuthService
             Phone = user.Phone,
             IsActive = user.IsActive,
             CreatedAt = user.CreatedAt,
-            Roles = roles
+            Roles = roles,
+            Specialization = user.Doctor?.Specialization,
+            LicenseNumber = user.Doctor?.LicenseNumber
         };
     }
 }

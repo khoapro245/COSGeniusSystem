@@ -18,6 +18,7 @@ public class UserRepository : IUserRepository
         return await _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
+            .Include(u => u.Doctor)
             .FirstOrDefaultAsync(u => u.UserId == userId);
     }
 
@@ -26,6 +27,7 @@ public class UserRepository : IUserRepository
         return await _context.Users
             .Include(u => u.UserRoles)
                 .ThenInclude(ur => ur.Role)
+            .Include(u => u.Doctor)
             .FirstOrDefaultAsync(u => u.Username.ToLower() == username.ToLower());
     }
 

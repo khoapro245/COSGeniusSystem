@@ -53,6 +53,7 @@ builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IImportRequestService, ImportRequestService>();
 // [hieppm] End: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
+builder.Services.AddScoped<IReportService, ReportService>();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 

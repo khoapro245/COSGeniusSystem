@@ -78,4 +78,26 @@ public class AuthController : BaseApiController
         var profile = await _authService.GetCurrentUserProfileAsync(userId);
         return SuccessResponse(SystemMessages.UserProfileRetrieved, profile);
     }
+
+    /// <summary>
+    /// Update current authenticated user's profile and optionally change password
+    /// </summary>
+    [Authorize]
+    [HttpPut("profile")]
+    [ProducesResponseType(typeof(ApiResponseModel<UserInfoResponseDto>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(ApiResponseModel<ValidationErrorData>), StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<ApiResponseModel<UserInfoResponseDto>>> UpdateProfile(
+        [FromBody] UpdateProfileRequestDto request, CancellationToken ct = default)
+    {
+        var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+        if (!int.TryParse(userIdClaim, out var userId))
+        {
+            throw new UnauthorizedException("The user identifier in the session is invalid.");
+        }
+
+        var profile = await _authService.UpdateProfileAsync(userId, request, ct);
+        return SuccessResponse(SystemMessages.UserUpdated, profile);
+    }
 }

@@ -291,7 +291,16 @@ public class AuditService : IAuditService
             var batch = await _context.Batches.FirstOrDefaultAsync(b => b.BatchId == detail.BatchId, ct);
             if (batch != null)
             {
-                batch.CurrentQuantity = detail.ActualQuantity;
+                decimal usable = detail.ActualQuantity;
+                if (!string.IsNullOrWhiteSpace(detail.Reason) && detail.Reason.Contains("[Tiêu hủy:"))
+                {
+                    var match = System.Text.RegularExpressions.Regex.Match(detail.Reason, @"\[Tiêu hủy:\s*([\d\.]+)\s*(?:kg|g)?\]");
+                    if (match.Success && decimal.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal destroyVal))
+                    {
+                        usable = Math.Max(0, detail.ActualQuantity - destroyVal);
+                    }
+                }
+                batch.CurrentQuantity = usable;
             }
         }
 
@@ -329,7 +338,16 @@ public class AuditService : IAuditService
     {
         var details = a.AuditDetails.Select(d =>
         {
-            var disc = d.ActualQuantity - d.SystemQuantity;
+            decimal usable = d.ActualQuantity;
+            if (!string.IsNullOrWhiteSpace(d.Reason) && d.Reason.Contains("[Tiêu hủy:"))
+            {
+                var match = System.Text.RegularExpressions.Regex.Match(d.Reason, @"\[Tiêu hủy:\s*([\d\.]+)\s*(?:kg|g)?\]");
+                if (match.Success && decimal.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal destroyVal))
+                {
+                    usable = Math.Max(0, d.ActualQuantity - destroyVal);
+                }
+            }
+            var disc = usable - d.SystemQuantity;
             string resolution = disc == 0 ? "Khớp" : (disc < 0 ? "Điều chỉnh giảm" : "Điều chỉnh tăng");
 
             return new AuditDetailDto

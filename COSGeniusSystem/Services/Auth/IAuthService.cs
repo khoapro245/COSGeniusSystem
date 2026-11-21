@@ -8,4 +8,5 @@ public interface IAuthService
     Task<AuthResponseDto> LoginAsync(LoginRequestDto request);
     Task LogoutAsync(string? rawAuthorizationHeader);
     Task<UserInfoResponseDto> GetCurrentUserProfileAsync(int userId);
+    Task<UserInfoResponseDto> UpdateProfileAsync(int userId, UpdateProfileRequestDto request, CancellationToken ct = default);
 }
