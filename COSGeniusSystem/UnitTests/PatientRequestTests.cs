@@ -42,9 +42,9 @@ public class PatientRequestTests
 
         var error = createTreatment
             ? await Assert.ThrowsAsync<ConflictException>(() => new TreatmentWorkflowService(db).RequestAsync(Reception, 1,
-                new RequestTreatment { RowVersion = new byte[8], AssignedDoctorId = 1, Shift = "MORNING", ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) }, default))
+                new RequestTreatment { RowVersion = new byte[8], AssignedDoctorId = 1, Shift = "AFTERNOON", ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)) }, default))
             : await Assert.ThrowsAsync<ConflictException>(() => new ExaminationService(db).CreateAsync(Reception,
-                new CreateRegistrationRequest { PatientId = 1, DoctorId = 1, Session = "MORNING" }, default));
+                new CreateRegistrationRequest { PatientId = 1, DoctorId = 1, Session = "AFTERNOON" }, default));
 
         Assert.Equal(409, error.StatusCode);
         Assert.Contains(existingTreatment ? "treatment" : "examination", error.Message);
@@ -81,21 +81,26 @@ public class PatientRequestTests
     }
 
     [Fact]
-    public async Task ActiveTreatmentInAnotherPlanBlocksNewTreatment()
+    public async Task ActiveTreatmentInAnotherPlanDoesNotBlockEligibleTreatment()
     {
         await using var db = SchemaFixture.Create();
         var record = SchemaFixture.Record();
+        record.Doctor.User!.IsActive = true;
+        record.Doctor.User.UserRoles.Add(new UserRole { Role = new Role { RoleCode = RoleConstants.Doctor, RoleName = "Bác sĩ" } });
         var first = SchemaFixture.Plan(record);
         db.TreatmentSessions.Add(new TreatmentSession { Plan = first, SessionNumber = 1, Status = "REQUESTED" });
         var second = SchemaFixture.Plan(record);
         second.PlanId = 2;
+        second.TreatmentType = "SINGLE";
         db.TreatmentPlans.Add(second);
+        db.TreatmentPlanDetails.Add(new TreatmentPlanDetail { Plan = second, ServiceId = 1,
+            ServiceNameSnapshot = "Châm cứu", UnitSnapshot = "buổi", PlannedQuantity = 1 });
         await db.SaveChangesAsync();
 
-        await Assert.ThrowsAsync<ConflictException>(() => new TreatmentWorkflowService(db).RequestAsync(Reception, 2,
+        await new TreatmentWorkflowService(db).RequestAsync(Reception, 2,
             new RequestTreatment { RowVersion = new byte[8], AssignedDoctorId = 1, Shift = "AFTERNOON",
-                ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1) }, default));
-        Assert.False(await db.TreatmentSessions.AnyAsync(s => s.PlanId == 2));
+                ScheduledDate = DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)).AddDays(1) }, default);
+        Assert.True(await db.TreatmentSessions.AnyAsync(s => s.PlanId == 2 && s.Status == "REQUESTED"));
     }
 
     [Theory]
@@ -112,7 +117,7 @@ public class PatientRequestTests
         await db.SaveChangesAsync();
 
         var result = await new ExaminationService(db).CreateAsync(Reception,
-            new CreateRegistrationRequest { PatientId = 1, DoctorId = 1, Session = "MORNING" }, default);
+            new CreateRegistrationRequest { PatientId = 1, DoctorId = 1, Session = "AFTERNOON" }, default);
 
         Assert.Equal("WAITING", result.Status);
         Assert.Equal(2, await db.ExaminationRegistrations.CountAsync());

@@ -187,6 +187,8 @@ public class HerbService : IHerbService
             .Select(g => new
             {
                 BatchId = g.Key,
+                LatestAuditId = g.OrderByDescending(x => x.AuditId).First().Audit.AuditId,
+                LatestAuditCode = g.OrderByDescending(x => x.AuditId).First().Audit.AuditCode,
                 LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
                 SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
                 LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
@@ -195,6 +197,7 @@ public class HerbService : IHerbService
 
         var batchSysMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.SystemQuantity);
         var auditDateMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditDate);
+        var auditCodeMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditCode);
         var batchDestroyMap = new Dictionary<int, decimal>();
         foreach (var item in auditedBatches)
         {
@@ -211,11 +214,23 @@ public class HerbService : IHerbService
         var completedDisposalsList = await _context.DisposalDetails
             .Include(dd => dd.Disposal)
             .Where(dd => dd.Disposal.Status == "Hoàn thành" || dd.Disposal.Status == "Đã tiêu hủy")
-            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate })
+            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate, dd.Disposal.Reason })
             .ToListAsync();
 
         var completedDisposals = completedDisposalsList
-            .Where(dd => !auditDateMap.TryGetValue(dd.BatchId, out var aDate) || dd.DisposalDate >= aDate.AddMinutes(-5))
+            .Where(dd =>
+            {
+                if (!auditDateMap.TryGetValue(dd.BatchId, out var aDate))
+                    return true;
+
+                if (auditCodeMap.TryGetValue(dd.BatchId, out var aCode) && !string.IsNullOrEmpty(aCode)
+                    && dd.Reason != null && dd.Reason.Contains(aCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                return aDate > DateTime.Now || dd.DisposalDate >= aDate.AddMinutes(-5);
+            })
             .GroupBy(dd => dd.BatchId)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
 
@@ -224,7 +239,8 @@ public class HerbService : IHerbService
             .Where(dd => (dd.Disposal.Status == "Chờ quản lý duyệt" || dd.Disposal.Status == "Đã duyệt / Chờ hủy" || dd.Disposal.Status == "Đã duyệt")
                       && dd.Batch.HerbId == herbId)
             .GroupBy(dd => dd.BatchId)
-            .ToDictionaryAsync(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
+            .Select(g => new { BatchId = g.Key, Quantity = g.Sum(x => x.DisposalQuantity) })
+            .ToDictionaryAsync(g => g.BatchId, g => g.Quantity);
 
         var batches = batchEntities.Select(b =>
         {
@@ -310,6 +326,8 @@ public class HerbService : IHerbService
             .Select(g => new
             {
                 BatchId = g.Key,
+                LatestAuditId = g.OrderByDescending(x => x.AuditId).First().Audit.AuditId,
+                LatestAuditCode = g.OrderByDescending(x => x.AuditId).First().Audit.AuditCode,
                 LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
                 SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
                 LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
@@ -318,6 +336,7 @@ public class HerbService : IHerbService
 
         var batchSysMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.SystemQuantity);
         var auditDateMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditDate);
+        var auditCodeMap = auditedBatches.ToDictionary(x => x.BatchId, x => x.LatestAuditCode);
         var batchDestroyMap = new Dictionary<int, decimal>();
         foreach (var item in auditedBatches)
         {
@@ -334,11 +353,23 @@ public class HerbService : IHerbService
         var completedDisposalsList = await _context.DisposalDetails
             .Include(dd => dd.Disposal)
             .Where(dd => dd.Disposal.Status == "Hoàn thành" || dd.Disposal.Status == "Đã tiêu hủy")
-            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate })
+            .Select(dd => new { dd.BatchId, dd.DisposalQuantity, dd.Disposal.DisposalDate, dd.Disposal.Reason })
             .ToListAsync(ct);
 
         var completedDisposals = completedDisposalsList
-            .Where(dd => !auditDateMap.TryGetValue(dd.BatchId, out var aDate) || dd.DisposalDate >= aDate.AddMinutes(-5))
+            .Where(dd =>
+            {
+                if (!auditDateMap.TryGetValue(dd.BatchId, out var aDate))
+                    return true;
+
+                if (auditCodeMap.TryGetValue(dd.BatchId, out var aCode) && !string.IsNullOrEmpty(aCode)
+                    && dd.Reason != null && dd.Reason.Contains(aCode, StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+
+                return aDate > DateTime.Now || dd.DisposalDate >= aDate.AddMinutes(-5);
+            })
             .GroupBy(dd => dd.BatchId)
             .ToDictionary(g => g.Key, g => g.Sum(x => x.DisposalQuantity));
 

@@ -64,8 +64,6 @@ public sealed partial class ExaminationService
         SavePrescriptionRequest request, CancellationToken ct)
     {
         Validate(request);
-        if (request.Items.Count == 0)
-            throw new BadRequestException("Select and apply a formula or add at least one herb before saving a draft prescription.");
         foreach (var item in request.Items) Validate(item);
         if (request.Items.Select(i => i.HerbId).Distinct().Count() != request.Items.Count)
             throw new BadRequestException("Each herb may appear only once in a prescription.");
@@ -78,6 +76,8 @@ public sealed partial class ExaminationService
             if (prescription.Status is not ("DRAFT" or "SENT"))
                 throw new ConflictException("Examination content cannot be edited in the current status.");
             Version(prescription.RowVersion, request.RowVersion);
+            if (request.Items.Count == 0)
+                throw new BadRequestException("Select and apply a formula or add at least one herb before saving a draft prescription.");
             var ids = request.Items.Select(i => i.HerbId).ToArray();
             var herbs = await db.Herbs.Where(h => ids.Contains(h.HerbId) && h.IsActive)
                 .Select(h => new { h.HerbId, h.CommonName }).ToDictionaryAsync(h => h.HerbId, ct);

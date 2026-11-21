@@ -21,6 +21,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 
 // Register MemoryCache
 builder.Services.AddMemoryCache();
+builder.Services.AddHostedService<AppointmentExpiryWorker>();
 
 // Register repositories and services by business domain.
 builder.Services.AddScoped<IUserRepository, UserRepository>();
@@ -32,6 +33,7 @@ builder.Services.AddScoped<IPatientService, PatientService>();
 builder.Services.AddScoped<IPatientContactService, PatientContactService>();
 builder.Services.AddScoped<ITreatmentWorkflowService, TreatmentWorkflowService>();
 builder.Services.AddScoped<IDoctorService, DoctorService>();
+builder.Services.AddScoped<IDoctorClinicalService, DoctorClinicalService>();
 builder.Services.AddScoped<ITreatmentService, TreatmentService>();
 builder.Services.AddScoped<IHerbService, HerbService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
@@ -43,7 +45,7 @@ builder.Services.AddScoped<ITreatmentProtocolService, TreatmentProtocolService>(
 builder.Services.AddScoped<ITreatmentQueueService, TreatmentProtocolService>();
 builder.Services.AddScoped<IReceptionDashboardService, ReceptionDashboardService>();
 builder.Services.AddScoped<IFormulaService, FormulaService>();
-// Grouped Herbalist requisitions replace the legacy DispensingService.
+builder.Services.AddScoped<IDispensingService, DispensingService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IDisposalService, DisposalService>();
 // [hieppm] Start: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests

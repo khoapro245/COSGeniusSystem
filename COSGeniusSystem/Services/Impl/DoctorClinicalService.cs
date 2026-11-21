@@ -176,6 +176,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
+        await PatientWorkAvailability.LockAsync(db, es.PatientId, ct);
         await db.Entry(es).ReloadAsync(ct);
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
@@ -188,6 +189,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         if (meta.Status != "Đang khám")
         {
             await DoctorAvailability.EnsureAvailableAsync(db, es.DoctorId, ct);
+            await PatientWorkAvailability.EnsureAvailableAsync(db, es.PatientId, ct);
             meta.Status = "Đang khám";
             meta.ExamStartTime ??= DateTime.UtcNow;
             es.Status = "IN_PROGRESS";
@@ -222,6 +224,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
 
         await using var tx = db.Database.IsRelational() ? await db.Database.BeginTransactionAsync(ct) : null;
         await DoctorAvailability.LockAsync(db, es.DoctorId, ct);
+        await PatientWorkAvailability.LockAsync(db, es.PatientId, ct);
         await db.Entry(es).ReloadAsync(ct);
 
         var meta = ClinicalMetadataJson.FromMedicalRecord(es);
@@ -303,6 +306,7 @@ public class DoctorClinicalService(ApplicationDbContext db) : IDoctorClinicalSer
         if (meta.Status == "Chờ khám")
         {
             await DoctorAvailability.EnsureAvailableAsync(db, es.DoctorId, ct);
+            await PatientWorkAvailability.EnsureAvailableAsync(db, es.PatientId, ct);
             meta.Status = "Đang khám";
             es.Status = "IN_PROGRESS";
         }

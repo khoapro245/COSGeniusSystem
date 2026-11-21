@@ -69,7 +69,7 @@ public class DisposalService : IDisposalService
             ? request.DisposalCode
             : $"TH{maxNum + 1:D5}";
 
-        var creatorId = request.CreatedBy ?? 1;
+        var creatorId = request.CreatedBy ?? 15;
         var entity = new Disposal
         {
             DisposalCode = nextCode,
