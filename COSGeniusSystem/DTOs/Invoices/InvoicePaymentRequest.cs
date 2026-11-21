@@ -5,6 +5,7 @@ public sealed class InvoicePaymentRequest
     [Required(ErrorMessage = "This field is required."), MinLength(8, ErrorMessage = "The value is shorter than the minimum allowed length."), MaxLength(8, ErrorMessage = "The value exceeds the maximum allowed length.")] public byte[] RowVersion { get; set; } = [];
     [Required(ErrorMessage = "This field is required.")] public string PaymentMethod { get; set; } = "";
     public bool ReceivedInFull { get; set; }
+    public List<int>? InvoiceDetailIds { get; set; }
 }
 public sealed class InvoiceCancelRequest
 {

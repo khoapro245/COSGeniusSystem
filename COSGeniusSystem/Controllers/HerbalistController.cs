@@ -79,6 +79,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
         CompletedAt = db.HerbRequisitionPrescriptions.Where(l => l.PrescriptionId == p.PrescriptionId && l.IsActive).Select(l => l.CompletedAt).FirstOrDefault(),
         CompletedBy = db.HerbRequisitionPrescriptions.Where(l => l.PrescriptionId == p.PrescriptionId && l.IsActive).Select(l => l.CompletedBy).FirstOrDefault(),
         CompletedByName = db.Users.Where(u => db.HerbRequisitionPrescriptions.Any(l => l.PrescriptionId == p.PrescriptionId && l.IsActive && l.CompletedBy == u.UserId)).Select(u => u.FullName).FirstOrDefault(),
+        Paid = db.InvoiceDetails.Any(i => i.PrescriptionId == p.PrescriptionId && i.Invoice.RecordId == p.RecordId && i.ItemType == "HERB_REMEDY" && i.IsActive && (i.Invoice.PaymentStatus == "PAID" || i.Invoice.PaymentStatus == "?? thanh to?n")),
         LegacyDispense = p.MedicineDispense != null
     });
     public class PrescriptionRow
@@ -97,6 +98,7 @@ public partial class HerbalistController(ApplicationDbContext db) : ControllerBa
         public DateTime? CompletedAt { get; set; }
         public int? CompletedBy { get; set; }
         public string? CompletedByName { get; set; }
+        public bool Paid { get; set; }
         public bool LegacyDispense { get; set; }
     }
 

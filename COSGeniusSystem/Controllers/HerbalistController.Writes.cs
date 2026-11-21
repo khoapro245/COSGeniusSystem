@@ -15,6 +15,8 @@ public partial class HerbalistController
         if (ids.Length == 0 || ids.Length > 100 || ids.Distinct().Count() != ids.Length || ids.Any(id => id <= 0)) return new(400, "Select between 1 and 100 prescriptions with no duplicate identifiers.");
         if (await Prescriptions().CountAsync(p => ids.Contains(p.PrescriptionId) && p.MedicineDispense == null, ct) != ids.Length) return new(409, "A prescription does not exist, has not been submitted, or was processed through the legacy dispensing workflow.");
         if (await db.HerbRequisitionPrescriptions.AnyAsync(l => ids.Contains(l.PrescriptionId) && l.IsActive, ct)) return new(409, "A prescription is already in an active requisition or has been dispensed. Please reload.");
+        if (await Rows(Prescriptions().Where(p => ids.Contains(p.PrescriptionId))).AnyAsync(p => !p.Paid, ct))
+            return new(409, "??n ch?a thanh to?n, ch?a th? t?o y?u c?u c?p d??c li?u.");
         var invalidHerbs = await db.HerbalPrescriptionDetails.AsNoTracking()
             .Where(d => ids.Contains(d.PrescriptionId))
             .Select(d => new { d.Herb.HerbCode, d.Herb.CommonName, d.Herb.IsActive, d.Herb.Unit })
