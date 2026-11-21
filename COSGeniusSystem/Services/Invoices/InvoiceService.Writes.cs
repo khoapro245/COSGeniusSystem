@@ -40,8 +40,8 @@ public partial class InvoiceService
             if (!((line.ItemType == "HERB_REMEDY" && line.PrescriptionId.HasValue && !line.PlanDetailId.HasValue)
                 || (line.ItemType == "SERVICE" && line.PlanDetailId.HasValue && !line.PrescriptionId.HasValue)))
                 throw new ConflictException("The charge source is ambiguous. Reconcile the invoice.");
-            if (line.PrescriptionId.HasValue && !await _context.MedicineDispenses.AnyAsync(d => d.PrescriptionId == line.PrescriptionId && d.Status == "COMPLETED"))
-                throw new ConflictException("The prescription has not been validly dispensed.");
+            if (line.PrescriptionId.HasValue && !await _context.HerbalPrescriptions.AnyAsync(p => p.PrescriptionId == line.PrescriptionId && p.Status == "SENT" && p.Record.Status == "COMPLETED"))
+                throw new ConflictException("The prescription has not been confirmed in a completed examination.");
             if (line.PrescriptionId.HasValue && (await _context.HerbalPrescriptions.Where(p => p.PrescriptionId == line.PrescriptionId).Select(p => p.RecordId).SingleAsync() != invoice.RecordId
                 || await _context.InvoiceDetails.CountAsync(i => i.PrescriptionId == line.PrescriptionId && i.Invoice.PaymentStatus != "CANCELLED" && i.Invoice.PaymentStatus != "Đã hủy") != 1))
                 throw new ConflictException("The prescription belongs to another examination or has been invoiced more than once.");
@@ -50,12 +50,29 @@ public partial class InvoiceService
                 var d = await _context.TreatmentPlanDetails.Include(d => d.Plan).SingleAsync(d => d.PlanDetailId == line.PlanDetailId);
                 if (d.Plan.TreatmentType is not ("COURSE" or "SINGLE"))
                     throw new ConflictException("Invalid indication type.");
-                var eligible = d.Plan.TreatmentType == "COURSE"
-                    ? (d.Plan.ConfirmedAt.HasValue && d.Plan.Status is "CONFIRMED" or "IN_PROGRESS" or "COMPLETED"
-                        && await _context.MedicalRecords.AnyAsync(r => r.RecordId == invoice.RecordId && r.Status == "COMPLETED") ? d.PlannedQuantity : 0)
-                    : await _context.UsageHistories.Where(u => u.PlanDetailId == d.PlanDetailId && u.Session.Status == "COMPLETED").SumAsync(u => (int?)u.Quantity) ?? 0;
+                var eligible = d.Plan.ConfirmedAt.HasValue && (d.Plan.Status is "CONFIRMED" or "IN_PROGRESS" or "COMPLETED") && await _context.MedicalRecords.AnyAsync(r => r.RecordId == invoice.RecordId && r.Status == "COMPLETED") ? d.PlannedQuantity : 0;
                 var billed = await _context.InvoiceDetails.Where(i => i.PlanDetailId == d.PlanDetailId && i.Invoice.PaymentStatus != "CANCELLED" && i.Invoice.PaymentStatus != "Đã hủy").SumAsync(i => i.Quantity);
                 if (d.Plan.RecordId != invoice.RecordId || billed > eligible) throw new ConflictException("The service is not eligible for payment or has been invoiced more than once.");
+            }
+        }
+        // Null preserves compatibility with clients that pay the whole invoice.
+        if (request.InvoiceDetailIds != null)
+        {
+            var selected = request.InvoiceDetailIds.ToHashSet();
+            if (selected.Count == 0 || selected.Count != request.InvoiceDetailIds.Count || selected.Any(id => !invoice.InvoiceDetails.Any(line => line.InvoiceDetailId == id)))
+                throw new BadRequestException("Select valid invoice items.");
+            if (selected.Count != invoice.InvoiceDetails.Count)
+            {
+                if (invoice.Discount != 0) throw new ConflictException("A discounted invoice must be paid in full.");
+                var remaining = invoice.InvoiceDetails.Where(line => !selected.Contains(line.InvoiceDetailId)).ToList();
+                var remainingTotal = remaining.Sum(line => line.Quantity * line.UnitPrice);
+                var remainder = new Invoice { RecordId = invoice.RecordId, IssuedDate = DateTime.UtcNow,
+                    PaymentStatus = "UNPAID", PaymentMethod = "", TotalAmount = remainingTotal, FinalAmount = remainingTotal,
+                    PatientNameSnapshot = invoice.PatientNameSnapshot, PatientCodeSnapshot = invoice.PatientCodeSnapshot,
+                    PhoneSnapshot = invoice.PhoneSnapshot, DoctorNameSnapshot = invoice.DoctorNameSnapshot, ExamDateSnapshot = invoice.ExamDateSnapshot };
+                _context.Invoices.Add(remainder);
+                foreach (var line in remaining) { invoice.InvoiceDetails.Remove(line); remainder.InvoiceDetails.Add(line); }
+                invoice.TotalAmount -= remainingTotal; invoice.FinalAmount = invoice.TotalAmount;
             }
         }
         invoice.PaymentStatus = "PAID"; invoice.PaymentMethod = request.PaymentMethod;
