@@ -31,6 +31,8 @@ public class PurchaseOrderDto
     public string ProgressStatus { get; set; } = "Chờ nhận";
     public string DetailStatus { get; set; } = "Chờ nhận hàng";
     public string? Note { get; set; }
+    public string? DriverName { get; set; }
+    public string? VehicleNumber { get; set; }
     public List<PODetailDto> Details { get; set; } = new();
 }
 
@@ -46,6 +48,8 @@ public class CreatePORequest
     public int SupplierId { get; set; }
     public DateOnly? DeliveryDate { get; set; }
     public string? Note { get; set; }
+    public string? DriverName { get; set; }
+    public string? VehicleNumber { get; set; }
     public string Status { get; set; } = "Nháp";
     // [hieppm] Start: Bổ sung liên kết RequestId khi tạo đơn mua hàng từ Yêu cầu bổ sung kho
     public int? RequestId { get; set; }
@@ -58,6 +62,8 @@ public class UpdatePORequest
     public int SupplierId { get; set; }
     public DateOnly? DeliveryDate { get; set; }
     public string? Note { get; set; }
+    public string? DriverName { get; set; }
+    public string? VehicleNumber { get; set; }
     public string? Status { get; set; }
     public List<CreatePOItemRequest> Items { get; set; } = new();
 }

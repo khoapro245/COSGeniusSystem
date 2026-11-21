@@ -129,6 +129,8 @@ public class PurchaseOrderService : IPurchaseOrderService
             DeliveryDate = request.DeliveryDate,
             TotalAmount = totalAmount,
             Status = normalizedStatus,
+            DriverName = request.DriverName?.Trim(),
+            VehicleNumber = request.VehicleNumber?.Trim(),
         };
 
         foreach (var item in request.Items)
@@ -180,6 +182,8 @@ public class PurchaseOrderService : IPurchaseOrderService
 
         po.SupplierId = request.SupplierId;
         po.DeliveryDate = request.DeliveryDate;
+        po.DriverName = request.DriverName?.Trim();
+        po.VehicleNumber = request.VehicleNumber?.Trim();
         if (!string.IsNullOrWhiteSpace(request.Status))
         {
             po.Status = NormalizeAllowedPOStatus(request.Status, defaultStatus: po.Status);
@@ -404,6 +408,8 @@ public class PurchaseOrderService : IPurchaseOrderService
             Status = po.Status,
             ProgressStatus = progressStatus,
             DetailStatus = detailStatus,
+            DriverName = po.DriverName,
+            VehicleNumber = po.VehicleNumber,
             Details = detailDtos
         };
     }

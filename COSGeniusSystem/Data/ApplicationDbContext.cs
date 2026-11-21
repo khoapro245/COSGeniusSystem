@@ -952,6 +952,8 @@ public partial class ApplicationDbContext : DbContext
                 .HasDefaultValue("Mới tạo");
             entity.Property(e => e.SupplierId).HasColumnName("SupplierID");
             entity.Property(e => e.TotalAmount).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.DriverName).HasMaxLength(100);
+            entity.Property(e => e.VehicleNumber).HasMaxLength(50);
 
             entity.HasOne(d => d.CreatedByNavigation).WithMany(p => p.PurchaseOrders)
                 .HasForeignKey(d => d.CreatedBy)

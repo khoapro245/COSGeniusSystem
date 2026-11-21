@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 
 namespace COSGeniusSystem.Models;
@@ -22,6 +22,10 @@ public partial class PurchaseOrder
     public decimal TotalAmount { get; set; }
 
     public string Status { get; set; } = null!;
+
+    public string? DriverName { get; set; }
+
+    public string? VehicleNumber { get; set; }
 
     public virtual User CreatedByNavigation { get; set; } = null!;
 
