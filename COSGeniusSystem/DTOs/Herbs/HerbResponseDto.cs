@@ -13,5 +13,6 @@ public class HerbResponseDto
     public decimal? LastImportPrice { get; set; }
     public decimal CurrentStock { get; set; }
     // [hieppm] End
+    public decimal AvailableStock { get; set; }
     public bool IsActive { get; set; }
 }

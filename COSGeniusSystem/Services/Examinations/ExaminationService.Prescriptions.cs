@@ -19,12 +19,30 @@ public sealed partial class ExaminationService
             q = q.Where(f => f.FormulaName.Contains(search) || (f.FormulaCode != null && f.FormulaCode.Contains(search)));
         }
         var total = await q.CountAsync(ct);
-        var items = await q.OrderBy(f => f.FormulaName).ThenBy(f => f.HerbalFormulaId)
+        var formulas = await q.OrderBy(f => f.FormulaName).ThenBy(f => f.HerbalFormulaId)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize)
-            .Select(f => new FormulaResponse(f.HerbalFormulaId, f.FormulaCode, f.FormulaName, f.IntendedUse, f.UsageInstructions,
-                f.HerbalFormulaDetails.OrderBy(d => d.HerbalFormulaDetailId)
-                    .Select(d => new FormulaItemResponse(d.HerbId, d.Herb.CommonName, d.DosagePerDose, d.RoleInFormula, d.Note, d.Herb.IsActive)).ToList()))
+            .Include(f => f.HerbalFormulaDetails)
+                .ThenInclude(d => d.Herb)
             .ToListAsync(ct);
+
+        var herbIds = formulas.SelectMany(f => f.HerbalFormulaDetails.Select(d => d.HerbId)).Distinct().ToList();
+        var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, herbIds, null, ct);
+
+        var items = formulas.Select(f => new FormulaResponse(
+            f.HerbalFormulaId, f.FormulaCode, f.FormulaName, f.IntendedUse, f.UsageInstructions,
+            f.HerbalFormulaDetails.OrderBy(d => d.HerbalFormulaDetailId)
+                .Select(d => new FormulaItemResponse(
+                    d.HerbId,
+                    d.Herb.CommonName,
+                    d.DosagePerDose,
+                    d.RoleInFormula,
+                    d.Note,
+                    d.Herb.IsActive,
+                    d.Herb.StandardPrice,
+                    stockMap.GetValueOrDefault(d.HerbId)?.AvailableStock ?? 0m
+                )).ToList()
+        )).ToList();
+
         return new(items, query.PageNumber, query.PageSize, total);
     }
 
@@ -166,14 +184,39 @@ public sealed partial class ExaminationService
         return await PrescriptionResponseAsync(prescriptionId, ct);
     }
 
-    private async Task SendPrescriptionContentAsync(HerbalPrescription prescription, CancellationToken ct)
+    private async Task SendPrescriptionContentAsync(HerbalPrescription prescription, CancellationToken ct, bool checkStock = true)
     {
         if (prescription.TotalDoses <= 0 || string.IsNullOrWhiteSpace(prescription.UsageInstructions)
             || prescription.HerbalPrescriptionDetails.Count == 0 || prescription.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0))
             throw new BadRequestException("A prescription requires a positive pack count, usage instructions, and at least one herb with a positive dose.");
-        var ids = prescription.HerbalPrescriptionDetails.Select(d => d.HerbId).ToArray();
+        var ids = prescription.HerbalPrescriptionDetails.Select(d => d.HerbId).Distinct().ToArray();
         if (await db.Herbs.CountAsync(h => ids.Contains(h.HerbId) && h.IsActive, ct) != ids.Length)
             throw new BadRequestException("The prescription contains an inactive herb.");
+
+        if (checkStock)
+        {
+            // Kiểm soát giữ chỗ nguyên tử & Tồn khả dụng theo thời gian thực
+            var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, ids, prescription.PrescriptionId, ct);
+            var shortages = new List<string>();
+            foreach (var detail in prescription.HerbalPrescriptionDetails)
+            {
+                var requiredQuantity = detail.DosagePerDose * prescription.TotalDoses;
+                var availableQuantity = stockMap.GetValueOrDefault(detail.HerbId)?.AvailableStock ?? 0m;
+                if (requiredQuantity > availableQuantity)
+                {
+                    var name = !string.IsNullOrWhiteSpace(detail.HerbNameSnapshot)
+                        ? detail.HerbNameSnapshot
+                        : (await db.Herbs.Where(h => h.HerbId == detail.HerbId).Select(h => h.CommonName).FirstOrDefaultAsync(ct) ?? $"ID {detail.HerbId}");
+                    shortages.Add($"'{name}' (cần: {requiredQuantity:0.###}g, khả dụng: {availableQuantity:0.###}g)");
+                }
+            }
+            if (shortages.Count > 0)
+            {
+                throw new ConflictException($"Không đủ tồn khả dụng cho các vị thuốc: {string.Join(", ", shortages)}. Vui lòng kiểm tra và điều chỉnh đơn thuốc.");
+            }
+
+        }
+
         prescription.Status = "SENT";
         prescription.SentAt ??= DateTime.UtcNow;
         prescription.UpdatedAt = prescription.SentAt;
@@ -194,19 +237,65 @@ public sealed partial class ExaminationService
         }, ct);
     }
 
-    private IQueryable<PrescriptionResponse> PrescriptionsQuery(int recordId) => db.HerbalPrescriptions.AsNoTracking()
-        .Where(p => p.RecordId == recordId).OrderBy(p => p.PrescriptionId)
-        .Select(p => new PrescriptionResponse(p.PrescriptionId, p.PrescriptionCode, p.RecordId, p.SourceHerbalFormulaId,
-            p.PrescriptionName, p.TotalDoses, p.DosageDays, p.UsageInstructions, p.Note, p.Status, p.SentAt, p.RowVersion,
-            p.HerbalPrescriptionDetails.OrderBy(d => d.PrescriptionDetailId)
-                .Select(d => new PrescriptionItemResponse(d.PrescriptionDetailId, d.HerbId, d.HerbNameSnapshot,
-                    d.DosagePerDose, d.DosagePerDose * p.TotalDoses, d.RoleInFormula, d.Note)).ToList()));
+    private async Task<IReadOnlyList<PrescriptionResponse>> PrescriptionsForRecordAsync(int recordId, CancellationToken ct)
+    {
+        var prescriptions = await db.HerbalPrescriptions.AsNoTracking()
+            .Where(p => p.RecordId == recordId)
+            .OrderBy(p => p.PrescriptionId)
+            .Include(p => p.HerbalPrescriptionDetails)
+                .ThenInclude(d => d.Herb)
+            .ToListAsync(ct);
 
-    private Task<PrescriptionResponse> PrescriptionResponseAsync(int id, CancellationToken ct) => db.HerbalPrescriptions.AsNoTracking()
-        .Where(p => p.PrescriptionId == id)
-        .Select(p => new PrescriptionResponse(p.PrescriptionId, p.PrescriptionCode, p.RecordId, p.SourceHerbalFormulaId,
+        if (prescriptions.Count == 0) return [];
+
+        var allHerbIds = prescriptions.SelectMany(p => p.HerbalPrescriptionDetails.Select(d => d.HerbId)).Distinct().ToList();
+        var firstPrescriptionId = prescriptions.Count == 1 ? (int?)prescriptions[0].PrescriptionId : null;
+        var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, allHerbIds, firstPrescriptionId, ct);
+
+        return prescriptions.Select(p => new PrescriptionResponse(
+            p.PrescriptionId, p.PrescriptionCode, p.RecordId, p.SourceHerbalFormulaId,
             p.PrescriptionName, p.TotalDoses, p.DosageDays, p.UsageInstructions, p.Note, p.Status, p.SentAt, p.RowVersion,
             p.HerbalPrescriptionDetails.OrderBy(d => d.PrescriptionDetailId)
-                .Select(d => new PrescriptionItemResponse(d.PrescriptionDetailId, d.HerbId, d.HerbNameSnapshot,
-                    d.DosagePerDose, d.DosagePerDose * p.TotalDoses, d.RoleInFormula, d.Note)).ToList())).SingleAsync(ct);
+                .Select(d => new PrescriptionItemResponse(
+                    d.PrescriptionDetailId,
+                    d.HerbId,
+                    d.HerbNameSnapshot,
+                    d.DosagePerDose,
+                    d.DosagePerDose * p.TotalDoses,
+                    d.RoleInFormula,
+                    d.Note,
+                    d.Herb?.StandardPrice ?? 0m,
+                    stockMap.GetValueOrDefault(d.HerbId)?.AvailableStock ?? 0m
+                )).ToList()
+        )).ToList();
+    }
+
+    private async Task<PrescriptionResponse> PrescriptionResponseAsync(int id, CancellationToken ct)
+    {
+        var p = await db.HerbalPrescriptions.AsNoTracking()
+            .Where(x => x.PrescriptionId == id)
+            .Include(x => x.HerbalPrescriptionDetails)
+                .ThenInclude(d => d.Herb)
+            .SingleAsync(ct);
+
+        var herbIds = p.HerbalPrescriptionDetails.Select(d => d.HerbId).Distinct().ToList();
+        var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, herbIds, p.PrescriptionId, ct);
+
+        return new PrescriptionResponse(
+            p.PrescriptionId, p.PrescriptionCode, p.RecordId, p.SourceHerbalFormulaId,
+            p.PrescriptionName, p.TotalDoses, p.DosageDays, p.UsageInstructions, p.Note, p.Status, p.SentAt, p.RowVersion,
+            p.HerbalPrescriptionDetails.OrderBy(d => d.PrescriptionDetailId)
+                .Select(d => new PrescriptionItemResponse(
+                    d.PrescriptionDetailId,
+                    d.HerbId,
+                    d.HerbNameSnapshot,
+                    d.DosagePerDose,
+                    d.DosagePerDose * p.TotalDoses,
+                    d.RoleInFormula,
+                    d.Note,
+                    d.Herb?.StandardPrice ?? 0m,
+                    stockMap.GetValueOrDefault(d.HerbId)?.AvailableStock ?? 0m
+                )).ToList()
+        );
+    }
 }

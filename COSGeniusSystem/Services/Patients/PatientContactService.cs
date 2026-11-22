@@ -39,6 +39,10 @@ public sealed class PatientContactService(ApplicationDbContext db) : IPatientCon
     {
         await EnsurePatientAsync(patientId, ct);
         request.Phone = PatientPhone.Validate(request.Phone, contact: true);
+        var patient = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.PatientId == patientId, ct);
+        if (patient != null && !string.IsNullOrWhiteSpace(request.Phone) && PatientPhone.Normalize(request.Phone) == PatientPhone.Normalize(patient.Phone))
+            throw new BadRequestException("Relative phone number must not be the same as the patient's phone number.");
+
         var entity = new PatientContact { PatientId = patientId };
         PatientContactMapping.Apply(request, entity);
         await db.PatientContacts.AddAsync(entity, ct);
@@ -49,6 +53,10 @@ public sealed class PatientContactService(ApplicationDbContext db) : IPatientCon
     public async Task UpdateAsync(int patientId, int contactId, UpdatePatientContactRequest request, CancellationToken ct)
     {
         request.Phone = PatientPhone.Validate(request.Phone, contact: true);
+        var patient = await db.Patients.AsNoTracking().SingleOrDefaultAsync(p => p.PatientId == patientId, ct);
+        if (patient != null && !string.IsNullOrWhiteSpace(request.Phone) && PatientPhone.Normalize(request.Phone) == PatientPhone.Normalize(patient.Phone))
+            throw new BadRequestException("Relative phone number must not be the same as the patient's phone number.");
+
         var entity = await FindAsync(patientId, contactId, ct);
         PatientContactMapping.Apply(request, entity);
         await db.SaveChangesAsync(ct);

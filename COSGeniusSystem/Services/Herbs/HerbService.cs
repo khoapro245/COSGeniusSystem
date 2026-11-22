@@ -41,7 +41,7 @@ public class HerbService : IHerbService
         var page = query.Page < 1 ? 1 : query.Page;
         var pageSize = query.PageSize < 1 ? 10 : query.PageSize;
 
-        return await q
+        var herbs = await q
             .OrderBy(h => h.CommonName)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
@@ -61,6 +61,22 @@ public class HerbService : IHerbService
                 IsActive = h.IsActive
             })
             .ToListAsync(ct);
+
+        if (herbs.Count > 0)
+        {
+            var herbIds = herbs.Select(h => h.HerbId).ToList();
+            var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(_context, herbIds, null, ct);
+            foreach (var h in herbs)
+            {
+                if (stockMap.TryGetValue(h.HerbId, out var info))
+                {
+                    h.AvailableStock = info.AvailableStock;
+                    if (info.PhysicalStock > 0) h.CurrentStock = info.PhysicalStock;
+                }
+            }
+        }
+
+        return herbs;
     }
 
     // ─── API-TU-02 ────────────────────────────────────────────────────────────
@@ -72,6 +88,9 @@ public class HerbService : IHerbService
 
         if (herb is null)
             return null;
+
+        var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(_context, new[] { id }, null);
+        var stockInfo = stockMap.GetValueOrDefault(id);
 
         return new HerbDetailDto
         {
@@ -85,6 +104,8 @@ public class HerbService : IHerbService
             // [hieppm] Start: Mapping LastImportPrice
             LastImportPrice = herb.LastImportPrice,
             // [hieppm] End
+            CurrentStock = stockInfo?.PhysicalStock ?? 0m,
+            AvailableStock = stockInfo?.AvailableStock ?? 0m,
             MinThreshold = herb.MinThreshold,
             IsActive = herb.IsActive
         };
