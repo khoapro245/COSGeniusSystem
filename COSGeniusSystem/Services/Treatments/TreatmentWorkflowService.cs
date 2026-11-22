@@ -282,9 +282,8 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
 
         var count = await q.CountAsync(ct);
         var items = await q.OrderByDescending(s => s.ScheduledDate)
-            .ThenBy(s => s.QueueNumber == null)
-            .ThenBy(s => s.QueueNumber)
-            .ThenBy(s => s.SessionId)
+            .ThenByDescending(s => s.RequestedAt ?? s.CreatedAt)
+            .ThenByDescending(s => s.SessionId)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }

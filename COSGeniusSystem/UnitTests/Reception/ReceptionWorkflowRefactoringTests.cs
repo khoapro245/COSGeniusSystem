@@ -116,19 +116,19 @@ public class ReceptionWorkflowRefactoringTests
         var result = await service.ListAsync(ReceptionActor, new RegistrationQuery { PageNumber = 1, PageSize = 10 }, false, default);
 
         Assert.Equal(4, result.Items.Count);
-        // 1st: IN_PROGRESS (r2)
-        Assert.Equal(102, result.Items[0].RegistrationId);
-        // 2nd: WAITING Priority (r3)
-        Assert.Equal(103, result.Items[1].RegistrationId);
-        // 3rd: WAITING Non-priority FIFO (r4)
-        Assert.Equal(104, result.Items[2].RegistrationId);
-        // 4th: COMPLETED (r1)
+        // 1st: newest registered (r3, -10 min)
+        Assert.Equal(103, result.Items[0].RegistrationId);
+        // 2nd: r4 (-15 min)
+        Assert.Equal(104, result.Items[1].RegistrationId);
+        // 3rd: r2 (-20 min)
+        Assert.Equal(102, result.Items[2].RegistrationId);
+        // 4th: oldest registered (r1, -30 min)
         Assert.Equal(101, result.Items[3].RegistrationId);
 
-        // Queue numbers are assigned at registration and remain stable when the list is reordered.
-        Assert.Equal(2, result.Items[0].QueueNumber);
-        Assert.Equal(3, result.Items[1].QueueNumber);
-        Assert.Equal(4, result.Items[2].QueueNumber);
+        // Queue numbers remain stable when list is ordered descending by registration time.
+        Assert.Equal(3, result.Items[0].QueueNumber);
+        Assert.Equal(4, result.Items[1].QueueNumber);
+        Assert.Equal(2, result.Items[2].QueueNumber);
         Assert.Equal(1, result.Items[3].QueueNumber);
     }
 
