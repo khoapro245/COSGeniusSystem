@@ -184,7 +184,7 @@ public sealed partial class ExaminationService
         return await PrescriptionResponseAsync(prescriptionId, ct);
     }
 
-    private async Task SendPrescriptionContentAsync(HerbalPrescription prescription, CancellationToken ct)
+    private async Task SendPrescriptionContentAsync(HerbalPrescription prescription, CancellationToken ct, bool checkStock = true)
     {
         if (prescription.TotalDoses <= 0 || string.IsNullOrWhiteSpace(prescription.UsageInstructions)
             || prescription.HerbalPrescriptionDetails.Count == 0 || prescription.HerbalPrescriptionDetails.Any(d => d.DosagePerDose <= 0))
@@ -193,24 +193,28 @@ public sealed partial class ExaminationService
         if (await db.Herbs.CountAsync(h => ids.Contains(h.HerbId) && h.IsActive, ct) != ids.Length)
             throw new BadRequestException("The prescription contains an inactive herb.");
 
-        // Kiểm soát giữ chỗ nguyên tử & Tồn khả dụng theo thời gian thực
-        var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, ids, prescription.PrescriptionId, ct);
-        var shortages = new List<string>();
-        foreach (var detail in prescription.HerbalPrescriptionDetails)
+        if (checkStock)
         {
-            var requiredQuantity = detail.DosagePerDose * prescription.TotalDoses;
-            var availableQuantity = stockMap.GetValueOrDefault(detail.HerbId)?.AvailableStock ?? 0m;
-            if (requiredQuantity > availableQuantity)
+            // Kiểm soát giữ chỗ nguyên tử & Tồn khả dụng theo thời gian thực
+            var stockMap = await COSGeniusSystem.Services.Herbs.HerbStockHelper.GetStockMapAsync(db, ids, prescription.PrescriptionId, ct);
+            var shortages = new List<string>();
+            foreach (var detail in prescription.HerbalPrescriptionDetails)
             {
-                var name = !string.IsNullOrWhiteSpace(detail.HerbNameSnapshot)
-                    ? detail.HerbNameSnapshot
-                    : (await db.Herbs.Where(h => h.HerbId == detail.HerbId).Select(h => h.CommonName).FirstOrDefaultAsync(ct) ?? $"ID {detail.HerbId}");
-                shortages.Add($"'{name}' (cần: {requiredQuantity:0.###}g, khả dụng: {availableQuantity:0.###}g)");
+                var requiredQuantity = detail.DosagePerDose * prescription.TotalDoses;
+                var availableQuantity = stockMap.GetValueOrDefault(detail.HerbId)?.AvailableStock ?? 0m;
+                if (requiredQuantity > availableQuantity)
+                {
+                    var name = !string.IsNullOrWhiteSpace(detail.HerbNameSnapshot)
+                        ? detail.HerbNameSnapshot
+                        : (await db.Herbs.Where(h => h.HerbId == detail.HerbId).Select(h => h.CommonName).FirstOrDefaultAsync(ct) ?? $"ID {detail.HerbId}");
+                    shortages.Add($"'{name}' (cần: {requiredQuantity:0.###}g, khả dụng: {availableQuantity:0.###}g)");
+                }
             }
-        }
-        if (shortages.Count > 0)
-        {
-            throw new ConflictException($"Không đủ tồn khả dụng cho các vị thuốc: {string.Join(", ", shortages)}. Vui lòng kiểm tra và điều chỉnh đơn thuốc.");
+            if (shortages.Count > 0)
+            {
+                throw new ConflictException($"Không đủ tồn khả dụng cho các vị thuốc: {string.Join(", ", shortages)}. Vui lòng kiểm tra và điều chỉnh đơn thuốc.");
+            }
+
         }
 
         prescription.Status = "SENT";

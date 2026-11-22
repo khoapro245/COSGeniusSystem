@@ -87,6 +87,8 @@ public partial class InvoiceService : IInvoiceService
             .Include(i => i.Record)
                 .ThenInclude(r => r.Patient)
             .Include(i => i.InvoiceDetails)
+                .ThenInclude(d => d.PlanDetail)
+                    .ThenInclude(d => d!.Plan)
             .FirstOrDefaultAsync(i => i.InvoiceId == id);
 
         if (invoice == null)
@@ -114,6 +116,8 @@ public partial class InvoiceService : IInvoiceService
                 ItemType = d.ItemType,
                 PrescriptionId = d.PrescriptionId,
                 PlanDetailId = d.PlanDetailId,
+                PlanId = d.PlanDetail?.PlanId,
+                PlanName = d.PlanDetail?.Plan?.PlanName,
                 ItemName = d.ItemName,
                 Quantity = d.Quantity,
                 UnitPrice = d.UnitPrice,

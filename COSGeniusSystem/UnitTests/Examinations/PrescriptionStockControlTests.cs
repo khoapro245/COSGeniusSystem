@@ -179,7 +179,7 @@ public class PrescriptionStockControlTests
     }
 
     [Fact]
-    public async Task CompleteExamination_BlocksAndRollsBack_WhenPrescriptionHerbExceedsStock()
+    public async Task CompleteExamination_SendsPrescription_WhenHerbExceedsStock()
     {
         using var db = SchemaFixture.Create();
         var record = SchemaFixture.Record(1);
@@ -206,15 +206,13 @@ public class PrescriptionStockControlTests
         await db.SaveChangesAsync();
 
         var service = new ExaminationService(db);
-        var ex = await Assert.ThrowsAsync<ConflictException>(() =>
-            service.CompleteAsync(DoctorActor(), 1, new VersionRequest { RowVersion = record.RowVersion }, default));
+        var completed = await service.CompleteAsync(DoctorActor(), 1, new VersionRequest { RowVersion = record.RowVersion }, default);
 
-        Assert.Contains("Kỷ Tử", ex.Message);
-        Assert.Contains("20", ex.Message);
-        Assert.Contains("15", ex.Message);
+        Assert.Equal("COMPLETED", completed.Status);
+        Assert.Equal("COMPLETED", record.Registration.Status);
+        Assert.Equal("SENT", rx.Status);
+        Assert.NotNull(rx.SentAt);
+        Assert.Equal(15m, batch.CurrentQuantity);
 
-        // Đơn thuốc vẫn giữ nguyên trạng thái DRAFT, ca khám vẫn là IN_PROGRESS do transaction rollback
-        Assert.Equal("DRAFT", rx.Status);
-        Assert.Equal("IN_PROGRESS", record.Status);
     }
 }

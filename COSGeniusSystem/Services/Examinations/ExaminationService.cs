@@ -464,7 +464,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "SENT")).ToListAsync(ct);
             var plans = await db.TreatmentPlans.Include(p => p.TreatmentPlanDetails)
                 .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "CONFIRMED")).ToListAsync(ct);
-            foreach (var prescription in prescriptions) await SendPrescriptionContentAsync(prescription, ct);
+            foreach (var prescription in prescriptions) await SendPrescriptionContentAsync(prescription, ct, checkStock: false);
             foreach (var plan in plans) await ConfirmPlanContentAsync(plan, ct);
             var now = DateTime.UtcNow;
             record.Status = "COMPLETED";
