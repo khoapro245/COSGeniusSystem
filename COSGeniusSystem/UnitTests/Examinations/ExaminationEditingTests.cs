@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
@@ -25,10 +25,11 @@ public class ExaminationEditingTests
         record.Status = record.Registration.Status = "IN_PROGRESS";
         record.Symptoms = "Symptoms";
         var herb = new Herb { HerbId = 1, HerbCode = "H1", CommonName = "Herb", Unit = "g", IsActive = true };
+        var batch = new Batch { BatchId = 1, HerbId = 1, BatchNumber = "B01", CurrentQuantity = 100m, OriginalQuantity = 100m, ExpiryDate = DateOnly.FromDateTime(DateTime.UtcNow.AddYears(1)), Status = "Đạt chuẩn" };
         var service = new COSGeniusSystem.Models.Service { ServiceId = 1, ServiceCode = "S1", ServiceName = "Service", Unit = "session", IsActive = true, Price = 10 };
         var prescription = new HerbalPrescription { PrescriptionId = 1, Record = record, CreatedByNavigation = record.Doctor.User, Status = prescriptionStatus, TotalDoses = 1, UsageInstructions = "Use" };
         var plan = SchemaFixture.Plan(record); plan.Status = planStatus;
-        db.MedicalRecords.Add(record); db.Herbs.Add(herb); db.Services.Add(service); db.HerbalPrescriptions.Add(prescription); db.TreatmentPlans.Add(plan);
+        db.MedicalRecords.Add(record); db.Herbs.Add(herb); db.Batches.Add(batch); db.Services.Add(service); db.HerbalPrescriptions.Add(prescription); db.TreatmentPlans.Add(plan);
         await db.SaveChangesAsync();
         var api = new ExaminationService(db);
         var medicine = new SavePrescriptionRequest { RowVersion = prescription.RowVersion, TotalDoses = 2, UsageInstructions = "Use twice", Items = [new() { HerbId = 1, DosagePerDose = 3 }] };

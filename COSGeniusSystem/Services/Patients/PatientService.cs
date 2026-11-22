@@ -100,11 +100,28 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
     {
         ValidateLegacy(request);
         request.Phone = PatientPhone.Validate(request.Phone, required: true)!;
+        if (!string.IsNullOrWhiteSpace(request.ContactFullName))
+        {
+            if (request.ContactFullName.Trim().Length < 2)
+                throw new BadRequestException("Contact full name must have at least 2 characters.");
+            if (request.ContactFullName.Trim().Length > 150)
+                throw new BadRequestException("Contact full name must not exceed 150 characters.");
+        }
+        else if (!string.IsNullOrWhiteSpace(request.ContactPhone) || !string.IsNullOrWhiteSpace(request.ContactRelationship))
+        {
+            throw new BadRequestException("Contact full name must not be blank.");
+        }
+
+        if (!string.IsNullOrWhiteSpace(request.ContactRelationship) && request.ContactRelationship.Trim().Length > 50)
+            throw new BadRequestException("Relationship must not exceed 50 characters.");
+
         if (!string.IsNullOrWhiteSpace(request.ContactPhone))
         {
             var clean = NormalizeContactPhone(request.ContactPhone);
             if (clean != null && !System.Text.RegularExpressions.Regex.IsMatch(clean, @"^0\d{9,10}$"))
                 throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
+            if (PatientPhone.Normalize(clean) == PatientPhone.Normalize(request.Phone))
+                throw new BadRequestException("Relative phone number must not be the same as the patient's phone number.");
             request.ContactPhone = clean;
         }
         else
@@ -257,12 +274,31 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
 
         if (request is UpdatePatientRequest updateReq)
         {
+            if (!string.IsNullOrWhiteSpace(updateReq.ContactFullName))
+            {
+                if (updateReq.ContactFullName.Trim().Length < 2)
+                    throw new BadRequestException("Contact full name must have at least 2 characters.");
+                if (updateReq.ContactFullName.Trim().Length > 150)
+                    throw new BadRequestException("Contact full name must not exceed 150 characters.");
+            }
+            else if (!string.IsNullOrWhiteSpace(updateReq.ContactPhone) || !string.IsNullOrWhiteSpace(updateReq.ContactRelationship))
+            {
+                throw new BadRequestException("Contact full name must not be blank.");
+            }
+
+            if (!string.IsNullOrWhiteSpace(updateReq.ContactRelationship) && updateReq.ContactRelationship.Trim().Length > 50)
+                throw new BadRequestException("Relationship must not exceed 50 characters.");
+
             if (!string.IsNullOrWhiteSpace(updateReq.ContactPhone))
             {
                 var cleanContactPhone = NormalizeContactPhone(updateReq.ContactPhone);
                 if (cleanContactPhone == null || !System.Text.RegularExpressions.Regex.IsMatch(cleanContactPhone, @"^0\d{9,10}$"))
                 {
                     throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
+                }
+                if (PatientPhone.Normalize(cleanContactPhone) == PatientPhone.Normalize(request.Phone))
+                {
+                    throw new BadRequestException("Relative phone number must not be the same as the patient's phone number.");
                 }
                 updateReq.ContactPhone = cleanContactPhone;
             }
@@ -283,6 +319,10 @@ public sealed class PatientService(ApplicationDbContext db) : IPatientService
                         if (cleanP == null || !System.Text.RegularExpressions.Regex.IsMatch(cleanP, @"^0\d{9,10}$"))
                         {
                             throw new BadRequestException("Contact phone number must contain 10 or 11 digits and start with 0.");
+                        }
+                        if (PatientPhone.Normalize(cleanP) == PatientPhone.Normalize(request.Phone))
+                        {
+                            throw new BadRequestException("Relative phone number must not be the same as the patient's phone number.");
                         }
                         c.Phone = cleanP;
                     }

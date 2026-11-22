@@ -29,7 +29,8 @@ public sealed record ExaminationResponse(RegistrationResponse Registration, Pati
     IReadOnlyList<TreatmentPlanResponse> TreatmentPlans);
 
 public sealed record PrescriptionItemResponse(int PrescriptionDetailId, int HerbId, string HerbNameSnapshot,
-    decimal DosagePerDose, decimal TotalQuantity, string? RoleInFormula, string? Note);
+    decimal DosagePerDose, decimal TotalQuantity, string? RoleInFormula, string? Note,
+    decimal UnitPrice = 0, decimal AvailableStock = 0);
 
 public sealed record PrescriptionResponse(int PrescriptionId, string? PrescriptionCode, int RecordId,
     int? SourceHerbalFormulaId, string? PrescriptionName, int TotalDoses, int? DosageDays,
@@ -49,7 +50,8 @@ public sealed record TreatmentPlanResponse(int PlanId, string? PlanCode, int Rec
 }
 
 public sealed record FormulaItemResponse(int HerbId, string HerbName, decimal DosagePerDose,
-    string? RoleInFormula, string? Note, bool IsActive);
+    string? RoleInFormula, string? Note, bool IsActive,
+    decimal UnitPrice = 0, decimal AvailableStock = 0);
 
 public sealed record FormulaResponse(int HerbalFormulaId, string? FormulaCode, string FormulaName,
     string? IntendedUse, string? UsageInstructions, IReadOnlyList<FormulaItemResponse> Items);

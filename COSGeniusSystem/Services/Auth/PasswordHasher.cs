@@ -10,6 +10,15 @@ public class PasswordHasher : IPasswordHasher
 
     public bool VerifyPassword(string password, string passwordHash)
     {
-        return BCrypt.Net.BCrypt.EnhancedVerify(password, passwordHash);
+        try
+        {
+            if (BCrypt.Net.BCrypt.EnhancedVerify(password, passwordHash)) return true;
+        }
+        catch { }
+        try
+        {
+            return BCrypt.Net.BCrypt.Verify(password, passwordHash);
+        }
+        catch { return false; }
     }
 }
