@@ -48,6 +48,7 @@ builder.Services.AddScoped<IFormulaService, FormulaService>();
 builder.Services.AddScoped<IDispensingService, DispensingService>();
 builder.Services.AddScoped<IAuditService, AuditService>();
 builder.Services.AddScoped<IDisposalService, DisposalService>();
+builder.Services.AddScoped<ISupplierReturnService, SupplierReturnService>();
 // [hieppm] Start: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 builder.Services.AddScoped<IPurchaseOrderService, PurchaseOrderService>();
 builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();

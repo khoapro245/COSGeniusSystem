@@ -159,6 +159,60 @@ public class AuditService : IAuditService
         string baseNote = request.Note ?? (initialStatus == "Đề xuất" ? "Đề xuất kiểm kê do Nhân viên kho tạo" : "Lịch kiểm kê do Quản lý khởi tạo");
         string finalNote = baseNote.Contains("[Phạm vi:") ? baseNote : $"[Phạm vi: {scopeStr}] {baseNote}".Trim();
 
+        // --- QUY TẮC KIỂM TRA ĐỢT KIỂM KÊ TRÙNG LẶP / CHƯA HOÀN TẤT ---
+        var activeAudits = await _context.InventoryAudits
+            .Include(a => a.AuditDetails)
+                .ThenInclude(d => d.Batch)
+                    .ThenInclude(b => b.Herb)
+            .Where(a => a.WarehouseId == warehouse.WarehouseId &&
+                        a.Status != "Đã duyệt" && a.Status != "Đã duyệt điều chỉnh" && a.Status != "Đã hủy" && a.Status != "Hủy")
+            .ToListAsync(ct);
+
+        bool isFullScope = scopeStr.Equals("Toàn kho", StringComparison.OrdinalIgnoreCase) ||
+                           scopeStr.Equals("Toàn bộ", StringComparison.OrdinalIgnoreCase);
+
+        // Quy tắc 1: Nếu tạo đợt kiểm kê Toàn kho mà đang có bất kỳ đợt kiểm kê nào chưa hoàn tất
+        if (isFullScope && activeAudits.Count > 0)
+        {
+            var firstActive = activeAudits[0];
+            throw new BadRequestException($"Hiện đang có đợt kiểm kê {firstActive.AuditCode} chưa hoàn tất ({firstActive.Status}), không thể bắt đầu đợt kiểm kê toàn kho mới.");
+        }
+
+        // Quy tắc 2: Nếu tạo đợt kiểm kê Theo vị
+        if (!isFullScope)
+        {
+            // Kiểm tra xem có đợt kiểm kê Toàn kho nào chưa hoàn tất không
+            var activeFullScreenAudit = activeAudits.FirstOrDefault(a =>
+                (a.Note != null && (a.Note.Contains("[Phạm vi: Toàn kho]") || a.Note.Contains("[Phạm vi: Toàn bộ]"))) ||
+                a.AuditDetails.Count >= 10);
+            if (activeFullScreenAudit != null)
+            {
+                throw new BadRequestException($"Hiện đang có đợt kiểm kê toàn kho {activeFullScreenAudit.AuditCode} chưa hoàn tất, không thể bắt đầu đợt kiểm kê theo vị mới.");
+            }
+
+            // Kiểm tra trùng vị thuốc với các đợt kiểm kê khác đang diễn ra
+            if (request.BatchIds != null && request.BatchIds.Count > 0)
+            {
+                var requestedBatches = await _context.Batches
+                    .Include(b => b.Herb)
+                    .Where(b => request.BatchIds.Contains(b.BatchId))
+                    .ToListAsync(ct);
+                var requestedHerbIds = requestedBatches.Select(b => b.HerbId).Distinct().ToHashSet();
+
+                foreach (var activeAudit in activeAudits)
+                {
+                    var conflictDetail = activeAudit.AuditDetails.FirstOrDefault(d =>
+                        (d.Batch != null && requestedHerbIds.Contains(d.Batch.HerbId)) ||
+                        request.BatchIds.Contains(d.BatchId));
+                    if (conflictDetail != null)
+                    {
+                        var conflictHerbName = conflictDetail.Batch?.Herb?.CommonName ?? "Dược liệu";
+                        throw new BadRequestException($"Vị thuốc {conflictHerbName} đang nằm trong đợt kiểm kê {activeAudit.AuditCode} chưa hoàn tất.");
+                    }
+                }
+            }
+        }
+
         var audit = new InventoryAudit
         {
             AuditCode = nextCode,
@@ -228,11 +282,16 @@ public class AuditService : IAuditService
         return MapToDto(audit);
     }
 
-    public async Task<InventoryAuditDto> UpdateAuditCountAsync(string idOrCode, UpdateAuditCountRequest request, CancellationToken ct = default)
+    public async Task<InventoryAuditDto> UpdateAuditCountAsync(string idOrCode, UpdateAuditCountRequest request, int tokenUserId = 0, bool isManagerOrAdmin = false, CancellationToken ct = default)
     {
         var audit = await FindAuditEntityAsync(idOrCode, ct);
         if (audit == null)
             throw new NotFoundException($"Inventory audit {idOrCode} was not found.");
+
+        if (tokenUserId > 0 && !isManagerOrAdmin && audit.AuditedBy != 0 && audit.AuditedBy != tokenUserId)
+        {
+            throw new ForbiddenException($"Phiếu kiểm kê {audit.AuditCode} được giao cho nhân viên khác thực hiện (User #{audit.AuditedBy}). Bạn không có quyền kiểm đếm phiếu này.");
+        }
 
         if (audit.Status == "Đã duyệt")
             throw new BadRequestException("The inventory audit has been approved; quantities cannot be edited.");

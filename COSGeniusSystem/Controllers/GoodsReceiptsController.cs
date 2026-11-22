@@ -24,7 +24,7 @@ public class GoodsReceiptsController : BaseApiController
     /// GET /api/v1/goods-receipts
     /// </summary>
     [HttpGet]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<GoodsReceiptDto>>>> GetGoodsReceipts(
         [FromQuery] string? status,
         [FromQuery] int? poId,
@@ -39,7 +39,7 @@ public class GoodsReceiptsController : BaseApiController
     /// GET /api/v1/goods-receipts/{idOrCode}
     /// </summary>
     [HttpGet("{idOrCode}")]
-    [Authorize]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<GoodsReceiptDto>>> GetGoodsReceiptDetail(
         string idOrCode,
         CancellationToken ct = default)

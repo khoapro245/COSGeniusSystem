@@ -90,10 +90,52 @@ public partial class ApplicationDbContext : DbContext
 
     public virtual DbSet<Warehouse> Warehouses { get; set; }
 
+    public virtual DbSet<SupplierReturn> SupplierReturns { get; set; }
+
+    public virtual DbSet<SupplierReturnDetail> SupplierReturnDetails { get; set; }
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.Ignore<TreatmentAdmission>();
         modelBuilder.Entity<TreatmentSession>().Ignore(s => s.AdmissionId).Ignore(s => s.Admission);
+
+        modelBuilder.Entity<SupplierReturn>(entity =>
+        {
+            entity.ToTable("SupplierReturn");
+            entity.HasKey(e => e.ReturnId);
+            entity.Property(e => e.ReturnCode).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.SupplierName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.ReceiptCode).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.BatchCode).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.TotalReturnQuantity).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.TotalReturnValue).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ReasonCategory).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.ReasonNote).HasMaxLength(500);
+            entity.Property(e => e.Status).HasMaxLength(50).IsRequired();
+            entity.Property(e => e.ApprovalNote).HasMaxLength(500);
+            entity.Property(e => e.HandoverNote).HasMaxLength(500);
+            entity.Property(e => e.RejectionReason).HasMaxLength(500);
+
+            entity.HasMany(d => d.SupplierReturnDetails)
+                .WithOne(p => p.SupplierReturn)
+                .HasForeignKey(d => d.ReturnId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SupplierReturnDetail>(entity =>
+        {
+            entity.ToTable("SupplierReturnDetail");
+            entity.HasKey(e => e.ReturnDetailId);
+            entity.Property(e => e.HerbCode).HasMaxLength(50);
+            entity.Property(e => e.HerbName).HasMaxLength(200).IsRequired();
+            entity.Property(e => e.SupplierBatchCode).HasMaxLength(100);
+            entity.Property(e => e.AvailableQuantity).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.ReturnQuantity).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.UnitPrice).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.LineTotal).HasColumnType("decimal(18, 2)");
+            entity.Property(e => e.Reason).HasMaxLength(500);
+            entity.Property(e => e.OriginalReceiptCode).HasMaxLength(50);
+        });
         modelBuilder.Entity<AuditDetail>(entity =>
         {
             entity.HasKey(e => e.AuditDetailId).HasName("PK__AuditDet__1E1C703DAB62BCCE");

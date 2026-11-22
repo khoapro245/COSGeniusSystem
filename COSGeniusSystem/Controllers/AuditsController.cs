@@ -88,7 +88,15 @@ public class AuditsController : BaseApiController
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<InventoryAuditDto>>> UpdateAuditCount(string idOrCode, [FromBody] UpdateAuditCountRequest request, CancellationToken ct = default)
     {
-        var result = await _auditService.UpdateAuditCountAsync(idOrCode, request, ct);
+        int tokenUserId = 0;
+        var claim = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        if (int.TryParse(claim, out int uid))
+        {
+            tokenUserId = uid;
+        }
+        bool isManagerOrAdmin = User.IsInRole("MANAGER") || User.IsInRole("ADMIN");
+
+        var result = await _auditService.UpdateAuditCountAsync(idOrCode, request, tokenUserId, isManagerOrAdmin, ct);
         string msg = request.IsComplete ? "Đã hoàn tất kiểm kê và chuyển phiếu sang Quản lý duyệt." : "Đã lưu tiến độ kiểm đếm.";
         return SuccessResponse(new SystemMessage(200, msg, true), result);
     }

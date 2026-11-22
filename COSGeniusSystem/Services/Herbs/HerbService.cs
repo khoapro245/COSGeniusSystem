@@ -190,7 +190,7 @@ public class HerbService : IHerbService
                 LatestAuditId = g.OrderByDescending(x => x.AuditId).First().Audit.AuditId,
                 LatestAuditCode = g.OrderByDescending(x => x.AuditId).First().Audit.AuditCode,
                 LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
-                SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
+                SystemQuantity = g.OrderByDescending(x => x.AuditId).First().SystemQuantity,
                 LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
             })
             .ToListAsync();
@@ -260,7 +260,7 @@ public class HerbService : IHerbService
                 ExpiryDate = b.ExpiryDate,
                 OriginalQuantity = b.OriginalQuantity,
                 CurrentQuantity = b.CurrentQuantity,
-                SystemQuantity = batchSysMap.TryGetValue(b.BatchId, out var sysQty) ? sysQty : b.CurrentQuantity,
+                SystemQuantity = b.CurrentQuantity,
                 UsableQuantity = usableQty,
                 DestroyQuantity = destrQty,
                 UnitCost = b.UnitCost,
@@ -329,7 +329,7 @@ public class HerbService : IHerbService
                 LatestAuditId = g.OrderByDescending(x => x.AuditId).First().Audit.AuditId,
                 LatestAuditCode = g.OrderByDescending(x => x.AuditId).First().Audit.AuditCode,
                 LatestAuditDate = g.OrderByDescending(x => x.AuditId).First().Audit.AuditDate,
-                SystemQuantity = g.OrderBy(x => x.AuditId).First().SystemQuantity,
+                SystemQuantity = g.OrderByDescending(x => x.AuditId).First().SystemQuantity,
                 LatestReason = g.OrderByDescending(x => x.AuditId).First().Reason
             })
             .ToListAsync(ct);
@@ -402,7 +402,7 @@ public class HerbService : IHerbService
                         ExpiryDate = b.ExpiryDate,
                         OriginalQuantity = b.OriginalQuantity,
                         CurrentQuantity = b.CurrentQuantity,
-                        SystemQuantity = batchSysMap.TryGetValue(b.BatchId, out var sysQty) ? sysQty : b.CurrentQuantity,
+                        SystemQuantity = b.CurrentQuantity,
                         UsableQuantity = usableQty,
                         DestroyQuantity = destrQty,
                         UnitCost = b.UnitCost,
