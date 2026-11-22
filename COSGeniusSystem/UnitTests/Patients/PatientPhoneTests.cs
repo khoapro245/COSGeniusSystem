@@ -48,4 +48,38 @@ public class PatientPhoneTests {
   request.ConfirmDuplicatePhone=true;await service.UpdateAsync(b.PatientId,request,default);
   request.Email="invalid";await Assert.ThrowsAsync<BadRequestException>(()=>service.UpdateAsync(b.PatientId,request,default));
  }
+ [Fact] public async Task RelativePhoneCannotMatchPatientPhone() {
+  using var db=Db(); var service=new PatientService(db); var contactService=new PatientContactService(db);
+  var createReq=new CreatePatientRequest {
+      FullName="Patient A", Phone="0912345678", ContactFullName="Contact A", ContactRelationship="Parent", ContactPhone="+84912345678"
+  };
+  var ex1=await Assert.ThrowsAsync<BadRequestException>(()=>service.CreateAsync(createReq,default));
+  Assert.Equal("Relative phone number must not be the same as the patient's phone number.", ex1.Message);
+
+  createReq.ContactPhone="0987654321";
+  var patient=await service.CreateAsync(createReq,default);
+  Assert.NotNull(patient);
+
+  var updateReq=new UpdatePatientRequest {
+      FullName="Patient A", Phone="0912345678", ContactFullName="Contact A", ContactRelationship="Parent", ContactPhone="0912345678"
+  };
+  var ex2=await Assert.ThrowsAsync<BadRequestException>(()=>service.UpdateAsync(patient.PatientId,updateReq,default));
+  Assert.Equal("Relative phone number must not be the same as the patient's phone number.", ex2.Message);
+
+  var createContactReq=new CreatePatientContactRequest {
+      FullName="Contact B", Relationship="Sibling", Phone="0912345678"
+  };
+  var ex3=await Assert.ThrowsAsync<BadRequestException>(()=>contactService.CreateAsync(patient.PatientId,createContactReq,default));
+  Assert.Equal("Relative phone number must not be the same as the patient's phone number.", ex3.Message);
+
+  createContactReq.Phone="0933333333";
+  var createdContact=await contactService.CreateAsync(patient.PatientId,createContactReq,default);
+  Assert.NotNull(createdContact);
+
+  var updateContactReq=new UpdatePatientContactRequest {
+      FullName="Contact B Updated", Relationship="Sibling", Phone="0912345678"
+  };
+  var ex4=await Assert.ThrowsAsync<BadRequestException>(()=>contactService.UpdateAsync(patient.PatientId,createdContact.ContactId,updateContactReq,default));
+  Assert.Equal("Relative phone number must not be the same as the patient's phone number.", ex4.Message);
+ }
 }

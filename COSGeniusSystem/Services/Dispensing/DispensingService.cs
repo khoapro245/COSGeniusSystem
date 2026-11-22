@@ -187,6 +187,13 @@ public class DispensingService : IDispensingService
         if (request.OrderIds == null || !request.OrderIds.Any())
             throw new BadRequestException("Select at least one prescription to create a requisition.");
 
+        if (request.OrderIds.Count != 1)
+            throw new ConflictException("Vui l?ng t?o y?u c?u c?p d??c li?u t?i m?n h?nh qu?y b?c thu?c.");
+        var orderId = request.OrderIds[0];
+        if (!await _db.HerbalPrescriptions.AnyAsync(p => p.PrescriptionId == orderId && p.Status == "SENT" && p.Record.Status == "COMPLETED" && p.Record.Registration.Status == "COMPLETED" && p.MedicineDispense == null
+            && !_db.HerbRequisitionPrescriptions.Any(l => l.PrescriptionId == orderId && l.IsActive)
+            && _db.InvoiceDetails.Any(i => i.PrescriptionId == orderId && i.Invoice.RecordId == p.RecordId && i.ItemType == "HERB_REMEDY" && i.IsActive && (i.Invoice.PaymentStatus == "PAID" || i.Invoice.PaymentStatus == "?? thanh to?n")), ct))
+            throw new ConflictException("??n ch?a ?? ?i?u ki?n ho?c ch?a thanh to?n, ch?a th? t?o y?u c?u c?p d??c li?u.");
         var orders = await _db.HerbalPrescriptions
             .Include(p => p.HerbalPrescriptionDetails)
             .Where(p => request.OrderIds.Contains(p.PrescriptionId))

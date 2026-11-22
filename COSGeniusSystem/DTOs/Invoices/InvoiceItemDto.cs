@@ -9,6 +9,8 @@ public class InvoiceItemDto
     public string ItemType { get; set; } = string.Empty;
     public int? PrescriptionId { get; set; }
     public int? PlanDetailId { get; set; }
+    public int? PlanId { get; set; }
+    public string? PlanName { get; set; }
     public string ItemName { get; set; } = string.Empty;
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }

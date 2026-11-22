@@ -328,11 +328,8 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
 
         var total = await q.CountAsync(ct);
         var dbItems = await q.OrderByDescending(r => r.BusinessDate)
-            .ThenBy(r => r.Status == "IN_PROGRESS" ? 0 : r.Status == "WAITING" ? 1 : 2)
-            .ThenByDescending(r => r.Status == "WAITING" && r.IsPriority)
-            .ThenBy(r => r.Status == "WAITING" ? r.RegisteredAt : DateTime.MinValue)
-            .ThenBy(r => r.QueueNumber)
-            .ThenBy(r => r.RegistrationId)
+            .ThenByDescending(r => r.RegisteredAt)
+            .ThenByDescending(r => r.RegistrationId)
             .Skip((query.PageNumber - 1) * query.PageSize)
             .Take(query.PageSize)
             .Select(RegistrationProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))))
@@ -370,7 +367,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
         var record = await db.MedicalRecords.AsNoTracking().Where(r => r.RegistrationId == registrationId).Select(RecordProjection).SingleOrDefaultAsync(ct);
         // Patient API mapping and validation remain the single source of patient information.
         var patient = await patients.GetByIdAsync(registration.PatientId, ct);
-        IReadOnlyList<PrescriptionResponse> prescriptions = record == null ? [] : await PrescriptionsQuery(record.RecordId).ToListAsync(ct);
+        IReadOnlyList<PrescriptionResponse> prescriptions = record == null ? [] : await PrescriptionsForRecordAsync(record.RecordId, ct);
         IReadOnlyList<TreatmentPlanResponse> plans = record == null ? [] : await PlansQuery(record.RecordId).ToListAsync(ct);
         return new(await RegistrationResponseAsync(registrationId, ct), patient, record, prescriptions, plans);
     }
@@ -431,7 +428,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
             .Select(RecordProjection).SingleOrDefaultAsync(ct)
             ?? throw new NotFoundException("The historical record does not belong to this patient.");
         return new(await RegistrationResponseAsync(record.RegistrationId, ct), await patients.GetByIdAsync(current.PatientId, ct),
-            record, await PrescriptionsQuery(record.RecordId).ToListAsync(ct), await PlansQuery(record.RecordId).ToListAsync(ct));
+            record, await PrescriptionsForRecordAsync(record.RecordId, ct), await PlansQuery(record.RecordId).ToListAsync(ct));
     }
 
     public async Task<MedicalRecordResponse> SaveAsync(ClaimsPrincipal actor, int registrationId, SaveMedicalRecordRequest request, CancellationToken ct)
@@ -464,7 +461,7 @@ public sealed partial class ExaminationService(ApplicationDbContext db, IPatient
                 .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "SENT")).ToListAsync(ct);
             var plans = await db.TreatmentPlans.Include(p => p.TreatmentPlanDetails)
                 .Where(p => p.RecordId == record.RecordId && (p.Status == "DRAFT" || p.Status == "CONFIRMED")).ToListAsync(ct);
-            foreach (var prescription in prescriptions) await SendPrescriptionContentAsync(prescription, ct);
+            foreach (var prescription in prescriptions) await SendPrescriptionContentAsync(prescription, ct, checkStock: false);
             foreach (var plan in plans) await ConfirmPlanContentAsync(plan, ct);
             var now = DateTime.UtcNow;
             record.Status = "COMPLETED";

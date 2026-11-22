@@ -24,7 +24,7 @@ public static class InvoiceAccrual
             && x.Invoice.PaymentStatus != "CANCELLED" && x.Invoice.PaymentStatus != "Đã hủy").ToListAsync(ct);
         var lines = new List<InvoiceDetail>();
         var prescriptions = await db.HerbalPrescriptions.Include(x => x.HerbalPrescriptionDetails).ThenInclude(x => x.Herb)
-            .Where(x => x.RecordId == recordId && x.MedicineDispense != null && x.MedicineDispense.Status == "COMPLETED").ToListAsync(ct);
+            .Where(x => x.RecordId == recordId && record.Status == "COMPLETED" && x.Status == "SENT").ToListAsync(ct);
         foreach (var rx in prescriptions.Where(x => !existing.Any(i => i.PrescriptionId == x.PrescriptionId)))
         {
             var ingredients = rx.HerbalPrescriptionDetails.Select(d => new InvoiceIngredient(d.HerbNameSnapshot,
@@ -43,10 +43,7 @@ public static class InvoiceAccrual
             .Where(x => x.Plan.RecordId == recordId).ToListAsync(ct);
         foreach (var d in details)
         {
-            var course = d.Plan.TreatmentType == "COURSE";
-            var eligible = course
-                ? (record.Status == "COMPLETED" && d.Plan.ConfirmedAt.HasValue && d.Plan.Status is "CONFIRMED" or "IN_PROGRESS" or "COMPLETED" ? d.PlannedQuantity : 0)
-                : d.Plan.TreatmentType == "SINGLE" ? d.UsageHistories.Where(u => u.Session.Status == "COMPLETED").Sum(u => u.Quantity) : 0;
+            var eligible = record.Status == "COMPLETED" && d.Plan.ConfirmedAt.HasValue && (d.Plan.Status is "CONFIRMED" or "IN_PROGRESS" or "COMPLETED") && (d.Plan.TreatmentType is "COURSE" or "SINGLE") ? d.PlannedQuantity : 0;
             var covered = existing.Where(i => i.PlanDetailId == d.PlanDetailId).Sum(i => i.Quantity);
             var quantity = eligible - covered;
             if (quantity <= 0) continue;

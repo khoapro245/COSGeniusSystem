@@ -18,6 +18,13 @@ public abstract class BaseApiController : ControllerBase
     {
         if (message.Code != StatusCodes.Status201Created)
             throw new ArgumentException("A creation response must use HTTP status code 201.", nameof(message));
-        return CreatedAtAction(actionName, routeValues, ApiResponseModel<T>.Success(message, data));
+        try
+        {
+            return CreatedAtAction(actionName, routeValues, ApiResponseModel<T>.Success(message, data));
+        }
+        catch (InvalidOperationException)
+        {
+            return StatusCode(StatusCodes.Status201Created, ApiResponseModel<T>.Success(message, data));
+        }
     }
 }

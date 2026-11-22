@@ -15,7 +15,7 @@ namespace COSGeniusSystem.Services;
 public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IPatientService? patients = null,
     IConfiguration? configuration = null) : ITreatmentWorkflowService
 {
-    // COURSE requires full prepayment; SINGLE is billed after completed usage.
+    // All indicated services require full prepayment.
 
     private static int UserId(ClaimsPrincipal actor) =>
         int.TryParse(actor.FindFirstValue(ClaimTypes.NameIdentifier), out var id) && id > 0 ? id : throw new UnauthorizedException();
@@ -166,7 +166,7 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
     private async Task PaymentAsync(int planId, CancellationToken ct)
     {
         _ = configuration; // Legacy setting cannot disable mandatory COURSE prepayment.
-        if (await db.TreatmentPlans.AnyAsync(p => p.PlanId == planId && p.TreatmentType == "COURSE", ct) && !await FullyPaidAsync(planId, ct))
+        if (!await FullyPaidAsync(planId, ct))
             throw new ConflictException("All indicated services must be fully paid before treatment.");
     }
     public async Task<PlanOverview> PlanAsync(ClaimsPrincipal actor, int id, CancellationToken ct)
@@ -187,7 +187,7 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         var hasActiveRequest = summary.ActiveRequests > 0
             || await PatientRequestGuard.HasActiveExaminationAsync(db, record.PatientId, ct);
         var blockedReason = hasActiveRequest ? "ACTIVE_REQUEST"
-            : plan.TreatmentType == "COURSE" && !paid ? "PAYMENT_REQUIRED"
+            : !paid ? "PAYMENT_REQUIRED"
             : !effective ? "PLAN_NOT_ACTIVE"
             : summary.CompletedSessions >= plan.PlannedSessionCount ? "NO_REMAINING_SESSIONS"
             : !services.Any(s => s.RemainingQuantity > 0) ? "NO_REMAINING_SERVICES"
@@ -197,7 +197,7 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         var patientResp = patients != null ? await patients.GetByIdAsync(record.PatientId, ct) : new PatientResponse { PatientId = record.PatientId, FullName = summary.PatientName, Phone = summary.Phone };
         return new(summary, patientResp, record.RegistrationId,
             record.ExamDate, record.FinalDiagnosis, record.AllergyNoteSnapshot, plan.Description, plan.TreatmentType,
-            plan.StartDate, plan.EndDate, Math.Max(0, plan.PlannedSessionCount - summary.CompletedSessions), paid, plan.TreatmentType == "COURSE",
+            plan.StartDate, plan.EndDate, Math.Max(0, plan.PlannedSessionCount - summary.CompletedSessions), paid, true,
             actor.IsInRole(RoleConstants.ReceptionStaff) && blockedReason == null,
             doctor == plan.DoctorId && (effective || plan.Status == "DRAFT") && summary.ActiveRequests == 0
                 && summary.CompletedSessions == 0 && !hasInvoices
@@ -282,9 +282,8 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
 
         var count = await q.CountAsync(ct);
         var items = await q.OrderByDescending(s => s.ScheduledDate)
-            .ThenBy(s => s.QueueNumber == null)
-            .ThenBy(s => s.QueueNumber)
-            .ThenBy(s => s.SessionId)
+            .ThenByDescending(s => s.RequestedAt ?? s.CreatedAt)
+            .ThenByDescending(s => s.SessionId)
             .Skip((query.PageNumber - 1) * query.PageSize).Take(query.PageSize).Select(SessionProjection(DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7)))).ToListAsync(ct);
         return new(items, query.PageNumber, query.PageSize, count);
     }

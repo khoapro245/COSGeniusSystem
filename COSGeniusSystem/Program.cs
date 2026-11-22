@@ -58,7 +58,13 @@ builder.Services.AddScoped<IReportService, ReportService>();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
-builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new UtcDateTimeJsonConverter());
+        options.JsonSerializerOptions.Converters.Add(new NullableUtcDateTimeJsonConverter());
+    })
+    .ConfigureApiBehaviorOptions(options =>
 {
     // Avoid MVC's default ProblemDetails wrapper alongside ApiResponseModel.
     options.SuppressMapClientErrors = true;
