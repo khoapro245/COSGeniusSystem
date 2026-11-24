@@ -22,4 +22,9 @@ public interface IDoctorService
     /// Đăng ký thông tin hồ sơ cho bác sĩ.
     /// </summary>
     Task<DoctorDetailDto> CreateDoctorAsync(CreateDoctorRequestDto request, CancellationToken ct = default);
+
+    /// <summary>
+    /// Cập nhật thông tin hồ sơ bác sĩ.
+    /// </summary>
+    Task<DoctorDetailDto> UpdateDoctorAsync(int id, UpdateDoctorRequestDto request, CancellationToken ct = default);
 }

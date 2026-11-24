@@ -128,6 +128,58 @@ public class DoctorService : IDoctorService
         return (await GetDoctorByIdAsync(doctor.DoctorId))!;
     }
 
+    public async Task<DoctorDetailDto> UpdateDoctorAsync(int id, UpdateDoctorRequestDto request, CancellationToken ct = default)
+    {
+        var doctor = await _context.Doctors
+            .Include(d => d.User)
+            .FirstOrDefaultAsync(d => d.DoctorId == id, ct);
+
+        if (doctor == null)
+            throw new NotFoundException($"Không tìm thấy hồ sơ bác sĩ có ID {id}.");
+
+        if (string.IsNullOrWhiteSpace(request.FullName))
+            throw new BadRequestException("Họ và tên bác sĩ không được để trống.");
+
+        doctor.FullName = request.FullName.Trim();
+        doctor.Specialization = request.Specialization?.Trim();
+        doctor.LicenseNumber = request.LicenseNumber?.Trim();
+        doctor.Phone = request.Phone?.Trim();
+        doctor.IsActive = request.IsActive;
+
+        if (request.UserId.HasValue && request.UserId.Value > 0 && request.UserId != doctor.UserId)
+        {
+            var user = await _context.Users
+                .Include(u => u.UserRoles)
+                    .ThenInclude(ur => ur.Role)
+                .FirstOrDefaultAsync(u => u.UserId == request.UserId.Value, ct);
+
+            if (user == null)
+                throw new NotFoundException($"Không tìm thấy tài khoản người dùng có ID {request.UserId.Value}.");
+
+            var existingDoc = await _context.Doctors.FirstOrDefaultAsync(d => d.UserId == request.UserId.Value && d.DoctorId != id, ct);
+            if (existingDoc != null)
+                throw new ConflictException($"Tài khoản '{user.Username}' đã được liên kết với một hồ sơ bác sĩ khác.");
+
+            if (!user.UserRoles.Any(ur => ur.Role.RoleCode == RoleConstants.Doctor))
+            {
+                var docRole = await _context.Roles.FirstOrDefaultAsync(r => r.RoleCode == RoleConstants.Doctor, ct);
+                if (docRole != null)
+                {
+                    user.UserRoles.Add(new UserRole
+                    {
+                        UserId = user.UserId,
+                        RoleId = docRole.RoleId,
+                        AssignedAt = DateTime.UtcNow
+                    });
+                }
+            }
+            doctor.UserId = request.UserId.Value;
+        }
+
+        await _context.SaveChangesAsync(ct);
+        return (await GetDoctorByIdAsync(doctor.DoctorId))!;
+    }
+
     public async Task<DoctorClinicOverviewDto> GetDoctorClinicOverviewAsync(DoctorClinicFilterQuery query, CancellationToken ct = default)
     {
         var today = query.BusinessDate ?? DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7));

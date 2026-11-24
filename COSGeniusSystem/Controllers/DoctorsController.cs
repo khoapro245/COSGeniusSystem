@@ -77,4 +77,19 @@ public class DoctorsController : BaseApiController
             new SystemMessage(201, "Hồ sơ bác sĩ đã được đăng ký thành công.", true),
             result);
     }
+
+    /// <summary>
+    /// API-DOCTOR-04: Cập nhật thông tin hồ sơ bác sĩ (Dành cho Quản lý / Admin).
+    /// PUT /api/v1/doctors/{id}
+    /// </summary>
+    [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleConstants.Admin + "," + RoleConstants.Manager)]
+    public async Task<ActionResult<ApiResponseModel<DoctorDetailDto>>> UpdateDoctor(
+        int id,
+        [FromBody] UpdateDoctorRequestDto request,
+        CancellationToken ct = default)
+    {
+        var result = await _doctorService.UpdateDoctorAsync(id, request, ct);
+        return SuccessResponse(new SystemMessage(200, "Cập nhật thông tin hồ sơ bác sĩ thành công.", true), result);
+    }
 }
