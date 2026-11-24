@@ -46,17 +46,11 @@ public sealed partial class ExaminationService
         return new(items, query.PageNumber, query.PageSize, total);
     }
 
-    // The current prescribing screen has one prescription aggregate per examination.
-    // Repeated POST returns that aggregate even after it has been sent.
     public async Task<PrescriptionResponse> CreatePrescriptionAsync(ClaimsPrincipal actor, int registrationId, CancellationToken ct)
     {
         var id = await WriteAsync(actor, registrationId, true, async registration =>
         {
-            var record = await RecordAsync(registration, false, ct);
-            var existing = await db.HerbalPrescriptions.Where(p => p.RecordId == record.RecordId)
-                .OrderBy(p => p.PrescriptionId).Select(p => (int?)p.PrescriptionId).FirstOrDefaultAsync(ct);
-            if (existing.HasValue) return existing.Value;
-            await RecordAsync(registration, true, ct);
+            var record = await RecordAsync(registration, true, ct);
             var prescription = new HerbalPrescription
             {
                 RecordId = record.RecordId, TotalDoses = 1, Status = "DRAFT", CreatedBy = UserId(actor), CreatedAt = DateTime.UtcNow
