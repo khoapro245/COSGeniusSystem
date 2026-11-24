@@ -44,6 +44,7 @@ public class DoctorService : IDoctorService
         return await q.Select(d => new DoctorResponseDto
         {
             DoctorId = d.DoctorId,
+            UserId = d.UserId,
             FullName = d.FullName,
             Specialization = d.Specialization,
             LicenseNumber = d.LicenseNumber,
@@ -67,6 +68,7 @@ public class DoctorService : IDoctorService
         return new DoctorDetailDto
         {
             DoctorId = doctor.DoctorId,
+            UserId = doctor.UserId,
             FullName = doctor.FullName,
             Specialization = doctor.Specialization,
             LicenseNumber = doctor.LicenseNumber,
