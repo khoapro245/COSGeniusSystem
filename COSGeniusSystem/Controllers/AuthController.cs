@@ -26,9 +26,9 @@ public class AuthController : BaseApiController
     [ProducesResponseType(typeof(ApiResponseModel<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseModel<ValidationErrorData>), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status409Conflict)]
-    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Register([FromBody] RegisterRequestDto request)
+    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Register([FromBody] RegisterRequestDto request, CancellationToken ct = default)
     {
-        var result = await _authService.RegisterAsync(request);
+        var result = await _authService.RegisterAsync(request, ct);
         return SuccessResponse(SystemMessages.UserRegistered, result);
     }
 
@@ -39,9 +39,9 @@ public class AuthController : BaseApiController
     [ProducesResponseType(typeof(ApiResponseModel<AuthResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status403Forbidden)]
-    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Login([FromBody] LoginRequestDto request)
+    public async Task<ActionResult<ApiResponseModel<AuthResponseDto>>> Login([FromBody] LoginRequestDto request, CancellationToken ct = default)
     {
-        var result = await _authService.LoginAsync(request);
+        var result = await _authService.LoginAsync(request, ct);
         return SuccessResponse(SystemMessages.LoginSuccessful, result);
     }
 
@@ -67,7 +67,7 @@ public class AuthController : BaseApiController
     [ProducesResponseType(typeof(ApiResponseModel<UserInfoResponseDto>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ApiResponseModel<object>), StatusCodes.Status404NotFound)]
-    public async Task<ActionResult<ApiResponseModel<UserInfoResponseDto>>> GetCurrentUser()
+    public async Task<ActionResult<ApiResponseModel<UserInfoResponseDto>>> GetCurrentUser(CancellationToken ct = default)
     {
         var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (!int.TryParse(userIdClaim, out var userId))
@@ -75,7 +75,7 @@ public class AuthController : BaseApiController
             throw new UnauthorizedException("The user identifier in the session is invalid.");
         }
 
-        var profile = await _authService.GetCurrentUserProfileAsync(userId);
+        var profile = await _authService.GetCurrentUserProfileAsync(userId, ct);
         return SuccessResponse(SystemMessages.UserProfileRetrieved, profile);
     }
 

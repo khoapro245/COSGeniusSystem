@@ -2,42 +2,43 @@ using COSGeniusSystem.Commons;
 using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Exceptions;
 using COSGeniusSystem.Models;
-using COSGeniusSystem.Repositories;
+using COSGeniusSystem.Data;
+using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Services;
 
 public class AuthService : IAuthService
 {
-    private readonly IUserRepository _userRepository;
+    private readonly ApplicationDbContext _context;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ITokenService _tokenService;
     private readonly ITokenBlacklistService _tokenBlacklistService;
     private readonly ILogger<AuthService> _logger;
 
     public AuthService(
-        IUserRepository userRepository,
+        ApplicationDbContext context,
         IPasswordHasher passwordHasher,
         ITokenService tokenService,
         ITokenBlacklistService tokenBlacklistService,
         ILogger<AuthService> logger)
     {
-        _userRepository = userRepository;
+        _context = context;
         _passwordHasher = passwordHasher;
         _tokenService = tokenService;
         _tokenBlacklistService = tokenBlacklistService;
         _logger = logger;
     }
 
-    public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request)
+    public async Task<AuthResponseDto> RegisterAsync(RegisterRequestDto request, CancellationToken ct = default)
     {
         // Check if username already exists
-        if (await _userRepository.ExistsByUsernameAsync(request.Username))
+        if (await _context.Users.AnyAsync(u => u.Username.ToLower() == request.Username.ToLower(), ct))
         {
             throw new ConflictException($"Username '{request.Username}' is already in use.");
         }
 
         // Check if email already exists
-        if (!string.IsNullOrWhiteSpace(request.Email) && await _userRepository.ExistsByEmailAsync(request.Email))
+        if (!string.IsNullOrWhiteSpace(request.Email) && await _context.Users.AnyAsync(u => u.Email != null && u.Email.ToLower() == request.Email.ToLower(), ct))
         {
             throw new ConflictException($"Email '{request.Email}' is already registered.");
         }
@@ -47,17 +48,18 @@ public class AuthService : IAuthService
             ? throw new BadRequestException("Role code is required.")
             : request.RoleCode.Trim().ToUpper();
 
-        var role = await _userRepository.GetRoleByCodeAsync(targetRoleCode);
+        var role = await _context.Roles.FirstOrDefaultAsync(r => r.RoleCode.ToUpper() == targetRoleCode.ToUpper(), ct);
         if (role == null)
         {
             // Seed the role if it doesn't exist
-            role = await _userRepository.CreateRoleAsync(new Role
+            role = new Role
             {
                 RoleCode = targetRoleCode,
                 RoleName = targetRoleCode,
                 Description = $"Role for {targetRoleCode}"
-            });
-            await _userRepository.SaveChangesAsync();
+            };
+            await _context.Roles.AddAsync(role, ct);
+            await _context.SaveChangesAsync(ct);
         }
 
         var newUser = new User
@@ -77,8 +79,8 @@ public class AuthService : IAuthService
             AssignedAt = DateTime.UtcNow
         });
 
-        await _userRepository.AddAsync(newUser);
-        await _userRepository.SaveChangesAsync();
+        await _context.Users.AddAsync(newUser, ct);
+        await _context.SaveChangesAsync(ct);
 
         _logger.LogInformation("New user registered successfully with ID: {UserId}, Role: {RoleCode}", newUser.UserId, role.RoleCode);
 
@@ -94,9 +96,9 @@ public class AuthService : IAuthService
         };
     }
 
-    public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request)
+    public async Task<AuthResponseDto> LoginAsync(LoginRequestDto request, CancellationToken ct = default)
     {
-        var user = await _userRepository.GetByUsernameAsync(request.Username);
+        var user = await _context.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).Include(u => u.Doctor).FirstOrDefaultAsync(u => u.Username.ToLower() == request.Username.ToLower(), ct);
         if (user == null || !_passwordHasher.VerifyPassword(request.Password, user.PasswordHash))
         {
             throw new UnauthorizedException("Incorrect username or password.");
@@ -142,9 +144,9 @@ public class AuthService : IAuthService
         return Task.CompletedTask;
     }
 
-    public async Task<UserInfoResponseDto> GetCurrentUserProfileAsync(int userId)
+    public async Task<UserInfoResponseDto> GetCurrentUserProfileAsync(int userId, CancellationToken ct = default)
     {
-        var user = await _userRepository.GetByIdAsync(userId);
+        var user = await _context.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).Include(u => u.Doctor).FirstOrDefaultAsync(u => u.UserId == userId, ct);
         if (user == null)
         {
             throw new NotFoundException($"User {userId} was not found.");
@@ -156,7 +158,7 @@ public class AuthService : IAuthService
 
     public async Task<UserInfoResponseDto> UpdateProfileAsync(int userId, UpdateProfileRequestDto request, CancellationToken ct = default)
     {
-        var user = await _userRepository.GetByIdAsync(userId);
+        var user = await _context.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).Include(u => u.Doctor).FirstOrDefaultAsync(u => u.UserId == userId, ct);
         if (user == null)
         {
             throw new NotFoundException($"User {userId} was not found.");
@@ -165,7 +167,7 @@ public class AuthService : IAuthService
         if (!string.IsNullOrWhiteSpace(request.Email))
         {
             var email = request.Email.Trim().ToLower();
-            var existingByEmail = await _userRepository.GetByEmailAsync(email);
+            var existingByEmail = await _context.Users.Include(u => u.UserRoles).ThenInclude(ur => ur.Role).FirstOrDefaultAsync(u => u.Email != null && u.Email.ToLower() == email.ToLower(), ct);
             if (existingByEmail != null && existingByEmail.UserId != userId)
             {
                 throw new ConflictException($"Email '{request.Email}' đã được sử dụng bởi tài khoản khác.");
@@ -210,7 +212,7 @@ public class AuthService : IAuthService
             user.PasswordHash = _passwordHasher.HashPassword(request.NewPassword.Trim());
         }
 
-        await _userRepository.SaveChangesAsync();
+        await _context.SaveChangesAsync(ct);
 
         _logger.LogInformation("Profile updated successfully for userId: {UserId}", user.UserId);
 
