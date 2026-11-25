@@ -2,7 +2,6 @@ using System.Text;
 using COSGeniusSystem.Commons;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.Middlewares;
-using COSGeniusSystem.Repositories;
 using COSGeniusSystem.Services;
 using COSGeniusSystem.Services.Formulas;
 using COSGeniusSystem.Services.Impl;
@@ -23,8 +22,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddMemoryCache();
 builder.Services.AddHostedService<AppointmentExpiryWorker>();
 
-// Register repositories and services by business domain.
-builder.Services.AddScoped<IUserRepository, UserRepository>();
+// Register services by business domain.
 builder.Services.AddSingleton<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddSingleton<ITokenBlacklistService, TokenBlacklistService>();
@@ -55,6 +53,11 @@ builder.Services.AddScoped<IGoodsReceiptService, GoodsReceiptService>();
 builder.Services.AddScoped<IImportRequestService, ImportRequestService>();
 // [hieppm] End: Đăng ký DI cho module Purchase Orders, Goods Receipts & Import Requests
 builder.Services.AddScoped<IReportService, ReportService>();
+builder.Services.AddScoped<IWarehouseService, WarehouseService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Herbalist.IHerbalistRequisitionService, COSGeniusSystem.Services.Herbalist.HerbalistRequisitionService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Herbalist.IHerbalistWarehouseService, COSGeniusSystem.Services.Herbalist.HerbalistWarehouseService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Herbalist.IHerbalistStorageService, COSGeniusSystem.Services.Herbalist.HerbalistStorageService>();
+builder.Services.AddScoped<COSGeniusSystem.Services.Herbalist.IHerbalistWarehouseQueryService, COSGeniusSystem.Services.Herbalist.HerbalistWarehouseQueryService>();
 
 builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 

@@ -1,30 +1,20 @@
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.Data;
-using COSGeniusSystem.Models;
+using COSGeniusSystem.DTOs;
+using COSGeniusSystem.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.Controllers;
-
-public class WarehouseResponseDto
-{
-    public int WarehouseId { get; set; }
-    public string WarehouseCode { get; set; } = string.Empty;
-    public string WarehouseName { get; set; } = string.Empty;
-    public string? Location { get; set; }
-    public bool IsActive { get; set; }
-}
 
 [ApiController]
 [Route("api/v1/warehouses")]
 public class WarehousesController : BaseApiController
 {
-    private readonly ApplicationDbContext _context;
+    private readonly IWarehouseService _service;
 
-    public WarehousesController(ApplicationDbContext context)
+    public WarehousesController(IWarehouseService service)
     {
-        _context = context;
+        _service = service;
     }
 
     /// <summary>
@@ -35,19 +25,7 @@ public class WarehousesController : BaseApiController
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponseModel<List<WarehouseResponseDto>>>> GetWarehouses(CancellationToken ct = default)
     {
-        var list = await _context.Warehouses
-            .AsNoTracking()
-            .Where(w => w.IsActive)
-            .OrderBy(w => w.WarehouseId)
-            .Select(w => new WarehouseResponseDto
-            {
-                WarehouseId = w.WarehouseId,
-                WarehouseCode = w.WarehouseCode,
-                WarehouseName = w.WarehouseName,
-                Location = w.Location,
-                IsActive = w.IsActive
-            })
-            .ToListAsync(ct);
+        var list = await _service.GetWarehousesAsync(ct);
 
         return SuccessResponse(new SystemMessage(200, "Warehouses retrieved successfully.", true), list);
     }
