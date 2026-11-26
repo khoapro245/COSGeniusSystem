@@ -298,7 +298,9 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         var usage = await db.UsageHistories.AsNoTracking().Where(u => u.SessionId == id).OrderBy(u => u.UsageId)
             .Select(u => new UsageResponse(u.PlanDetailId, u.PlanDetail.ServiceNameSnapshot, u.Quantity, u.PerformedBy, u.ExecutionTime, u.ResultNote)).ToListAsync(ct);
         var assigned = actor.IsInRole(RoleConstants.Doctor) && session.AssignedDoctorId == await DoctorAsync(actor, ct);
-        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && (!plan.RequiresFullPayment || plan.FullyPaid),
+        return new(session, plan, usage, assigned && session.Status == "REQUESTED" && session.ScheduledDate == DateOnly.FromDateTime(DateTime.UtcNow.AddHours(7))
+            && (plan.Plan.Status is "CONFIRMED" or "IN_PROGRESS") && plan.RemainingSessions > 0
+            && plan.Services.Any(s => s.RemainingQuantity > 0) && (!plan.RequiresFullPayment || plan.FullyPaid),
             assigned && session.Status == "IN_PROGRESS", session.Status == "REQUESTED" && (assigned || actor.IsInRole(RoleConstants.ReceptionStaff)));
     }
 
@@ -359,6 +361,9 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
             foreach (var item in request.Items.OrderBy(i => i.PlanId))
                 _ = await db.TreatmentPlans.FromSqlInterpolated($"SELECT * FROM dbo.TreatmentPlan WITH (UPDLOCK, ROWLOCK) WHERE PlanID = {item.PlanId}").SingleOrDefaultAsync(ct)
                     ?? throw new NotFoundException("Treatment plan was not found.");
+        foreach (var item in request.Items)
+            if (!await db.TreatmentPlans.AnyAsync(p => p.PlanId == item.PlanId && p.Record.PatientId == request.PatientId, ct))
+                throw new BadRequestException($"Liệu trình {item.PlanId} không thuộc bệnh nhân đã chọn.");
         await PatientRequestGuard.EnsureAvailableAsync(db, request.PatientId, ct);
         var results = new List<SessionOverview>();
         var requestedAt = DateTime.UtcNow;
@@ -379,6 +384,8 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
         {
             var patientId = await db.MedicalRecords.Where(r => r.RecordId == plan.RecordId)
                 .Select(r => r.PatientId).SingleAsync(ct);
+            if (batchPatientId.HasValue && patientId != batchPatientId.Value)
+                throw new BadRequestException($"Liệu trình {planId} không thuộc bệnh nhân đã chọn.");
             await PatientRequestGuard.LockAsync(db, patientId, ct);
             if (await PatientRequestGuard.HasActiveExaminationAsync(db, patientId, ct))
                 throw new ConflictException("The patient already has a pending or ongoing examination request.");
@@ -491,7 +498,7 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
             session.AssignedDoctorId ??= doctorId;
 
             var details = await db.TreatmentPlanDetails.Where(d => d.PlanId == plan.PlanId).ToListAsync(ct);
-            var used = await db.UsageHistories.Where(u => u.PlanDetail.PlanId == plan.PlanId && u.SessionId != id)
+            var used = await db.UsageHistories.Where(u => u.PlanDetail.PlanId == plan.PlanId && u.SessionId != id && u.Session.Status == "COMPLETED")
                 .GroupBy(u => u.PlanDetailId).Select(g => new { Id = g.Key, Quantity = g.Sum(u => u.Quantity) }).ToDictionaryAsync(g => g.Id, g => g.Quantity, ct);
 
             foreach (var item in request.Items.Where(i => i.Quantity > 0))
@@ -537,8 +544,8 @@ public sealed partial class TreatmentWorkflowService(ApplicationDbContext db, IP
             session.ResultNote = request.ResultNote.Trim();
 
             plan.StartDate ??= DateOnly.FromDateTime(session.StartedAt.Value.AddHours(7));
-            plan.Status = (completedCount >= plan.PlannedSessionCount || servicesComplete) ? "COMPLETED" : "IN_PROGRESS";
-            if (plan.Status == "COMPLETED") plan.EndDate = DateOnly.FromDateTime(now.AddHours(7));
+            plan.Status = (completedCount >= plan.PlannedSessionCount && servicesComplete) ? "COMPLETED" : "IN_PROGRESS";
+            plan.EndDate = plan.Status == "COMPLETED" ? DateOnly.FromDateTime(now.AddHours(7)) : null;
             plan.UpdatedAt = now;
             await db.SaveChangesAsync(ct);
             await InvoiceAccrual.GenerateAsync(db, plan.RecordId, ct);
