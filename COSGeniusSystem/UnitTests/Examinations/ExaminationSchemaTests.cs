@@ -1,10 +1,10 @@
-﻿using COSGeniusSystem.Data;
+using COSGeniusSystem.Data;
 using COSGeniusSystem.Models;
 using Microsoft.EntityFrameworkCore;
 
 namespace COSGeniusSystem.UnitTests;
 
-public class ExaminationServiceTests
+public class ExaminationSchemaTests
 {
     [Fact]
     public void Model_ContainsOnlyCurrentTables_AndNoLegacyUsageColumns()
@@ -12,7 +12,8 @@ public class ExaminationServiceTests
         using var db = new ApplicationDbContext(new DbContextOptionsBuilder<ApplicationDbContext>()
             .UseSqlServer("Server=localhost;Database=SchemaChecks;Integrated Security=true;TrustServerCertificate=true").Options);
         var entities = db.Model.GetEntityTypes().ToArray();
-        Assert.Contains(entities, e => e.ClrType == typeof(TreatmentAdmission));
+        Assert.DoesNotContain(entities, e => e.ClrType == typeof(TreatmentAdmission));
+        Assert.Contains(entities, e => e.ClrType == typeof(TreatmentSession));
         Assert.DoesNotContain(entities, e => new[] { "ExamSheet", "TreatmentProtocol", "RemedyFormula", "FormulaDetail" }.Contains(e.GetTableName()));
         var usage = db.Model.FindEntityType(typeof(UsageHistory))!;
         Assert.Null(usage.FindProperty("ExamSheetId"));

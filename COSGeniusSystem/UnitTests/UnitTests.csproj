@@ -8,6 +8,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="TreatmentServices\TreatmentServiceManagerTests.cs" />
+    <Compile Remove="TreatmentServices\TreatmentServiceTests.cs" />
+    <Compile Remove="Treatments\TreatmentAdmissionTests.cs" />
+    <Compile Remove="Treatments\TreatmentProtocolServiceTests.cs" />
+    <Compile Remove="Treatments\TreatmentSchedulingTests.cs" />
+    <Compile Remove="Treatments\TreatmentValidationBoundaryTests.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="coverlet.collector" Version="6.0.4" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="xunit" Version="2.9.3" />
@@ -22,6 +31,13 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Invoices\" />
+    <Folder Include="Patients\" />
+    <Folder Include="TreatmentServices\" />
+    <Folder Include="Treatments\" />
   </ItemGroup>
 
 </Project>

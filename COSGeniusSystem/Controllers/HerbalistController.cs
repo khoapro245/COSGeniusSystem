@@ -1,11 +1,8 @@
-using System.Security.Claims;
 using COSGeniusSystem.Commons;
-using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs;
-using COSGeniusSystem.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+using System.Security.Claims;
 
 namespace COSGeniusSystem.Controllers;
 

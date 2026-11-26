@@ -3,7 +3,6 @@ using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 
 namespace COSGeniusSystem.UnitTests;
 

@@ -32,6 +32,8 @@ public class AuditServiceTests
         context.Users.Add(user);
         context.Herbs.Add(herb);
         context.Batches.Add(batch);
+        // A completed audit prevents the service demo seed from creating an open audit.
+        context.InventoryAudits.Add(new InventoryAudit { AuditCode = "KK00001", WarehouseId = 1, AuditedBy = 1006, AuditDate = DateTime.UtcNow, Status = "Đã duyệt" });
         await context.SaveChangesAsync();
 
         var service = new AuditService(context);
@@ -67,6 +69,8 @@ public class AuditServiceTests
         context.Users.Add(user);
         context.Herbs.Add(herb);
         context.Batches.Add(batch);
+        // A completed audit prevents the service demo seed from creating an open audit.
+        context.InventoryAudits.Add(new InventoryAudit { AuditCode = "KK00001", WarehouseId = 1, AuditedBy = 1006, AuditDate = DateTime.UtcNow, Status = "Đã duyệt" });
         await context.SaveChangesAsync();
 
         var service = new AuditService(context);
@@ -105,6 +109,8 @@ public class AuditServiceTests
         context.Users.Add(user);
         context.Herbs.Add(herb);
         context.Batches.Add(batch);
+        // A completed audit prevents the service demo seed from creating an open audit.
+        context.InventoryAudits.Add(new InventoryAudit { AuditCode = "KK00001", WarehouseId = 1, AuditedBy = 1006, AuditDate = DateTime.UtcNow, Status = "Đã duyệt" });
         await context.SaveChangesAsync();
 
         var service = new AuditService(context);
@@ -146,6 +152,8 @@ public class AuditServiceTests
         context.Users.Add(user);
         context.Herbs.Add(herb);
         context.Batches.Add(batch);
+        // A completed audit prevents the service demo seed from creating an open audit.
+        context.InventoryAudits.Add(new InventoryAudit { AuditCode = "KK00001", WarehouseId = 1, AuditedBy = 1006, AuditDate = DateTime.UtcNow, Status = "Đã duyệt" });
         await context.SaveChangesAsync();
 
         var service = new AuditService(context);
@@ -184,6 +192,19 @@ public class AuditServiceTests
         var dbBatch = await context.Batches.FindAsync(101);
         Assert.NotNull(dbBatch);
         Assert.Equal(8800m, dbBatch.CurrentQuantity);
+    }
+    [Fact]
+    public async Task CreateAuditAsync_BlocksFullWarehouseWhenAuditIsOpen()
+    {
+        using var context = CreateInMemoryDbContext();
+        context.Warehouses.Add(new Warehouse { WarehouseId = 1, WarehouseCode = "K", WarehouseName = "Kho", Location = "A" });
+        context.Users.Add(new User { UserId = 1006, Username = "inventory", PasswordHash = "hash", FullName = "Nhân viên", IsActive = true });
+        context.InventoryAudits.Add(new InventoryAudit { AuditCode = "KK00008", WarehouseId = 1, AuditedBy = 1006, AuditDate = DateTime.UtcNow, Status = "Chờ duyệt" });
+        await context.SaveChangesAsync();
+        var error = await Assert.ThrowsAsync<COSGeniusSystem.Exceptions.BadRequestException>(() =>
+            new AuditService(context).CreateAuditAsync(new CreateAuditRequest { WarehouseId = 1, AuditedBy = 1006 }));
+        Assert.Contains("KK00008", error.Message);
+        Assert.Single(await context.InventoryAudits.ToListAsync());
     }
 }
 

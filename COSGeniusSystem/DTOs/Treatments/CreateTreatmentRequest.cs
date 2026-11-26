@@ -7,5 +7,6 @@ public sealed class CreateTreatmentRequest : VersionRequest
 {
     [Range(1, int.MaxValue, ErrorMessage = "The value is outside the allowed range.")] public int PlanId { get; set; }
     [Range(1, int.MaxValue, ErrorMessage = "The value is outside the allowed range.")] public int AssignedDoctorId { get; set; }
+    [Required(ErrorMessage = "This field is required."), RegularExpression("^(MORNING|AFTERNOON)$")] public string Shift { get; set; } = "";
     [Required(ErrorMessage = "This field is required.")] public DateOnly? ScheduledDate { get; set; }
 }

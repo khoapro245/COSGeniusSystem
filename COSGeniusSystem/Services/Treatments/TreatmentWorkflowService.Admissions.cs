@@ -19,16 +19,17 @@ public sealed partial class TreatmentWorkflowService
 
         await using var tx = db.Database.IsRelational()
             ? await db.Database.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct) : null;
+        foreach (var item in request.Items)
+            if (!await db.TreatmentPlans.AnyAsync(p => p.PlanId == item.PlanId && p.Record.PatientId == request.PatientId, ct))
+                throw new BadRequestException($"Liệu trình {item.PlanId} không thuộc bệnh nhân đã chọn.");
         var results = new List<SessionOverview>();
         foreach (var item in request.Items.OrderBy(i => i.PlanId))
         {
-            if (!await db.TreatmentPlans.AnyAsync(p => p.PlanId == item.PlanId && p.Record.PatientId == request.PatientId, ct))
-                throw new BadRequestException($"Liệu trình {item.PlanId} không thuộc bệnh nhân đã chọn.");
-            results.Add(await RequestAsync(actor, item.PlanId, new RequestTreatment
+            results.Add(await RequestCoreAsync(actor, item.PlanId, new RequestTreatment
             {
                 AssignedDoctorId = item.AssignedDoctorId, ScheduledDate = request.ScheduledDate,
                 Shift = request.Shift, Note = request.Note, RowVersion = item.RowVersion
-            }, ct));
+            }, request.PatientId, null, ct));
         }
         if (tx != null) await tx.CommitAsync(ct);
         return results;

@@ -34,7 +34,7 @@ public sealed class TreatmentProtocolService(ApplicationDbContext db, ITreatment
     {
         var overview = await workflow.RequestAsync(actor, request.PlanId, new RequestTreatment
         {
-            AssignedDoctorId = request.AssignedDoctorId, ScheduledDate = request.ScheduledDate,
+            AssignedDoctorId = request.AssignedDoctorId, ScheduledDate = request.ScheduledDate, Shift = request.Shift,
             RowVersion = request.RowVersion
         }, ct);
         return Map(overview.Session, overview.TreatmentPlan.Plan.PlannedSessionCount, 1);

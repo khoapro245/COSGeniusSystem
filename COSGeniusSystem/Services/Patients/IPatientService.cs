@@ -17,8 +17,6 @@ public interface IPatientService
     // Module 1: Hồ sơ & Thông tin bệnh nhân (Phân hệ Tiếp tân)
     Task<List<PatientResponseDto>> SearchPatientsAsync(PatientSearchQuery query, CancellationToken ct = default);
     Task<PatientDetailDto> GetPatientDetailAsync(int id, CancellationToken ct = default);
-    Task<PatientDetailDto> CreatePatientV1Async(COSGeniusSystem.DTOs.Compatibility.V1.CreatePatientRequest request, CancellationToken ct = default);
-    Task<PatientDetailDto> UpdatePatientV1Async(int id, COSGeniusSystem.DTOs.Compatibility.V1.UpdatePatientRequest request, CancellationToken ct = default);
     Task<List<PatientVisitHistoryDto>> GetVisitHistoryAsync(int patientId, CancellationToken ct = default);
     Task<MedicalRecordDetailDto> GetMedicalRecordDetailAsync(int recordId, CancellationToken ct = default);
     Task<List<TreatmentProtocolDto>> GetTreatmentProtocolsAsync(int patientId, CancellationToken ct = default);
