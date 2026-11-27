@@ -12,7 +12,7 @@ using Xunit;
 
 namespace COSGeniusSystem.UnitTests;
 
-public class PurchaseOrderModuleTests
+public sealed class PurchaseOrderMainFunctionTests
 {
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private sealed class Scope : IDisposable
@@ -22,7 +22,7 @@ public class PurchaseOrderModuleTests
         private Scope()
         {
             Db = new(new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseInMemoryDatabase($"PurchaseOrderTests_{Guid.NewGuid():N}").Options);
+                .UseInMemoryDatabase($"PurchaseOrderMain_{Guid.NewGuid():N}").Options);
             Api = new(Db);
         }
         internal static async Task<Scope> CreateAsync()
@@ -55,6 +55,44 @@ public class PurchaseOrderModuleTests
             receipt.ReceiptDetails.Add(new ReceiptDetail { Batch=batch,BatchId=id,Quantity=quantity,UnitPrice=50000m });
             Db.GoodsReceipts.Add(receipt); await Db.SaveChangesAsync();
         }
+        // Compare persisted values after rejection, not still-tracked entities.
+        // InMemory cannot prove SQL rollback, database constraints or locks.
+        internal async Task<string> OrdersSnapshotAsync()
+        {
+            Db.ChangeTracker.Clear();
+            var purchaseOrders = await Db.PurchaseOrders.AsNoTracking().OrderBy(p => p.Poid)
+                .Select(p => new
+                {
+                    p.Poid, p.Pocode, p.SupplierId, p.CreatedBy, p.RequestId, p.OrderDate,
+                    p.DeliveryDate, p.TotalAmount, p.Status, p.DriverName, p.VehicleNumber
+                }).ToListAsync();
+            var purchaseLines = await Db.Podetails.AsNoTracking().OrderBy(d => d.Poid).ThenBy(d => d.HerbId)
+                .Select(d => new { d.Poid, d.HerbId, d.OrderQuantity, d.UnitPrice }).ToListAsync();
+            var receipts = await Db.GoodsReceipts.AsNoTracking().OrderBy(g => g.ReceiptId)
+                .Select(g => new
+                {
+                    g.ReceiptId, g.ReceiptCode, g.Poid, g.WarehouseId, g.ReceivedBy,
+                    g.ReceiptDate, g.TotalCost, g.Status, g.Note, g.DriverName,
+                    g.VehicleNumber, g.DocumentUrl
+                }).ToListAsync();
+            var receiptLines = await Db.ReceiptDetails.AsNoTracking().OrderBy(d => d.ReceiptDetailId)
+                .Select(d => new { d.ReceiptDetailId, d.ReceiptId, d.BatchId, d.Quantity, d.UnitPrice }).ToListAsync();
+            var batches = await Db.Batches.AsNoTracking().OrderBy(b => b.BatchId)
+                .Select(b => new
+                {
+                    b.BatchId, b.HerbId, b.WarehouseId, b.BatchNumber, b.OriginalQuantity,
+                    b.CurrentQuantity, b.UnitCost, b.Status, b.StorageLocationId,
+                    b.Location, b.ExpiryDate, b.SupplierBatchCode
+                }).ToListAsync();
+            var history = await Db.ReceiptHistories.AsNoTracking().OrderBy(h => h.ReceiptId).ThenBy(h => h.BatchId)
+                .Select(h => new { h.ReceiptId, h.BatchId, h.QuantityChanged, h.BalanceAfter, h.ChangeDate }).ToListAsync();
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                purchaseOrders, purchaseLines, receipts, receiptLines, batches, history,
+                NotificationCount = await Db.Notifications.CountAsync()
+            });
+        }
+
         public void Dispose()=>Db.Dispose();
     }
     private static CreatePORequest CreateRequest()=>new() { SupplierId=1,DeliveryDate=Today.AddDays(7),Status="Nháp",
@@ -62,97 +100,13 @@ public class PurchaseOrderModuleTests
     private static UpdatePORequest UpdateRequest()=>new() { SupplierId=1,DeliveryDate=Today.AddDays(7),
         Items=new List<CreatePOItemRequest> { new(){HerbId=1,OrderQuantity=20m,UnitPrice=50000m} } };
 
-    // UTC-PO-001: List all purchase orders and use descending ID to break equal-date ties.
-    [Fact]
-    public async Task GetPurchaseOrdersAsync_NoFilterReturnsOrdersNewestFirst()
-    {
-        using var s=await Scope.CreateAsync();var date=DateTime.Now;
-        await s.OrderAsync(1,date:date);await s.OrderAsync(2,date:date);
-        var result=await s.Api.GetPurchaseOrdersAsync();
-        Assert.Equal(new[]{2,1},result.Select(x=>x.Poid).ToArray());
-    }
+    #region CreatePOAsync
 
-    // UTC-PO-002: Filter orders by pending delivery status.
+    // UTC-PO-MAIN-001: Tested method = CreatePOAsync
     [Fact]
-    public async Task GetPurchaseOrdersAsync_PendingFilterReturnsOnlyWaitingOrders()
-    {
-        using var s=await Scope.CreateAsync();await s.OrderAsync(status:"Chờ nhận");await s.OrderAsync(2,status:"Nháp");
-        var result=await s.Api.GetPurchaseOrdersAsync(status:"pending");
-        Assert.Equal(1,Assert.Single(result).Poid);Assert.Equal("Chờ nhận",result[0].ProgressStatus);
-    }
-
-    // UTC-PO-003: Search using a trimmed and case-insensitive purchase-order code.
-    [Fact]
-    public async Task GetPurchaseOrdersAsync_SearchByCodeReturnsMatchingOrder()
-    {
-        using var s=await Scope.CreateAsync();await s.OrderAsync();await s.OrderAsync(2);
-        Assert.Equal(1,Assert.Single(await s.Api.GetPurchaseOrdersAsync(search:" po00001 ")).Poid);
-    }
-
-    // UTC-PO-004: Search by supplier name, herb name and herb code in one grouped test.
-    [Fact]
-    public async Task GetPurchaseOrdersAsync_SearchSupplierHerbNameAndHerbCode()
-    {
-        using var s=await Scope.CreateAsync();await s.OrderAsync();await s.OrderAsync(2,supplier:2,herb:2);
-        foreach(var keyword in new[]{"An Phat","Cam thao","VT00001"})
-            Assert.Equal(1,Assert.Single(await s.Api.GetPurchaseOrdersAsync(search:keyword)).Poid);
-    }
-
-    // UTC-PO-005: Return an empty result when no purchase order exists.
-    [Fact]
-    public async Task GetPurchaseOrdersAsync_NoOrdersReturnsEmptyList()
-    {
-        using var s=await Scope.CreateAsync();Assert.Empty(await s.Api.GetPurchaseOrdersAsync());
-    }
-
-    // UTC-PO-006: Retrieve purchase-order details by ID.
-    [Fact]
-    public async Task GetPurchaseOrderDetailAsync_ExistingIdReturnsLinesAndTotals()
-    {
-        using var s=await Scope.CreateAsync();await s.OrderAsync();var result=await s.Api.GetPurchaseOrderDetailAsync("1");
-        Assert.NotNull(result);Assert.Equal(1,result.Poid);Assert.Equal("PO00001",result.Pocode);
-        Assert.Equal(500000m,result.TotalAmount);var line=Assert.Single(result.Details);
-        Assert.Equal(1,line.HerbId);Assert.Equal(10m,line.OrderQuantity);Assert.Equal(500000m,line.LineTotal);
-    }
-
-    // UTC-PO-007: Retrieve purchase-order details by code without case sensitivity.
-    [Fact]
-    public async Task GetPurchaseOrderDetailAsync_ExistingCodeIsCaseInsensitive()
-    {
-        using var s=await Scope.CreateAsync();await s.OrderAsync();
-        var result=await s.Api.GetPurchaseOrderDetailAsync("po00001");Assert.NotNull(result);Assert.Equal(1,result.Poid);
-    }
-
-    // UTC-PO-008: Return null for a nonexistent purchase order.
-    [Fact]
-    public async Task GetPurchaseOrderDetailAsync_MissingIdReturnsNull()
-    {
-        using var s=await Scope.CreateAsync();Assert.Null(await s.Api.GetPurchaseOrderDetailAsync("999"));
-    }
-
-    // UTC-PO-009: Calculate partial progress using approved receipts only.
-    [Fact]
-    public async Task GetPurchaseOrderDetailAsync_OnlyApprovedReceiptsContributeToProgress()
-    {
-        using var s=await Scope.CreateAsync();var order=await s.OrderAsync(status:"Chờ nhận");
-        await s.ReceiptAsync(order,1,"APPROVED",2m);await s.ReceiptAsync(order,2,"PENDING_APPROVAL",3m);await s.ReceiptAsync(order,3,"REJECTED",4m);
-        var result=await s.Api.GetPurchaseOrderDetailAsync("1");Assert.NotNull(result);var line=Assert.Single(result.Details);
-        Assert.Equal(2m,line.ReceivedQuantity);Assert.Equal(8m,line.RemainingQuantity);
-        Assert.Equal("Nhận một phần",result.ProgressStatus);
-    }
-
-    // UTC-PO-010: Show completion when approved receipts fulfill the ordered quantity.
-    [Fact]
-    public async Task GetPurchaseOrderDetailAsync_AllRequiredQuantityReceivedShowsCompleted()
-    {
-        using var s=await Scope.CreateAsync();var order=await s.OrderAsync(status:"Chờ nhận");
-        await s.ReceiptAsync(order,1,"APPROVED",10m);
-        var result=await s.Api.GetPurchaseOrderDetailAsync("1");Assert.NotNull(result);
-        Assert.Equal(0m,Assert.Single(result.Details).RemainingQuantity);Assert.Equal("Đã hoàn thành",result.ProgressStatus);
-    }
-
-    // UTC-PO-011: Create an order, calculate totals, trim transport fields and persist its details.
-    [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "CreatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-001")]
     public async Task CreatePOAsync_ValidRequestCalculatesAndPersistsOrder()
     {
         using var s=await Scope.CreateAsync();var request=CreateRequest();
@@ -165,16 +119,24 @@ public class PurchaseOrderModuleTests
         Assert.Equal(1000000m,saved.TotalAmount);Assert.Equal(2,saved.Podetails.Count);
     }
 
-    // UTC-PO-012: Reject creating an order for a nonexistent supplier.
+    // UTC-PO-MAIN-002: Tested method = CreatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "CreatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-002")]
     public async Task CreatePOAsync_MissingSupplierIsRejected()
     {
         using var s=await Scope.CreateAsync();var request=CreateRequest();request.SupplierId=999;
-        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.CreatePOAsync(1,request));Assert.False(await s.Db.PurchaseOrders.AnyAsync());
+        var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.CreatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());Assert.False(await s.Db.PurchaseOrders.AnyAsync());
     }
 
-    // UTC-PO-013: Reject empty items, zero/negative quantity, negative price and duplicate herbs in one grouped test.
+    // UTC-PO-MAIN-003: Tested method = CreatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "CreatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-003")]
     public async Task CreatePOAsync_InvalidItemListsAreRejected()
     {
         using var s=await Scope.CreateAsync();
@@ -185,30 +147,51 @@ public class PurchaseOrderModuleTests
             new(){new(){HerbId=1,OrderQuantity=5,UnitPrice=50000},new(){HerbId=1,OrderQuantity=1,UnitPrice=50000}}
         };
         foreach(var items in invalid) { var request=CreateRequest();request.Items=items;
-            await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreatePOAsync(1,request)); }
+            var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync()); }
         Assert.False(await s.Db.PurchaseOrders.AnyAsync());Assert.False(await s.Db.Podetails.AnyAsync());
     }
 
-    // UTC-PO-014: Reject creating an order containing a nonexistent herb.
+    // UTC-PO-MAIN-004: Tested method = CreatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "CreatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-004")]
     public async Task CreatePOAsync_MissingHerbIsRejected()
     {
         using var s=await Scope.CreateAsync();var request=CreateRequest();request.Items[0].HerbId=999;
-        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.CreatePOAsync(1,request));Assert.False(await s.Db.PurchaseOrders.AnyAsync());
+        var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.CreatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());Assert.False(await s.Db.PurchaseOrders.AnyAsync());
     }
 
-    // UTC-PO-015: Reject a past delivery date or unsupported creation status.
+    // UTC-PO-MAIN-005: Tested method = CreatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "CreatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-005")]
     public async Task CreatePOAsync_PastDeliveryDateOrUnsupportedStatusIsRejected()
     {
         using var s=await Scope.CreateAsync();var request=CreateRequest();request.DeliveryDate=Today.AddDays(-1);
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         request=CreateRequest();request.Status="UNKNOWN";
-        await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreatePOAsync(1,request));Assert.False(await s.Db.PurchaseOrders.AnyAsync());
+        var before2 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreatePOAsync(1,request));
+        Assert.Equal(before2, await s.OrdersSnapshotAsync());Assert.False(await s.Db.PurchaseOrders.AnyAsync());
     }
 
-    // UTC-PO-016: Replace draft-order lines, change supplier and recalculate the total.
+    #endregion
+
+    #region UpdatePOAsync
+
+    // UTC-PO-MAIN-006: Tested method = UpdatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "UpdatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-006")]
     public async Task UpdatePOAsync_DraftOrderReplacesLinesAndRecalculatesTotal()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync();var request=UpdateRequest();request.SupplierId=2;
@@ -219,80 +202,127 @@ public class PurchaseOrderModuleTests
         Assert.Equal(2,line.HerbId);Assert.Equal(20m,line.OrderQuantity);Assert.Equal(1,await s.Db.Podetails.CountAsync());
     }
 
-    // UTC-PO-017: Reject updating a nonexistent purchase order.
+    // UTC-PO-MAIN-007: Tested method = UpdatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "UpdatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-007")]
     public async Task UpdatePOAsync_MissingOrderIsRejected()
     {
-        using var s=await Scope.CreateAsync();await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.UpdatePOAsync(999,UpdateRequest()));
+        using var s=await Scope.CreateAsync();var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.UpdatePOAsync(999,UpdateRequest()));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
     }
 
-    // UTC-PO-018: Prevent editing an issued purchase order.
+    // UTC-PO-MAIN-008: Tested method = UpdatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "UpdatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-008")]
     public async Task UpdatePOAsync_NonDraftOrderIsRejected()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync(status:"Chờ nhận");
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.UpdatePOAsync(1,UpdateRequest()));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Equal(500000m,(await s.Db.PurchaseOrders.SingleAsync()).TotalAmount);
     }
 
-    // UTC-PO-019: Reject an empty update without deleting existing details.
+    // UTC-PO-MAIN-009: Tested method = UpdatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "UpdatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-009")]
     public async Task UpdatePOAsync_EmptyItemsAreRejectedWithoutSavingChanges()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync();var request=UpdateRequest();request.Items.Clear();
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.UpdatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Equal(500000m,(await s.Db.PurchaseOrders.SingleAsync()).TotalAmount);
         Assert.Single(await s.Db.Podetails.ToListAsync());
     }
 
-    // UTC-PO-020: Reject a missing supplier, past date or unsupported update status.
+    // UTC-PO-MAIN-010: Tested method = UpdatePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "UpdatePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-010")]
     public async Task UpdatePOAsync_InvalidSupplierDateOrStatusIsRejected()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync();var request=UpdateRequest();request.SupplierId=999;
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.UpdatePOAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         request=UpdateRequest();request.DeliveryDate=Today.AddDays(-1);
+        var before2 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.UpdatePOAsync(1,request));
+        Assert.Equal(before2, await s.OrdersSnapshotAsync());
         request=UpdateRequest();request.Status="UNKNOWN";
+        var before3 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.UpdatePOAsync(1,request));
+        Assert.Equal(before3, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Equal(500000m,(await s.Db.PurchaseOrders.SingleAsync()).TotalAmount);
         Assert.Equal(1,await s.Db.Podetails.CountAsync());
     }
 
-    // UTC-PO-021: Delete a draft purchase order together with its details.
+    #endregion
+
+    #region DeletePOAsync
+
+    // UTC-PO-MAIN-011: Tested method = DeletePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "DeletePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-011")]
     public async Task DeletePOAsync_DraftOrderAndItsLinesAreDeleted()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync();await s.Api.DeletePOAsync(1);
         s.Db.ChangeTracker.Clear();Assert.False(await s.Db.PurchaseOrders.AnyAsync());Assert.False(await s.Db.Podetails.AnyAsync());
     }
 
-    // UTC-PO-022: Reject deleting a nonexistent purchase order.
+    // UTC-PO-MAIN-012: Tested method = DeletePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "DeletePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-012")]
     public async Task DeletePOAsync_MissingOrderIsRejected()
     {
-        using var s=await Scope.CreateAsync();await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.DeletePOAsync(999));
+        using var s=await Scope.CreateAsync();var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.DeletePOAsync(999));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
     }
 
-    // UTC-PO-023: Prevent deleting a completed purchase order.
+    // UTC-PO-MAIN-013: Tested method = DeletePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "DeletePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-013")]
     public async Task DeletePOAsync_NonDraftOrderIsRejected()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync(status:"Hoàn thành");
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.DeletePOAsync(1));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Single(await s.Db.PurchaseOrders.ToListAsync());Assert.Single(await s.Db.Podetails.ToListAsync());
     }
 
-    // UTC-PO-024: Accept supported draft-status aliases when deleting.
+    // UTC-PO-MAIN-014: Tested method = DeletePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "DeletePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-014")]
     public async Task DeletePOAsync_SupportedDraftAliasesCanBeDeleted()
     {
         foreach(var status in new[]{"DRAFT","Mới tạo"}) { using var s=await Scope.CreateAsync();await s.OrderAsync(status:status);
             await s.Api.DeletePOAsync(1);s.Db.ChangeTracker.Clear();Assert.False(await s.Db.PurchaseOrders.AnyAsync()); }
     }
 
-    // UTC-PO-025: Delete only the selected order and preserve other orders and details.
+    // UTC-PO-MAIN-015: Tested method = DeletePOAsync
     [Fact]
+    [Trait("Module", "PO")]
+    [Trait("Method", "DeletePOAsync")]
+    [Trait("TestCaseId", "UTC-PO-MAIN-015")]
     public async Task DeletePOAsync_OtherOrdersAndLinesRemainUnchanged()
     {
         using var s=await Scope.CreateAsync();await s.OrderAsync();await s.OrderAsync(2,herb:2);
@@ -301,4 +331,5 @@ public class PurchaseOrderModuleTests
         Assert.Equal(2,(await s.Db.Podetails.SingleAsync()).Poid);
     }
 
+    #endregion
 }
