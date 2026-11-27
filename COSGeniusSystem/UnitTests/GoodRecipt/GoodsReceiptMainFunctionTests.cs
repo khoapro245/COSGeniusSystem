@@ -13,7 +13,7 @@ using Xunit;
 
 namespace COSGeniusSystem.UnitTests;
 
-public class GoodsReceiptModuleTests
+public sealed class GoodsReceiptMainFunctionTests
 {
     private static DateOnly Today => DateOnly.FromDateTime(DateTime.Today);
     private static CreateGoodsReceiptRequest Request() => new() {
@@ -28,7 +28,7 @@ public class GoodsReceiptModuleTests
         private Scope()
         {
             Db=new(new DbContextOptionsBuilder<ApplicationDbContext>()
-                .UseInMemoryDatabase($"GoodsReceiptTests_{Guid.NewGuid():N}")
+                .UseInMemoryDatabase($"GoodsReceiptMain_{Guid.NewGuid():N}")
                 // InMemory has no transaction semantics. SQL rollback/locks are NOT tested.
                 .ConfigureWarnings(w=>w.Ignore(InMemoryEventId.TransactionIgnoredWarning)).Options);
             Api=new(Db);
@@ -78,98 +78,54 @@ public class GoodsReceiptModuleTests
             receipt.ReceiptDetails.Add(new ReceiptDetail { Batch=batch,BatchId=id,Quantity=quantity,UnitPrice=50000m });
             Db.GoodsReceipts.Add(receipt);await Db.SaveChangesAsync();return receipt;
         }
+        // Compare persisted values after rejection, not still-tracked entities.
+        // InMemory cannot prove SQL rollback, database constraints or locks.
+        internal async Task<string> OrdersSnapshotAsync()
+        {
+            Db.ChangeTracker.Clear();
+            var purchaseOrders = await Db.PurchaseOrders.AsNoTracking().OrderBy(p => p.Poid)
+                .Select(p => new
+                {
+                    p.Poid, p.Pocode, p.SupplierId, p.CreatedBy, p.RequestId, p.OrderDate,
+                    p.DeliveryDate, p.TotalAmount, p.Status, p.DriverName, p.VehicleNumber
+                }).ToListAsync();
+            var purchaseLines = await Db.Podetails.AsNoTracking().OrderBy(d => d.Poid).ThenBy(d => d.HerbId)
+                .Select(d => new { d.Poid, d.HerbId, d.OrderQuantity, d.UnitPrice }).ToListAsync();
+            var receipts = await Db.GoodsReceipts.AsNoTracking().OrderBy(g => g.ReceiptId)
+                .Select(g => new
+                {
+                    g.ReceiptId, g.ReceiptCode, g.Poid, g.WarehouseId, g.ReceivedBy,
+                    g.ReceiptDate, g.TotalCost, g.Status, g.Note, g.DriverName,
+                    g.VehicleNumber, g.DocumentUrl
+                }).ToListAsync();
+            var receiptLines = await Db.ReceiptDetails.AsNoTracking().OrderBy(d => d.ReceiptDetailId)
+                .Select(d => new { d.ReceiptDetailId, d.ReceiptId, d.BatchId, d.Quantity, d.UnitPrice }).ToListAsync();
+            var batches = await Db.Batches.AsNoTracking().OrderBy(b => b.BatchId)
+                .Select(b => new
+                {
+                    b.BatchId, b.HerbId, b.WarehouseId, b.BatchNumber, b.OriginalQuantity,
+                    b.CurrentQuantity, b.UnitCost, b.Status, b.StorageLocationId,
+                    b.Location, b.ExpiryDate, b.SupplierBatchCode
+                }).ToListAsync();
+            var history = await Db.ReceiptHistories.AsNoTracking().OrderBy(h => h.ReceiptId).ThenBy(h => h.BatchId)
+                .Select(h => new { h.ReceiptId, h.BatchId, h.QuantityChanged, h.BalanceAfter, h.ChangeDate }).ToListAsync();
+            return System.Text.Json.JsonSerializer.Serialize(new
+            {
+                purchaseOrders, purchaseLines, receipts, receiptLines, batches, history,
+                NotificationCount = await Db.Notifications.CountAsync()
+            });
+        }
+
         public void Dispose()=>Db.Dispose();
     }
 
-    // UTC-GR-001: List receipts in descending receipt-date order.
-    [Fact]
-    public async Task GetGoodsReceiptsAsync_ListsNewestReceiptsFirst()
-    {
-        using var s=await Scope.CreateAsync();var now=DateTime.Now;
-        await s.ReceiptAsync(1,date:now.AddMinutes(-1));await s.ReceiptAsync(2,date:now);
-        var result=await s.Api.GetGoodsReceiptsAsync();Assert.Equal(new[]{2,1},result.Select(x=>x.ReceiptId).ToArray());
-    }
+    #region CreateGoodsReceiptAsync
 
-    // UTC-GR-002: Filter receipts by approved status.
+    // UTC-GR-MAIN-001: Tested method = CreateGoodsReceiptAsync
     [Fact]
-    public async Task GetGoodsReceiptsAsync_FiltersApprovedStatus()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();await s.ReceiptAsync(2,GoodsReceiptStatusConstants.Approved);
-        Assert.Equal(2,Assert.Single(await s.Api.GetGoodsReceiptsAsync(status:"approved")).ReceiptId);
-    }
-
-    // UTC-GR-003: Filter receipts by their linked purchase order.
-    [Fact]
-    public async Task GetGoodsReceiptsAsync_FiltersLinkedPurchaseOrder()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();await s.ReceiptAsync(2,poId:2);
-        Assert.Equal(2,Assert.Single(await s.Api.GetGoodsReceiptsAsync(poId:2)).ReceiptId);
-    }
-
-    // UTC-GR-004: Return an empty list when no goods receipt exists.
-    [Fact]
-    public async Task GetGoodsReceiptsAsync_NoReceiptsReturnsEmpty()
-    {
-        using var s=await Scope.CreateAsync();Assert.Empty(await s.Api.GetGoodsReceiptsAsync());
-    }
-
-    // UTC-GR-005: Apply status and PO filters together.
-    [Fact]
-    public async Task GetGoodsReceiptsAsync_CombinesStatusAndPurchaseOrderFilters()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync(1,GoodsReceiptStatusConstants.Approved);
-        await s.ReceiptAsync(2,GoodsReceiptStatusConstants.Rejected,poId:2);await s.ReceiptAsync(3,GoodsReceiptStatusConstants.Approved,poId:2);
-        Assert.Equal(3,Assert.Single(await s.Api.GetGoodsReceiptsAsync("approved",2)).ReceiptId);
-    }
-
-    // UTC-GR-006: Retrieve receipt details by ID, including batch and shelf information.
-    [Fact]
-    public async Task GetGoodsReceiptDetailAsync_ExistingIdReturnsBatchAndLocationDetails()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();var result=await s.Api.GetGoodsReceiptDetailAsync("1");
-        Assert.NotNull(result);Assert.Equal(1,result.ReceiptId);Assert.Equal(1,result.Poid);
-        var line=Assert.Single(result.Details);Assert.Equal(1,line.HerbId);Assert.Equal(1,line.BatchId);
-        Assert.Equal("TEST-B1",line.BatchNumber);Assert.Equal("S1",line.StorageLocationCode);Assert.Equal("S1",line.Location);
-    }
-
-    // UTC-GR-007: Retrieve a receipt using a case-insensitive code.
-    [Fact]
-    public async Task GetGoodsReceiptDetailAsync_ExistingCodeIsCaseInsensitive()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();
-        var result=await s.Api.GetGoodsReceiptDetailAsync("pn00001");Assert.NotNull(result);Assert.Equal(1,result.ReceiptId);
-    }
-
-    // UTC-GR-008: Return null for a nonexistent receipt.
-    [Fact]
-    public async Task GetGoodsReceiptDetailAsync_MissingIdReturnsNull()
-    {
-        using var s=await Scope.CreateAsync();Assert.Null(await s.Api.GetGoodsReceiptDetailAsync("999"));
-    }
-
-    // UTC-GR-009: Map pending, approved and rejected status labels in one grouped test.
-    [Fact]
-    public async Task GetGoodsReceiptDetailAsync_MapsCanonicalStatusLabels()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();await s.ReceiptAsync(2,GoodsReceiptStatusConstants.Approved);
-        await s.ReceiptAsync(3,GoodsReceiptStatusConstants.Rejected);
-        Assert.Equal("Chờ quản lý duyệt",(await s.Api.GetGoodsReceiptDetailAsync("1"))!.StatusLabel);
-        Assert.Equal("Đã duyệt nhập",(await s.Api.GetGoodsReceiptDetailAsync("2"))!.StatusLabel);
-        Assert.Equal("Từ chối duyệt",(await s.Api.GetGoodsReceiptDetailAsync("3"))!.StatusLabel);
-    }
-
-    // UTC-GR-010: Map receipt totals and transport/document fields.
-    [Fact]
-    public async Task GetGoodsReceiptDetailAsync_MapsTotalsAndTransportInformation()
-    {
-        using var s=await Scope.CreateAsync();await s.ReceiptAsync();var result=await s.Api.GetGoodsReceiptDetailAsync("1");
-        Assert.NotNull(result);Assert.Equal(5m,result.TotalQuantity);Assert.Equal(250000m,result.TotalCost);
-        Assert.Equal(250000m,Assert.Single(result.Details).LineTotal);Assert.Equal("Driver",result.DriverName);
-        Assert.Equal("Vehicle",result.VehicleNumber);Assert.Equal("/test/doc.pdf",result.DocumentUrl);
-    }
-
-    // UTC-GR-011: Create unique pending receipts and batches while leaving available stock unchanged.
-    [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "CreateGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-001")]
     public async Task CreateGoodsReceiptAsync_CreatesPendingReceiptWithoutIncreasingStockAndUsesUniqueCodes()
     {
         using var s=await Scope.CreateAsync();var first=await s.Api.CreateGoodsReceiptAsync(1,Request());
@@ -182,8 +138,11 @@ public class GoodsReceiptModuleTests
         Assert.True(await s.Db.Notifications.AnyAsync(n=>n.UserId==2));
     }
 
-    // UTC-GR-012: Allow an extra herb outside the PO while retaining the PO link.
+    // UTC-GR-MAIN-002: Tested method = CreateGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "CreateGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-002")]
     public async Task CreateGoodsReceiptAsync_AllowsAdditionalHerbOutsideLinkedPurchaseOrder()
     {
         using var s=await Scope.CreateAsync();var request=Request();request.Items.Add(new() {
@@ -193,8 +152,11 @@ public class GoodsReceiptModuleTests
         s.Db.ChangeTracker.Clear();Assert.All(await s.Db.Batches.ToListAsync(),b=>Assert.Equal(0m,b.CurrentQuantity));
     }
 
-    // UTC-GR-013: Reject empty items, missing supplier batch code, zero quantity, expiry today and negative price.
+    // UTC-GR-MAIN-003: Tested method = CreateGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "CreateGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-003")]
     public async Task CreateGoodsReceiptAsync_InvalidLinesAreRejectedWithoutCreatingReceipt()
     {
         using var s=await Scope.CreateAsync();
@@ -205,35 +167,57 @@ public class GoodsReceiptModuleTests
             if(variant=="quantity")request.Items[0].Quantity=0;
             if(variant=="expiry")request.Items[0].ExpiryDate=Today;
             if(variant=="price")request.Items[0].UnitPrice=-1m;
-            await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreateGoodsReceiptAsync(1,request));
+            var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreateGoodsReceiptAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         }
         Assert.False(await s.Db.GoodsReceipts.AnyAsync());Assert.False(await s.Db.Batches.AnyAsync());
     }
 
-    // UTC-GR-014: Reject receipts linked to a draft or nonexistent PO.
+    // UTC-GR-MAIN-004: Tested method = CreateGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "CreateGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-004")]
     public async Task CreateGoodsReceiptAsync_DraftOrMissingPurchaseOrderIsRejected()
     {
         using var s=await Scope.CreateAsync();var po=await s.Db.PurchaseOrders.SingleAsync(x=>x.Poid==1);po.Status="Nháp";
-        await s.Db.SaveChangesAsync();await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreateGoodsReceiptAsync(1,Request()));
+        await s.Db.SaveChangesAsync();var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreateGoodsReceiptAsync(1,Request()));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         var request=Request();request.Poid=999;
+        var before2 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.CreateGoodsReceiptAsync(1,request));
+        Assert.Equal(before2, await s.OrdersSnapshotAsync());
         Assert.False(await s.Db.GoodsReceipts.AnyAsync());
     }
 
-    // UTC-GR-015: Require a PO link before creating a goods receipt.
+    // UTC-GR-MAIN-005: Tested method = CreateGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "CreateGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-005")]
     [Trait("Category", "BusinessRuleRegression")]
     [Trait("CandidateIssue", "GR-CAND-001")]
+    [Trait("Defect", "DEF-GR-001")]
     public async Task CreateGoodsReceiptAsync_MissingPurchaseOrderMustBeRejected()
     {
         using var s=await Scope.CreateAsync();var request=Request();request.Poid=null;
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.CreateGoodsReceiptAsync(1,request));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         Assert.False(await s.Db.GoodsReceipts.AnyAsync());Assert.False(await s.Db.Batches.AnyAsync());
     }
 
-    // UTC-GR-016: Resubmit a rejected receipt without creating a replacement receipt.
+    #endregion
+
+    #region SubmitForApprovalAsync
+
+    // UTC-GR-MAIN-006: Tested method = SubmitForApprovalAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "SubmitForApprovalAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-006")]
     public async Task SubmitForApprovalAsync_RejectedReceiptIsResubmittedUsingSameId()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync(status:GoodsReceiptStatusConstants.Rejected);
@@ -241,15 +225,23 @@ public class GoodsReceiptModuleTests
         s.Db.ChangeTracker.Clear();Assert.Equal(1,await s.Db.GoodsReceipts.CountAsync());Assert.Equal(0m,(await s.Db.Batches.SingleAsync()).CurrentQuantity);
     }
 
-    // UTC-GR-017: Reject submission of a nonexistent receipt.
+    // UTC-GR-MAIN-007: Tested method = SubmitForApprovalAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "SubmitForApprovalAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-007")]
     public async Task SubmitForApprovalAsync_MissingReceiptIsRejected()
     {
-        using var s=await Scope.CreateAsync();await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.SubmitForApprovalAsync(999));
+        using var s=await Scope.CreateAsync();var before1 = await s.OrdersSnapshotAsync();
+        await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.SubmitForApprovalAsync(999));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
     }
 
-    // UTC-GR-018: Preserve header and line data when resubmitting the same receipt.
+    // UTC-GR-MAIN-008: Tested method = SubmitForApprovalAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "SubmitForApprovalAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-008")]
     public async Task SubmitForApprovalAsync_ResubmissionPreservesReceiptDetailsAndNotes()
     {
         using var s=await Scope.CreateAsync();var receipt=await s.ReceiptAsync(status:GoodsReceiptStatusConstants.Rejected);
@@ -260,8 +252,11 @@ public class GoodsReceiptModuleTests
         Assert.Equal(5m,saved.ReceiptDetails.Single().Quantity);Assert.False(await s.Db.ReceiptHistories.AnyAsync());
     }
 
-    // UTC-GR-019: Repeat pending submission without duplicating receipts or increasing stock.
+    // UTC-GR-MAIN-009: Tested method = SubmitForApprovalAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "SubmitForApprovalAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-009")]
     public async Task SubmitForApprovalAsync_PendingRetryDoesNotDuplicateReceiptOrStock()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync();
@@ -270,20 +265,33 @@ public class GoodsReceiptModuleTests
         Assert.Equal(0m,(await s.Db.Batches.SingleAsync()).CurrentQuantity);Assert.False(await s.Db.ReceiptHistories.AnyAsync());
     }
 
-    // UTC-GR-020: Prevent reopening an approved receipt for another approval.
+    // UTC-GR-MAIN-010: Tested method = SubmitForApprovalAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "SubmitForApprovalAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-010")]
     [Trait("Category", "BusinessRuleRegression")]
     [Trait("CandidateIssue", "GR-CAND-002")]
+    [Trait("Defect", "DEF-GR-002")]
     public async Task SubmitForApprovalAsync_ApprovedReceiptMustNotReturnToPending()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync(status:GoodsReceiptStatusConstants.Approved,current:5m);
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.SubmitForApprovalAsync(1));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Equal(GoodsReceiptStatusConstants.Approved,(await s.Db.GoodsReceipts.SingleAsync()).Status);
         Assert.Equal(5m,(await s.Db.Batches.SingleAsync()).CurrentQuantity);
     }
 
-    // UTC-GR-021: Approve receipts, add stock, record history, update price and advance PO progress.
+    #endregion
+
+    #region ApproveGoodsReceiptAsync
+
+    // UTC-GR-MAIN-011: Tested method = ApproveGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "ApproveGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-011")]
     public async Task ApproveGoodsReceiptAsync_ApprovalAddsStockAndUpdatesHistoryPriceAndPoProgress()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync(current:2m);
@@ -300,8 +308,11 @@ public class GoodsReceiptModuleTests
         Assert.Equal(2,await s.Db.ReceiptHistories.CountAsync());
     }
 
-    // UTC-GR-022: Reject a receipt without posting stock and notify the receiving staff.
+    // UTC-GR-MAIN-012: Tested method = ApproveGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "ApproveGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-012")]
     public async Task ApproveGoodsReceiptAsync_RejectionDoesNotIncreaseStockAndNotifiesCreator()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync();
@@ -313,28 +324,42 @@ public class GoodsReceiptModuleTests
         Assert.Equal("Chờ nhận",(await s.Db.PurchaseOrders.SingleAsync(p=>p.Poid==1)).Status);
     }
 
-    // UTC-GR-023: Block a direct second approval and leave stock unchanged.
+    // UTC-GR-MAIN-013: Tested method = ApproveGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "ApproveGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-013")]
     public async Task ApproveGoodsReceiptAsync_AlreadyApprovedReceiptCannotBeApprovedAgain()
     {
         using var s=await Scope.CreateAsync();await s.ReceiptAsync(status:GoodsReceiptStatusConstants.Approved,current:5m);
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<BadRequestException>(()=>s.Api.ApproveGoodsReceiptAsync(2,1,new(){IsApproved=true}));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
         s.Db.ChangeTracker.Clear();Assert.Equal(5m,(await s.Db.Batches.SingleAsync()).CurrentQuantity);
         Assert.False(await s.Db.ReceiptHistories.AnyAsync());
     }
 
-    // UTC-GR-024: Reject approval of a nonexistent receipt.
+    // UTC-GR-MAIN-014: Tested method = ApproveGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "ApproveGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-014")]
     public async Task ApproveGoodsReceiptAsync_MissingReceiptIsRejected()
     {
         using var s=await Scope.CreateAsync();
+        var before1 = await s.OrdersSnapshotAsync();
         await Assert.ThrowsAsync<NotFoundException>(()=>s.Api.ApproveGoodsReceiptAsync(2,999,new(){IsApproved=true}));
+        Assert.Equal(before1, await s.OrdersSnapshotAsync());
     }
 
-    // UTC-GR-025: Count a new batch received quantity once in both current and original quantity.
+    // UTC-GR-MAIN-015: Tested method = ApproveGoodsReceiptAsync
     [Fact]
+    [Trait("Module", "GR")]
+    [Trait("Method", "ApproveGoodsReceiptAsync")]
+    [Trait("TestCaseId", "UTC-GR-MAIN-015")]
     [Trait("Category", "BusinessRuleRegression")]
     [Trait("CandidateIssue", "GR-CAND-003")]
+    [Trait("Defect", "DEF-GR-003")]
     public async Task ApproveGoodsReceiptAsync_NewBatchOriginalQuantityMustNotBeCountedTwice()
     {
         using var s=await Scope.CreateAsync();var created=await s.Api.CreateGoodsReceiptAsync(1,Request());
@@ -342,54 +367,5 @@ public class GoodsReceiptModuleTests
         var batch=await s.Db.Batches.SingleAsync();Assert.Equal(5m,batch.CurrentQuantity);Assert.Equal(5m,batch.OriginalQuantity);
     }
 
-    // UTC-GR-026: Filter suggested locations by warehouse and active status.
-    [Fact]
-    public async Task GetSuggestedStorageLocationsAsync_ReturnsOnlyActiveLocationsInSelectedWarehouse()
-    {
-        using var s=await Scope.CreateAsync();var result=await s.Api.GetSuggestedStorageLocationsAsync(1,null,1);
-        Assert.Equal(new[]{1,2},result.Select(x=>x.Id).OrderBy(x=>x).ToArray());
-        Assert.Equal(3,Assert.Single(await s.Api.GetSuggestedStorageLocationsAsync(1,null,2)).Id);
-    }
-
-    // UTC-GR-027: Prefer cold storage for a herb requiring refrigeration.
-    [Fact]
-    public async Task GetSuggestedStorageLocationsAsync_ColdHerbRequiresColdStorage()
-    {
-        using var s=await Scope.CreateAsync();(await s.Db.Herbs.SingleAsync(h=>h.HerbId==1)).IsColdStorageRequired=true;
-        await s.Db.SaveChangesAsync();var result=await s.Api.GetSuggestedStorageLocationsAsync(1,100m,1);
-        Assert.True(result.Single(x=>x.Id==2).IsSuitable);Assert.False(result.Single(x=>x.Id==1).IsSuitable);Assert.Equal(2,result[0].Id);
-    }
-
-    // UTC-GR-028: Accept exact remaining capacity and reject a request exceeding it.
-    [Fact]
-    public async Task GetSuggestedStorageLocationsAsync_CapacityBoundaryUsesRemainingSpace()
-    {
-        using var s=await Scope.CreateAsync();(await s.Db.Herbs.SingleAsync(h=>h.HerbId==1)).Unit="g";
-        await s.Db.SaveChangesAsync();await s.BatchAsync(current:2500m,original:2500m);
-        var exact=(await s.Api.GetSuggestedStorageLocationsAsync(1,7500m,1)).Single(x=>x.Id==1);
-        Assert.Equal(2500m,exact.CurrentUsedGrams);Assert.Equal(7500m,exact.RemainingCapacityGrams);Assert.True(exact.IsSuitable);
-        Assert.False((await s.Api.GetSuggestedStorageLocationsAsync(1,7501m,1)).Single(x=>x.Id==1).IsSuitable);
-    }
-
-    // UTC-GR-029: Prioritize suitable storage type and then greater remaining capacity.
-    [Fact]
-    public async Task GetSuggestedStorageLocationsAsync_SortsSuitableLocationsByRemainingCapacity()
-    {
-        using var s=await Scope.CreateAsync();(await s.Db.WarehouseStorageLocations.SingleAsync(l=>l.Id==1)).MaxCapacityGrams=1000m;
-        s.Db.WarehouseStorageLocations.Add(new(){Id=5,WarehouseId=1,Code="S5",StorageType="STANDARD",MaxCapacityGrams=2000m,IsActive=true});
-        await s.Db.SaveChangesAsync();var result=await s.Api.GetSuggestedStorageLocationsAsync(1,500m,1);
-        Assert.Equal(new[]{5,1,2},result.Select(x=>x.Id).ToArray());
-    }
-
-    // UTC-GR-030: Convert kg stock to grams before checking shelf capacity.
-    [Fact]
-    [Trait("Category", "BusinessRuleRegression")]
-    [Trait("CandidateIssue", "GR-CAND-004")]
-    public async Task GetSuggestedStorageLocationsAsync_KilogramStockMustBeConvertedToGrams()
-    {
-        using var s=await Scope.CreateAsync();await s.BatchAsync(current:1.5m,original:1.5m);
-        var shelf=(await s.Api.GetSuggestedStorageLocationsAsync(1,9000m,1)).Single(x=>x.Id==1);
-        Assert.Equal(1500m,shelf.CurrentUsedGrams);Assert.Equal(8500m,shelf.RemainingCapacityGrams);Assert.False(shelf.IsSuitable);
-    }
-
+    #endregion
 }

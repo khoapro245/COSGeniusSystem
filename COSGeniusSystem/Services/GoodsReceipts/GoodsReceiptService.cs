@@ -95,6 +95,12 @@ public class GoodsReceiptService : IGoodsReceiptService
             throw new BadRequestException("A goods receipt must contain at least one herb line.");
         }
 
+        if (!request.Poid.HasValue || request.Poid.Value <= 0)
+        {
+            throw new BadRequestException(
+                "A purchase order is required to create a goods receipt.");
+        }
+
         var today = DateOnly.FromDateTime(DateTime.Today);
 
         // Server Validation: HSD > Ngày hiện tại, Số lượng > 0, Mã lô là bắt buộc nhập
@@ -313,9 +319,23 @@ public class GoodsReceiptService : IGoodsReceiptService
     public async Task<GoodsReceiptDto> SubmitForApprovalAsync(int receiptId, CancellationToken ct = default)
     {
         var receipt = await _context.GoodsReceipts.FindAsync(new object[] { receiptId }, ct);
+
         if (receipt == null)
         {
             throw new NotFoundException($"Goods receipt ID {receiptId} was not found.");
+        }
+
+        var status = receipt.Status?.Trim();
+
+        if (string.Equals(status, GoodsReceiptStatusConstants.Approved,
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "Đã duyệt",
+                StringComparison.OrdinalIgnoreCase)
+            || string.Equals(status, "Đã duyệt nhập",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new BadRequestException(
+                $"Goods receipt '{receipt.ReceiptCode}' has already been approved and cannot be resubmitted.");
         }
 
         receipt.Status = GoodsReceiptStatusConstants.PendingApproval;
@@ -367,9 +387,10 @@ public class GoodsReceiptService : IGoodsReceiptService
 
                     // Tăng tồn kho thực tế cho lô hàng: Cộng dồn số lượng nhập từ PO vào số lượng hiện có trong kho
                     detail.Batch.CurrentQuantity = previousBatchQuantity + detail.Quantity;
-                    detail.Batch.OriginalQuantity = previousOriginalQuantity > 0 
-                        ? previousOriginalQuantity + detail.Quantity 
-                        : detail.Quantity;
+                    if (previousOriginalQuantity <= 0)
+                    {
+                        detail.Batch.OriginalQuantity = detail.Quantity;
+                    }
                     detail.Batch.Status = "Đạt chuẩn";
 
                     // Tự động cập nhật vị trí và đơn giá nếu Quản lý điều chỉnh lúc duyệt
