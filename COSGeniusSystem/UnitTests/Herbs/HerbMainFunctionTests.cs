@@ -1,12 +1,8 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using COSGeniusSystem.Data;
 using COSGeniusSystem.DTOs;
 using COSGeniusSystem.Models;
 using COSGeniusSystem.Services;
 using Microsoft.EntityFrameworkCore;
-using Xunit;
 
 namespace COSGeniusSystem.UnitTests;
 
@@ -18,24 +14,40 @@ public sealed class HerbMainFunctionTests
 
     private static CreateHerbRequest CreateRequest() => new()
     {
-        HerbCode = "H001", CommonName = "New herb", ScientificName = "New scientific name",
-        Unit = "g", TasteProperties = "Sweet", StandardPrice = 1000m, MinThreshold = 10
+        HerbCode = "H001",
+        CommonName = "New herb",
+        ScientificName = "New scientific name",
+        Unit = "g",
+        TasteProperties = "Sweet",
+        StandardPrice = 1000m,
+        MinThreshold = 10
     };
 
     private static UpdateHerbRequest UpdateRequest() => new()
     {
-        CommonName = "Updated herb", ScientificName = "Updated scientific name",
-        Unit = "g", TasteProperties = "Bitter", StandardPrice = 1500m,
-        MinThreshold = 20, IsActive = false
+        CommonName = "Updated herb",
+        ScientificName = "Updated scientific name",
+        Unit = "g",
+        TasteProperties = "Bitter",
+        StandardPrice = 1500m,
+        MinThreshold = 20,
+        IsActive = false
     };
 
     private static async Task<Herb> SeedHerbAsync(ApplicationDbContext db, int id = 1)
     {
         var herb = new Herb
         {
-            HerbId = id, HerbCode = $"H{id:000}", CommonName = $"Herb {id}",
-            ScientificName = $"Scientific {id}", Unit = "g", TasteProperties = "Sweet",
-            StandardPrice = 1000m, LastImportPrice = 500m, MinThreshold = 5, IsActive = true
+            HerbId = id,
+            HerbCode = $"H{id:000}",
+            CommonName = $"Herb {id}",
+            ScientificName = $"Scientific {id}",
+            Unit = "g",
+            TasteProperties = "Sweet",
+            StandardPrice = 1000m,
+            LastImportPrice = 500m,
+            MinThreshold = 5,
+            IsActive = true
         };
         db.Herbs.Add(herb);
         await db.SaveChangesAsync();
@@ -46,14 +58,23 @@ public sealed class HerbMainFunctionTests
     {
         db.Warehouses.Add(new Warehouse
         {
-            WarehouseId = 1, WarehouseCode = "WH001", WarehouseName = "Test warehouse", IsActive = true
+            WarehouseId = 1,
+            WarehouseCode = "WH001",
+            WarehouseName = "Test warehouse",
+            IsActive = true
         });
         db.Batches.Add(new Batch
         {
-            BatchId = 1, HerbId = 1, WarehouseId = 1, BatchNumber = "B001",
+            BatchId = 1,
+            HerbId = 1,
+            WarehouseId = 1,
+            BatchNumber = "B001",
             ImportDate = DateTime.UtcNow,
             ExpiryDate = DateOnly.FromDateTime(DateTime.Today).AddYears(1),
-            OriginalQuantity = 50m, CurrentQuantity = 50m, UnitCost = 500m, Status = "Đạt chuẩn"
+            OriginalQuantity = 50m,
+            CurrentQuantity = 50m,
+            UnitCost = 500m,
+            Status = "Đạt chuẩn"
         });
         await db.SaveChangesAsync();
     }
@@ -64,16 +85,30 @@ public sealed class HerbMainFunctionTests
         db.ChangeTracker.Clear();
         var herbs = await db.Herbs.AsNoTracking().OrderBy(h => h.HerbId).Select(h => new
         {
-            h.HerbId, h.HerbCode, h.CommonName, h.ScientificName, h.Unit,
-            h.TasteProperties, h.StandardPrice, h.LastImportPrice, h.MinThreshold, h.IsActive
+            h.HerbId,
+            h.HerbCode,
+            h.CommonName,
+            h.ScientificName,
+            h.Unit,
+            h.TasteProperties,
+            h.StandardPrice,
+            h.LastImportPrice,
+            h.MinThreshold,
+            h.IsActive
         }).ToListAsync();
         var batches = await db.Batches.AsNoTracking().OrderBy(b => b.BatchId).Select(b => new
         {
-            b.BatchId, b.HerbId, b.OriginalQuantity, b.CurrentQuantity, b.UnitCost, b.Status
+            b.BatchId,
+            b.HerbId,
+            b.OriginalQuantity,
+            b.CurrentQuantity,
+            b.UnitCost,
+            b.Status
         }).ToListAsync();
         return System.Text.Json.JsonSerializer.Serialize(new
         {
-            herbs, batches,
+            herbs,
+            batches,
             PoLineCount = await db.Podetails.CountAsync(),
             FormulaLineCount = await db.HerbalFormulaDetails.CountAsync(),
             PrescriptionLineCount = await db.HerbalPrescriptionDetails.CountAsync()
@@ -355,17 +390,28 @@ public sealed class HerbMainFunctionTests
         await SeedHerbAsync(db);
         db.Users.Add(new User
         {
-            UserId = 1, Username = "manager.test", FullName = "Manager Test",
-            PasswordHash = "test-only", IsActive = true
+            UserId = 1,
+            Username = "manager.test",
+            FullName = "Manager Test",
+            PasswordHash = "test-only",
+            IsActive = true
         });
         db.Suppliers.Add(new Supplier
         {
-            SupplierId = 1, SupplierCode = "SUP001", SupplierName = "Supplier Test", IsActive = true
+            SupplierId = 1,
+            SupplierCode = "SUP001",
+            SupplierName = "Supplier Test",
+            IsActive = true
         });
         var po = new PurchaseOrder
         {
-            Poid = 1, Pocode = "PO00001", SupplierId = 1, CreatedBy = 1,
-            OrderDate = DateTime.UtcNow, Status = "Nháp", TotalAmount = 5000m
+            Poid = 1,
+            Pocode = "PO00001",
+            SupplierId = 1,
+            CreatedBy = 1,
+            OrderDate = DateTime.UtcNow,
+            Status = "Nháp",
+            TotalAmount = 5000m
         };
         po.Podetails.Add(new Podetail { HerbId = 1, OrderQuantity = 10m, UnitPrice = 500m });
         db.PurchaseOrders.Add(po);
@@ -394,8 +440,12 @@ public sealed class HerbMainFunctionTests
         var herb = await SeedHerbAsync(db);
         var formula = new HerbalFormula
         {
-            HerbalFormulaId = 1, FormulaCode = "F001", FormulaName = "Formula Test",
-            Status = "APPROVED", IsActive = true, RowVersion = new byte[8],
+            HerbalFormulaId = 1,
+            FormulaCode = "F001",
+            FormulaName = "Formula Test",
+            Status = "APPROVED",
+            IsActive = true,
+            RowVersion = new byte[8],
             UsageInstructions = "Use as directed"
         };
         formula.HerbalFormulaDetails.Add(new HerbalFormulaDetail { Herb = herb, DosagePerDose = 10m });

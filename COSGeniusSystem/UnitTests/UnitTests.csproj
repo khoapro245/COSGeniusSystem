@@ -8,8 +8,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Remove="TreatmentServices\TreatmentServiceManagerTests.cs" />
-    <Compile Remove="TreatmentServices\TreatmentServiceTests.cs" />
     <Compile Remove="Treatments\TreatmentAdmissionTests.cs" />
     <Compile Remove="Treatments\TreatmentProtocolServiceTests.cs" />
     <Compile Remove="Treatments\TreatmentSchedulingTests.cs" />
@@ -34,10 +32,11 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Folder Include="GoodRecipt\" />
+    <Folder Include="Examinations\" />
     <Folder Include="Invoices\" />
-    <Folder Include="Patients\" />
+    <Folder Include="Authen\" />
     <Folder Include="TreatmentServices\" />
+    <Folder Include="Patients\" />
     <Folder Include="Treatments\" />
   </ItemGroup>
 
